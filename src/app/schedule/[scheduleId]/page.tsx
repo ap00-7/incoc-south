@@ -4,8 +4,9 @@ import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
 import { PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { requireMember } from "@/lib/auth";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { getMembership } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" });
 
@@ -15,13 +16,15 @@ export default async function ScheduleDetailPage({ params }: { params: Promise<{
     return <PageShell><div className="content-wrap"><div className="notice notice-warning">Service details require a configured Supabase project.</div></div></PageShell>;
   }
   const { scheduleId } = await params;
-  const membership = await requireMember();
-  const supabase = await createClient();
+  const [membership, { supabase, churchId }] = await Promise.all([
+    getMembership(),
+    getPublicChurchContext(),
+  ]);
   const { data: schedule, error } = await supabase.from("schedules")
     .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
-    .eq("id", scheduleId).eq("church_id", membership.churchId).maybeSingle();
+    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
-  if (!schedule || (schedule.status !== "published" && membership.role !== "owner")) notFound();
+  if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
   const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);
   const totalMinutes = items.reduce((total, item) => total + (item.duration_minutes ?? 0), 0);
 
@@ -34,7 +37,6 @@ export default async function ScheduleDetailPage({ params }: { params: Promise<{
           { table: "songs" as const, column: "id", value: item.song_id },
           { table: "song_sections" as const, column: "song_id", value: item.song_id },
         ] : []),
-        { table: "church_members", column: "user_id", value: membership.user.id },
       ]} />
       <article className="content-wrap">
         <Link href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</Link>

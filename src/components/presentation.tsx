@@ -12,6 +12,7 @@ export function Presentation({
   scheduleTitle,
   slides,
   isOwner,
+  canReadSession,
   userId,
   songIds,
 }: {
@@ -19,7 +20,8 @@ export function Presentation({
   scheduleTitle: string;
   slides: PresentationSlide[];
   isOwner: boolean;
-  userId: string;
+  canReadSession: boolean;
+  userId: string | null;
   songIds: string[];
 }) {
   const [index, setIndex] = useState(0);
@@ -28,6 +30,7 @@ export function Presentation({
   const currentIndex = clampSlideIndex(index, slides.length);
 
   useEffect(() => {
+    if (!canReadSession) return;
     const supabase = createClient();
     let alive = true;
     const refresh = async () => {
@@ -58,7 +61,7 @@ export function Presentation({
       alive = false;
       void supabase.removeChannel(channel);
     };
-  }, [scheduleId, slides.length]);
+  }, [canReadSession, scheduleId, slides.length]);
 
   const goTo = useCallback(async (nextIndex: number) => {
     const safeIndex = clampSlideIndex(nextIndex, slides.length);
@@ -66,6 +69,10 @@ export function Presentation({
     setIndex(safeIndex);
     setSyncError("");
     if (!syncActive || !isOwner) return;
+    if (!userId) {
+      setSyncError("Your owner session is unavailable. Sign in again to control the shared presentation.");
+      return;
+    }
     const supabase = createClient();
     const { error } = await supabase.from("presentation_sessions")
       .update({
@@ -95,6 +102,10 @@ export function Presentation({
 
   async function toggleSync() {
     if (!isOwner) return;
+    if (!userId) {
+      setSyncError("Your owner session is unavailable. Sign in again to control the shared presentation.");
+      return;
+    }
     const supabase = createClient();
     const { error } = await supabase.from("presentation_sessions").upsert({
       schedule_id: scheduleId,
@@ -137,7 +148,7 @@ export function Presentation({
           { table: "songs" as const, column: "id", value: songId },
           { table: "song_sections" as const, column: "song_id", value: songId },
         ]),
-        { table: "church_members", column: "user_id", value: userId },
+        ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
       ]} />
       <div className="presentation-toolbar">
         <div className="presentation-status">

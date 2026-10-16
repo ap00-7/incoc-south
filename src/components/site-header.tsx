@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, LogIn } from "lucide-react";
+import { BookOpen, CalendarDays, LogIn, MonitorPlay } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 
 const nav = [
-  { href: "/songbook", label: "Songbook", icon: BookOpen },
-  { href: "/schedule", label: "Services", icon: CalendarDays },
+  { href: "/songbook", label: "Songs", icon: BookOpen },
+  { href: "/schedule", label: "Sunday Schedule", icon: CalendarDays },
+  { href: "/slides", label: "Slides", icon: MonitorPlay },
 ];
 
 export function SiteHeader() {
@@ -13,7 +14,7 @@ export function SiteHeader() {
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="INCOC South home">
           <BrandMark />
-          <span><strong>INCOC South</strong><small>Indian Church of Christ</small></span>
+          <span><strong>INCOC South</strong><small>Indian Church of Christ · South Sector</small></span>
         </Link>
         <nav className="main-nav" aria-label="Main navigation">
           {nav.map(({ href, label, icon: Icon }) => (
@@ -30,7 +31,6 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <span>Indian Church of Christ · South Sector</span>
-      <span>Worship · Fellowship · Service</span>
     </footer>
   );
 }

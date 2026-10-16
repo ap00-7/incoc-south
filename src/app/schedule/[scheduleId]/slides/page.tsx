@@ -4,8 +4,9 @@ import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
 import { PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { requireMember } from "@/lib/auth";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { getMembership } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
 export default async function SlidesPage({ params }: { params: Promise<{ scheduleId: string }> }) {
@@ -14,13 +15,15 @@ export default async function SlidesPage({ params }: { params: Promise<{ schedul
     return <PageShell><div className="content-wrap"><div className="notice notice-warning">Presentation preview requires a configured Supabase project.</div></div></PageShell>;
   }
   const { scheduleId } = await params;
-  const membership = await requireMember();
-  const supabase = await createClient();
+  const [membership, { supabase, churchId }] = await Promise.all([
+    getMembership(),
+    getPublicChurchContext(),
+  ]);
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, song_sections(id, section_type, label, position, lyrics)))")
-    .eq("id", scheduleId).eq("church_id", membership.churchId).maybeSingle();
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, song_sections(id, section_type, label, position, lyrics, translation, translation_language)))")
+    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load slide preview: ${error.message}`);
-  if (!schedule || (schedule.status !== "published" && membership.role !== "owner")) notFound();
+  if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
   const slides = generateSlides(normalizeProgrammeItems(schedule.schedule_items ?? []));
 
   return (
@@ -32,7 +35,6 @@ export default async function SlidesPage({ params }: { params: Promise<{ schedul
           const song = item.song;
           return song ? [{ table: "song_sections" as const, column: "song_id", value: song.id }] : [];
         }) ?? [],
-        { table: "church_members", column: "user_id", value: membership.user.id },
       ]} />
       <div className="content-wrap">
         <Link href={`/schedule/${scheduleId}`} className="back-link"><ArrowLeft size={15} /> Back to service</Link>

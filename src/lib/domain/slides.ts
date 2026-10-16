@@ -4,6 +4,8 @@ export type LyricSection = {
   label: string | null;
   position: number;
   lyrics: string;
+  translation?: string | null;
+  translation_language?: string | null;
 };
 
 export type ProgrammeItem = {
@@ -44,23 +46,34 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
   const slides: PresentationSlide[] = [];
   for (const item of [...items].sort((a, b) => a.position - b.position)) {
     if (item.song) {
+      const songTitle = item.song.title;
       const sections = [...item.song.song_sections].sort(
         (a, b) => a.position - b.position,
       );
       for (const section of sections) {
-        const lines = section.lyrics.replace(/\r\n/g, "\n").split("\n");
-        for (let start = 0; start < lines.length; start += LINES_PER_SLIDE) {
-          const chunk = lines.slice(start, start + LINES_PER_SLIDE);
-          const longest = Math.max(0, ...chunk.map((line) => [...line].length));
-          slides.push({
-            itemId: item.id,
-            itemTitle: item.song.title,
-            sectionLabel:
-              section.label?.trim() ||
-              section.section_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase()),
-            lines: chunk,
-            fontScale: Math.max(0.58, Math.min(1, TARGET_LINE_LENGTH / longest || 1)),
-          });
+        const sectionLabel =
+          section.label?.trim() ||
+          section.section_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+        const addTextSlides = (text: string, label: string) => {
+          const lines = text.replace(/\r\n/g, "\n").split("\n");
+          for (let start = 0; start < lines.length; start += LINES_PER_SLIDE) {
+            const chunk = lines.slice(start, start + LINES_PER_SLIDE);
+            const longest = Math.max(0, ...chunk.map((line) => [...line].length));
+            slides.push({
+              itemId: item.id,
+              itemTitle: songTitle,
+              sectionLabel: label,
+              lines: chunk,
+              fontScale: Math.max(0.58, Math.min(1, TARGET_LINE_LENGTH / longest || 1)),
+            });
+          }
+        };
+        addTextSlides(section.lyrics, sectionLabel);
+        if (section.translation?.trim()) {
+          addTextSlides(
+            section.translation,
+            `${sectionLabel} · ${section.translation_language ?? "Translation"}`,
+          );
         }
       }
     } else {

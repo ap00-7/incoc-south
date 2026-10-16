@@ -3,8 +3,8 @@ import { ArrowRight, CalendarDays } from "lucide-react";
 import { connection } from "next/server";
 import { PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { requireMember } from "@/lib/auth";
-import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "long",
@@ -16,19 +16,17 @@ export default async function SchedulePage() {
   if (!isSupabaseConfigured()) {
     return <PageShell><div className="content-wrap"><SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div></PageShell>;
   }
-  const membership = await requireMember();
-  const supabase = await createClient();
+  const { supabase, churchId } = await getPublicChurchContext();
   const { data: schedules, error } = await supabase.from("schedules")
     .select("id, title, service_date, venue, description")
-    .eq("church_id", membership.churchId).eq("status", "published")
+    .eq("church_id", churchId).eq("status", "published")
     .order("service_date", { ascending: false }).limit(50);
   if (error) throw new Error(`Unable to load services: ${error.message}`);
 
   return (
     <PageShell>
       <RealtimeRefresh subscriptions={[
-        { table: "schedules", column: "church_id", value: membership.churchId },
-        { table: "church_members", column: "user_id", value: membership.user.id },
+        { table: "schedules", column: "church_id", value: churchId },
       ]} />
       <div className="content-wrap">
         <SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" description="Find the published service plans shared with your church." />

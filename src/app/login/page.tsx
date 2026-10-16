@@ -15,13 +15,13 @@ export default async function LoginPage() {
         <Link className="auth-brand" href="/"><BrandMark /> INCOC South</Link>
         <p className="eyebrow">INDIAN CHURCH OF CHRIST</p>
         <h1>Welcome back</h1>
-        <p className="muted">Sign in with your authorized church account.</p>
+        <p className="muted">Sign-in is restricted to the website owner.</p>
         {configured ? <LoginForm /> : (
           <div className="notice notice-warning" role="status">
             Sign-in is unavailable until Supabase is configured. Follow the setup guide in the project README.
           </div>
         )}
-        <p className="auth-footnote">Access is limited to members provisioned by a church owner.</p>
+        <p className="auth-footnote">Songs, published Sunday schedules, and slides are available without signing in.</p>
       </section>
     </main>
   );

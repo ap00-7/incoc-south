@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "INCOC South | Worship · Fellowship · Service",
+    default: "INCOC South",
     template: "%s | INCOC South",
   },
   description:

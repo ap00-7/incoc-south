@@ -2,19 +2,17 @@
 
 Church service management, songbook, lyrics, and projector presentations for **Indian Church of Christ · South Sector**.
 
-**Worship · Fellowship · Service**
-
-This is a standalone Next.js App Router application with Supabase Auth, PostgreSQL, row-level security, and Realtime. The restricted presentation-link feature is intentionally disabled; presentation access is for signed-in church members only.
+This is a standalone Next.js App Router application with Supabase Auth, PostgreSQL, row-level security, and Realtime. Published church content is publicly readable; management and synchronized presentation controls remain owner/member restricted.
 
 ## Features implemented
 
 - Responsive near-black INCOC South design with Songs, Sunday Schedule, and Slides as the three homepage destinations and a white-cross favicon.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
 - Server-side membership/owner route checks and database RLS.
-- Owner song creation, metadata editing, structured lyric sections, section ordering, and deletion protection for songs referenced by schedules.
-- Member-only songbook search and language filtering.
+- Owner song creation, metadata editing, six supported song languages, repeated lyric sections, optional section translations, chorus-first ordering, and deletion protection for songs referenced by schedules.
+- Public songbook search, language filtering, lyric sections, and translations.
 - Dated service drafts, reusable song references, non-song programme items, leaders, durations, private notes, ordering, publishing, and unpublishing.
-- Published service details that omit private notes and draft schedules.
+- Public published service details that omit private notes and draft schedules.
 - Deterministic lyric/content slide generation shared by preview and projector mode.
 - Projector keyboard navigation, fullscreen, item navigation, and optional signed-in owner-controlled synchronized sessions.
 - Scoped Realtime refetches for song, schedule, membership, and presentation changes.
@@ -100,10 +98,11 @@ Migration inventory:
 3. `202610160003_membership_profiles.sql` — profile relationship and authenticated table grants.
 4. `202610160004_private_notes.sql` — owner-only programme notes stored separately from viewer-readable programme rows.
 5. `202610160005_realtime_tables.sql` — scoped table additions to the Supabase Realtime publication.
+6. `202610160006_public_content_and_translations.sql` — additive section translation fields and read-only public access scoped to INCOC South content and published schedules.
 
 `src/lib/supabase/database.types.ts` provides strict table, enum, relationship, and RPC types to both browser and server Supabase clients. After applying migrations to the linked project, refresh the file with `npx supabase@latest gen types typescript --linked > src/lib/supabase/database.types.ts` and run `npm run typecheck`.
 
-All exposed application tables have RLS enabled. Membership helpers use fixed search paths and `SECURITY DEFINER` so policies do not recurse through membership RLS. Owners are checked server-side and again by database policies. Viewers can read only their church's songs and published schedules; draft schedules and private service notes are not readable. Membership role changes are not permitted for the acting owner. Songs referenced by a programme item cannot be deleted because of the database foreign key.
+All exposed application tables have RLS enabled. Membership helpers use fixed search paths and `SECURITY DEFINER` so policies do not recurse through membership RLS. Owners are checked server-side and again by database policies. Anonymous and authenticated readers can access INCOC South songs and sections, plus published INCOC South schedules and their programme items. Draft schedules, private service notes, membership/profile data, and presentation-session controls are not public. Owner actions and membership role boundaries remain enforced by PostgreSQL. Songs referenced by a programme item cannot be deleted because of the database foreign key.
 
 Presentation sharing by restricted URL is disabled. `presentation_links` stores hashes only and is owner-only, but no public token validation endpoint is enabled.
 
@@ -118,7 +117,7 @@ npm run test:e2e
 
 Install the Playwright Chromium browser once with `npx playwright install chromium`. Browser smoke tests start the local Next.js server automatically.
 
-Database policy and integrity tests use pgTAP and require the local Supabase stack. The suite currently contains 22 assertions covering tenant isolation, draft and private-note visibility, membership administration, synchronized presentation control, cross-church song references, deletion restrictions, and programme position constraints:
+Database policy and integrity tests use pgTAP and require the local Supabase stack. The suite contains 34 assertions covering public-read scope, draft and private-note visibility, membership administration, synchronized presentation control, cross-church song references, deletion restrictions, and programme position constraints:
 
 ```powershell
 npx supabase@latest start
@@ -130,8 +129,9 @@ npm run db:test
 
 ### Authenticated browser workflow test
 
-The Playwright suite includes an end-to-end owner-to-viewer workflow. It is skipped unless all four test-account variables are present:
+The Playwright suite includes an end-to-end owner-to-viewer workflow. It is skipped unless it is explicitly marked as a disposable test database and all four test-account variables are present. The known hosted production project reference is blocked by the test guard.
 
+- `E2E_TEST_DATABASE=disposable`
 - `E2E_OWNER_EMAIL` and `E2E_OWNER_PASSWORD`
 - `E2E_VIEWER_EMAIL` and `E2E_VIEWER_PASSWORD`
 
@@ -152,7 +152,7 @@ To run it locally:
    ```
 
 4. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` to the local API URL and anon key shown by `npx supabase@latest status`. Stop any already-running Next.js dev server so Playwright starts it with the new configuration.
-5. Set the four `E2E_*` variables in the terminal running the test, then run:
+5. Set `E2E_TEST_DATABASE=disposable` and the four `E2E_*` variables in the terminal running the test, then run:
 
    ```powershell
    npm run test:e2e -- --grep "owner publishes a Sunday programme"
@@ -160,7 +160,7 @@ To run it locally:
 
    The test creates uniquely named song and schedule records and does not delete them; use only a disposable local database. The viewer account must already be a member, and no service-role key is needed for this test.
 
-The test exercises sign-in as owner, song and lyric-section creation, a dated Sunday schedule with song and prayer items, publication, viewer access, and projector slide navigation. Without a configured Supabase instance and test accounts, only the public-page smoke tests can run; the authenticated workflow and live RLS behavior remain unverified.
+The test exercises sign-in as owner, song and lyric-section creation, a dated Sunday schedule with song and prayer items, publication, viewer access, and projector slide navigation. Without a separate disposable Supabase instance and test accounts, only public-page smoke tests can run; the authenticated workflow and live RLS behavior remain unverified. The workflow creates uniquely named records and does not clean them up.
 
 ## Deployment to Vercel
 
@@ -169,11 +169,11 @@ The test exercises sign-in as owner, song and lyric-section creation, a dated Su
 3. Add `SUPABASE_SERVICE_ROLE_KEY` only if member invitations are enabled; keep it server-only.
 4. Add the production callback URL to the Supabase Auth redirect allow-list.
 5. Apply the reviewed SQL migrations to the dedicated Supabase project.
-6. Deploy using Vercel's Next.js build settings and verify sign-in, membership authorization, RLS, and presentation behavior against that project's test accounts.
+6. Deploy using Vercel's Next.js build settings and verify public reads, sign-in, membership authorization, RLS, and presentation behavior against that project's test accounts.
 
 ## Known limitations / follow-up verification
 
-- No Supabase credentials or production deployment access were provided; database migrations and remote integrations are not claimed as executed.
+- The latest public-content migration must be applied to each intended Supabase project before anonymous content pages can query it. No hosted database changes are made automatically.
 - Realtime content clients refetch on notified changes and initial subscription; live multi-client behavior still needs testing against a configured Supabase project.
 - Invitation email delivery, SMTP settings, account recovery, and Vercel production configuration remain deployment tasks.
 - Restricted presentation links remain disabled by design.

@@ -31,9 +31,9 @@ export type Database = {
         ];
       };
       song_sections: {
-        Row: { id: string; song_id: string; section_type: Database["public"]["Enums"]["song_section_type"]; label: string | null; position: number; lyrics: string; created_at: string; updated_at: string };
-        Insert: { id?: string; song_id: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position: number; lyrics?: string; created_at?: string; updated_at?: string };
-        Update: { id?: string; song_id?: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position?: number; lyrics?: string; created_at?: string; updated_at?: string };
+        Row: { id: string; song_id: string; section_type: Database["public"]["Enums"]["song_section_type"]; label: string | null; position: number; lyrics: string; translation: string | null; translation_language: string | null; created_at: string; updated_at: string };
+        Insert: { id?: string; song_id: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position: number; lyrics?: string; translation?: string | null; translation_language?: string | null; created_at?: string; updated_at?: string };
+        Update: { id?: string; song_id?: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position?: number; lyrics?: string; translation?: string | null; translation_language?: string | null; created_at?: string; updated_at?: string };
         Relationships: [
           { foreignKeyName: "song_sections_song_id_fkey"; columns: ["song_id"]; isOneToOne: false; referencedRelation: "songs"; referencedColumns: ["id"] },
         ];

@@ -3,8 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { connection } from "next/server";
 import { PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { requireMember } from "@/lib/auth";
-import { isSupabaseConfigured, createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string }> };
 
@@ -13,18 +13,17 @@ export default async function SongbookPage({ searchParams }: Props) {
   if (!isSupabaseConfigured()) {
     return <PageShell><div className="content-wrap"><SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div></PageShell>;
   }
-  const membership = await requireMember();
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
   const language = params.language?.trim() ?? "";
-  const supabase = await createClient();
+  const { supabase, churchId } = await getPublicChurchContext();
   let songsQuery = supabase.from("songs").select("id, title, language, author")
-    .eq("church_id", membership.churchId).order("title").limit(100);
+    .eq("church_id", churchId).order("title").limit(100);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
   const [{ data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
     songsQuery,
-    supabase.from("songs").select("language").eq("church_id", membership.churchId).order("language").limit(200),
+    supabase.from("songs").select("language").eq("church_id", churchId).order("language").limit(200),
   ]);
   if (error) throw new Error(`Unable to load songs: ${error.message}`);
   if (languageError) throw new Error(`Unable to load song languages: ${languageError.message}`);
@@ -33,8 +32,7 @@ export default async function SongbookPage({ searchParams }: Props) {
   return (
     <PageShell>
       <RealtimeRefresh subscriptions={[
-        { table: "songs", column: "church_id", value: membership.churchId },
-        { table: "church_members", column: "user_id", value: membership.user.id },
+        { table: "songs", column: "church_id", value: churchId },
       ]} />
       <div className="content-wrap">
         <SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" description="Browse the songs shared by your church. Select a song to read its lyrics and sections." />

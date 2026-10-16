@@ -37,6 +37,22 @@ describe("generateSlides", () => {
     expect(slides.flatMap((slide) => slide.lines)).toEqual(lines);
   });
 
+  it("adds each section translation as separately labeled slides", () => {
+    const slides = generateSlides([songItem("Multilingual", 0, [
+      {
+        id: "s",
+        section_type: "chorus",
+        label: null,
+        position: 0,
+        lyrics: "Original chorus",
+        translation: "தமிழ் மொழிபெயர்ப்பு",
+        translation_language: "Tamil",
+      },
+    ])]);
+    expect(slides.map((slide) => slide.sectionLabel)).toEqual(["Chorus", "Chorus · Tamil"]);
+    expect(slides.map((slide) => slide.lines[0])).toEqual(["Original chorus", "தமிழ் மொழிபெயர்ப்பு"]);
+  });
+
   it("keeps unusually long words intact and scales down the slide", () => {
     const longWord = "அ".repeat(100);
     const [slide] = generateSlides([songItem("Long line", 0, [

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(34);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -29,6 +29,8 @@ from public.churches where slug = 'incoc-south';
 insert into public.songs (id, church_id, title, language, created_by)
 select '20000000-0000-0000-0000-000000000002', id, 'Other tenant song', 'English', '10000000-0000-0000-0000-000000000003'
 from public.churches where slug = 'rls-test-tenant';
+insert into public.song_sections (id, song_id, section_type, position, lyrics, translation, translation_language)
+values ('21000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'chorus', 0, 'Public chorus', 'தமிழ் பல்லவி', 'Tamil');
 
 insert into public.schedules (id, church_id, title, service_date, status, created_by)
 select '30000000-0000-0000-0000-000000000001', id, 'Published test service', current_date, 'published', '10000000-0000-0000-0000-000000000001'
@@ -48,6 +50,36 @@ values ('40000000-0000-0000-0000-000000000001', 'Confidential owner note');
 insert into public.presentation_sessions (schedule_id, current_item_id, updated_by)
 values ('30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001');
 
+set local role anon;
+select set_config('request.jwt.claim.role', 'anon', true);
+select is((select count(*) from public.churches), 1::bigint, 'anonymous readers can identify only the public church');
+select is((select count(*) from public.songs), 1::bigint, 'anonymous readers see songs only from INCOC South');
+select is((select translation from public.song_sections where id = '21000000-0000-0000-0000-000000000001'), 'தமிழ் பல்லவி', 'anonymous readers can read section translations');
+select is((select count(*) from public.schedules where status = 'published'), 1::bigint, 'anonymous readers can read published schedules');
+select is((select count(*) from public.schedules where status = 'draft'), 0::bigint, 'anonymous readers cannot read draft schedules');
+select is((select count(*) from public.schedule_items), 1::bigint, 'anonymous readers can read programme items only for published schedules');
+select throws_ok($$select * from public.church_members$$, '42501', 'anonymous readers cannot read church memberships');
+select throws_ok($$select * from public.schedule_item_notes$$, '42501', 'anonymous readers cannot read private service notes');
+select throws_ok($$select * from public.presentation_sessions$$, '42501', 'anonymous readers cannot inspect synchronized session controls');
+select throws_ok(
+  $$insert into public.songs (church_id, title, language, created_by)
+    select id, 'Anonymous song', 'English', '10000000-0000-0000-0000-000000000001'
+    from public.churches where slug = 'incoc-south'$$,
+  '42501',
+  'anonymous readers cannot create songs'
+);
+select throws_ok(
+  $$update public.schedules set status = 'published' where title = 'Private draft service'$$,
+  '42501',
+  'anonymous readers cannot publish a draft schedule'
+);
+select throws_ok(
+  $$update public.songs set title = 'Changed by anonymous reader' where id = '20000000-0000-0000-0000-000000000001'$$,
+  '42501',
+  'anonymous readers cannot edit public songs'
+);
+
+reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);

@@ -4,10 +4,13 @@ const ownerEmail = process.env.E2E_OWNER_EMAIL;
 const ownerPassword = process.env.E2E_OWNER_PASSWORD;
 const viewerEmail = process.env.E2E_VIEWER_EMAIL;
 const viewerPassword = process.env.E2E_VIEWER_PASSWORD;
+const isDisposableTestDatabase = process.env.E2E_TEST_DATABASE === "disposable"
+  && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
+  && !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("ckgnhsnqeabowkctvdqj");
 
 test.skip(
-  !ownerEmail || !ownerPassword || !viewerEmail || !viewerPassword,
-  "Set E2E_OWNER_EMAIL, E2E_OWNER_PASSWORD, E2E_VIEWER_EMAIL, and E2E_VIEWER_PASSWORD for the Supabase workflow test.",
+  !isDisposableTestDatabase || !ownerEmail || !ownerPassword || !viewerEmail || !viewerPassword,
+  "Set E2E_TEST_DATABASE=disposable and test-account credentials for a non-production Supabase project.",
 );
 
 async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
@@ -27,8 +30,8 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const songTitle = `E2E Song ${uniqueSuffix}`;
   await ownerPage.goto("/admin/songs/new");
   await ownerPage.getByLabel("Song title").fill(songTitle);
-  await ownerPage.getByLabel("Language").fill("English");
-  await ownerPage.getByLabel("Section label").fill("Verse 1");
+  await ownerPage.getByLabel("Song language").selectOption("English");
+  await ownerPage.getByLabel(/Section label/).fill("Verse 1");
   await ownerPage.getByLabel("Lyrics").fill([
     "First verse line one",
     "First verse line two",

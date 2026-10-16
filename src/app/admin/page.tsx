@@ -20,8 +20,7 @@ export default async function AdminPage() {
     <div className="admin-stats"><div><strong>{songs ?? 0}</strong><span>Songs in library</span></div><div><strong>{schedules ?? 0}</strong><span>Service schedules</span></div></div>
     <div className="admin-card-grid">
       <Link className="admin-link-card" href="/admin/songs"><strong>Manage songs</strong><span>Create reusable songs, edit lyric sections, and organize languages.</span></Link>
-      <Link className="admin-link-card" href="/admin/schedules"><strong>Plan a service</strong><span>Build a dated programme, preview slides, and publish it for members.</span></Link>
-      <Link className="admin-link-card" href="/admin/members"><strong>Manage members</strong><span>Review authorized church members and their access level.</span></Link>
+      <Link className="admin-link-card" href="/admin/schedules"><strong>Plan a service</strong><span>Build a dated programme, preview slides, and publish it for public viewing.</span></Link>
       <Link className="admin-link-card" href="/admin/settings"><strong>Church settings</strong><span>Review application identity and configuration status.</span></Link>
     </div>
   </>;
