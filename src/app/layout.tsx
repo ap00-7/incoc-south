@@ -9,12 +9,12 @@ export const metadata: Metadata = {
   },
   description:
     "Church service management, worship songs, lyrics, and projector presentations for Indian Church of Christ, South Sector.",
-  icons: { icon: "/incoc-mark.svg" },
+  icons: { icon: [{ url: "/incoc-mark.svg", type: "image/svg+xml" }] },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body>
         <Suspense fallback={<div className="route-loading" role="status">Loading INCOC South…</div>}>
           {children}

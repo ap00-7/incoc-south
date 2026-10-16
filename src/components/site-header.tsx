@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, Church, LogIn } from "lucide-react";
+import { BookOpen, CalendarDays, LogIn } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 
 const nav = [
   { href: "/songbook", label: "Songbook", icon: BookOpen },
@@ -11,7 +12,7 @@ export function SiteHeader() {
     <header className="site-header">
       <div className="header-inner">
         <Link className="brand" href="/" aria-label="INCOC South home">
-          <span className="brand-mark"><Church size={20} strokeWidth={1.7} /></span>
+          <BrandMark />
           <span><strong>INCOC South</strong><small>Indian Church of Christ</small></span>
         </Link>
         <nav className="main-nav" aria-label="Main navigation">

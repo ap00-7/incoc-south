@@ -8,7 +8,9 @@ export async function getMembership() {
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) return null;
+  if (authError?.name === "AuthSessionMissingError") return null;
+  if (authError) throw new Error("Unable to verify the signed-in account.");
+  if (!user) return null;
 
   const { data: church, error: churchError } = await supabase
     .from("churches")
@@ -29,7 +31,7 @@ export async function getMembership() {
     throw new Error(`Unable to verify church membership: ${error.message}`);
   }
   if (!membership) return null;
-  return { user, churchId: church.id, role: membership.role as "owner" | "viewer" };
+  return { user, churchId: church.id, role: membership.role };
 }
 
 export async function requireMember() {

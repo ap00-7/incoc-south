@@ -8,7 +8,7 @@ This is a standalone Next.js App Router application with Supabase Auth, PostgreS
 
 ## Features implemented
 
-- Branded, responsive INCOC South home and application shell.
+- Responsive near-black INCOC South design with Songs, Sunday Schedule, and Slides as the three homepage destinations and a white-cross favicon.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
 - Server-side membership/owner route checks and database RLS.
 - Owner song creation, metadata editing, structured lyric sections, section ordering, and deletion protection for songs referenced by schedules.
@@ -38,7 +38,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-The home and sign-in pages load without Supabase configuration. Copy the Supabase URL and public anon/publishable key from your own Supabase project into `.env.local` to enable authenticated data features. Do not use another application's Supabase project.
+The home and sign-in pages load without Supabase configuration. Set your Supabase project URL and publishable key in `.env.local` to enable authenticated data features. The app also accepts the legacy anon-key variable for existing local setups. Do not use another application's Supabase project.
 
 For a local Supabase instance, install Docker Desktop and run:
 
@@ -48,7 +48,7 @@ npx supabase@latest db reset
 npx supabase@latest status
 ```
 
-Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` using the local values printed by `supabase status`. The reset command applies the ordered SQL migrations to the local database. It deletes and recreates the local database; do not use it with production data.
+Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` using the local values printed by `supabase status`. The app also accepts `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` when a publishable key is available. The reset command applies the ordered SQL migrations to the local database. It deletes and recreates the local database; do not use it with production data.
 
 To use a hosted project, link only the intended new INCOC South Supabase project and apply migrations:
 
@@ -65,7 +65,8 @@ Review the linked project before running `db:push`. The migrations are version c
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Yes for data features | Supabase project URL. Safe to expose publicly. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes for data features | Public anon/publishable key. RLS must remain enabled. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes for data features | Preferred public publishable key. RLS must remain enabled. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Alternative | Legacy name for the public anon/publishable key. Used only if the preferred variable is unset. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | Server-only key used by the owner invitation action. Never use a `NEXT_PUBLIC_` prefix or send it to a client. |
 | `NEXT_PUBLIC_SITE_URL` | Optional | Invitation callback origin; set it to the deployed HTTPS URL in production. |
 
@@ -85,7 +86,7 @@ from public.churches
 where slug = 'incoc-south';
 ```
 
-5. Set the application's public Supabase URL and anon/publishable key, then sign in at `/login`.
+5. Set the application's public Supabase URL and publishable key, then sign in at `/login`.
 6. For owner-managed invitations, configure `SUPABASE_SERVICE_ROLE_KEY` only in the server environment and set the Supabase Auth redirect allow-list for `${NEXT_PUBLIC_SITE_URL}/auth/callback`.
 
 The bootstrap is a deliberate SQL operation so the first owner is never granted automatically by registration. Supabase invitation email delivery also needs an SMTP provider for production.
@@ -164,7 +165,7 @@ The test exercises sign-in as owner, song and lyric-section creation, a dated Su
 ## Deployment to Vercel
 
 1. Create a separate Vercel project for this repository.
-2. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
+2. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
 3. Add `SUPABASE_SERVICE_ROLE_KEY` only if member invitations are enabled; keep it server-only.
 4. Add the production callback URL to the Supabase Auth redirect allow-list.
 5. Apply the reviewed SQL migrations to the dedicated Supabase project.

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
-import { Church } from "lucide-react";
+import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/app/login/login-form";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 
@@ -12,7 +12,7 @@ export default async function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
-        <Link className="auth-brand" href="/"><span className="brand-mark"><Church size={21} /></span> INCOC South</Link>
+        <Link className="auth-brand" href="/"><BrandMark /> INCOC South</Link>
         <p className="eyebrow">INDIAN CHURCH OF CHRIST</p>
         <h1>Welcome back</h1>
         <p className="muted">Sign in with your authorized church account.</p>

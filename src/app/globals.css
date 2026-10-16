@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --navy: #101d35;
-  --navy-soft: #1b2a44;
-  --gold: #d7b875;
-  --paper: #f7f6f2;
-  --white: #fff;
-  --ink: #202735;
-  --muted: #667085;
-  --border: #e4e7ec;
-  --danger: #a93232;
+  --navy: #f4f4f4;
+  --navy-soft: #181818;
+  --gold: #d0d0d0;
+  --paper: #090909;
+  --white: #111;
+  --ink: #ededed;
+  --muted: #aaa;
+  --border: #2b2b2b;
+  --danger: #fb7185;
 }
 
 * { box-sizing: border-box; }
@@ -235,4 +235,69 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+html { color-scheme: dark; }
+:focus-visible { outline-color: #f4f4f4; }
+
+.brand-mark {
+  color: #fff;
+  background: #090909;
+  border-color: #303030;
+}
+.brand-mark svg { width: 24px; height: 24px; fill: currentColor; }
+.main-nav a, .header-login { color: #c9c9c9; }
+.main-nav a:hover, .header-login:hover, .text-link:hover { color: #fff; }
+.header-login { border-color: #383838; }
+.eyebrow, .hero h1 span, .card-arrow, .lyrics-section h2, .programme-position,
+.slide-section, .preview-card p { color: #c8c8c8; }
+.button-primary { color: #090909; background: #f2f2f2; }
+.button-primary:hover { color: #090909; background: #d8d8d8; }
+.button-secondary { color: #f2f2f2; background: #171717; border-color: #383838; }
+.button-secondary:hover { background: #242424; }
+.text-link { color: #ededed; }
+
+.home-main { max-width: 980px; min-height: calc(100vh - 205px); margin: auto; padding: 90px 30px 100px; }
+.home-main > .eyebrow { margin-bottom: 18px; }
+.home-main h1 { margin: 0; color: #f5f5f5; font-family: Georgia, "Times New Roman", serif; font-size: clamp(38px, 6vw, 58px); font-weight: 500; letter-spacing: -1.5px; }
+.home-description { margin: 14px 0 38px; color: var(--muted); font-size: 14px; }
+.home-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.home-option { min-height: 170px; padding: 22px; display: flex; flex-direction: column; align-items: flex-start; gap: 25px; background: #111; border: 1px solid #2b2b2b; border-radius: 10px; transition: border-color .15s ease, background .15s ease, transform .15s ease; }
+.home-option:hover { background: #161616; border-color: #666; transform: translateY(-2px); }
+.home-option-icon { width: 38px; height: 38px; display: grid; place-items: center; color: #eee; background: #1d1d1d; border-radius: 8px; }
+.home-option-copy { display: grid; gap: 7px; }
+.home-option-copy strong { color: #f2f2f2; font-size: 15px; }
+.home-option-copy > span { color: #aaa; font-size: 12px; line-height: 1.6; }
+
+.search-input, .form-stack input, .form-stack select, .form-stack textarea,
+.toolbar select, .member-actions select {
+  color: #eee;
+  background: #141414;
+  border-color: #383838;
+}
+.search-input::placeholder, .form-stack input::placeholder, .form-stack textarea::placeholder { color: #888; }
+.toolbar select { color: #ddd; }
+.result-card, .lyrics-section, .programme-item, .auth-card, .admin-nav,
+.admin-link-card, .admin-stats > div, .admin-form, .schedule-edit-form,
+.member-row, .settings-list { color: var(--ink); background: #111; }
+.result-card:hover { border-color: #666; }
+.meta-tag { color: #ddd; background: #242424; }
+.empty-state, .notice { color: #bcbcbc; background: #111; border-color: #303030; }
+.notice-warning { color: #dedede; background: #1a1a1a; border-color: #383838; }
+.programme-public-preview, .internal-note { color: #ccc; background: #1b1b1b; }
+.internal-note { color: #ddd; }
+.auth-page { background: #090909; }
+.auth-card { border-color: #303030; box-shadow: 0 14px 40px #0008; }
+.form-stack label, .admin-nav a, .admin-nav-button { color: #c7c7c7; }
+.admin-nav a:hover, .admin-nav-button:hover { color: #fff; background: #202020; }
+.realtime-notice { color: #eee; background: #1b1b1b; border-color: #383838; box-shadow: 0 4px 16px #0008; }
+.status-draft, .status-published { color: #ddd; background: #262626; }
+.member-actions select { color: #ddd; }
+.settings-list code { color: #ddd; }
+.not-found h1 { color: #f4f4f4; }
+
+@media (max-width: 760px) {
+  .home-main { min-height: calc(100vh - 180px); padding: 64px 20px 70px; }
+  .home-options { grid-template-columns: 1fr; gap: 10px; }
+  .home-option { min-height: 125px; flex-direction: row; align-items: center; gap: 17px; }
 }

@@ -1,17 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/supabase/database.types";
+import { getSupabasePublicConfig } from "@/lib/supabase/config";
 
 export function isSupabaseConfigured() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  const { url, key } = getSupabasePublicConfig();
+  return Boolean(url && key);
 }
 
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const { url, key } = getSupabasePublicConfig();
   if (!url || !key) {
     throw new Error("Supabase is not configured. See the setup instructions.");
   }

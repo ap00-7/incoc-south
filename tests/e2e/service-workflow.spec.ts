@@ -83,6 +83,8 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const viewerPage = await viewerContext.newPage();
   await signIn(viewerPage, viewerEmail!, viewerPassword!);
   await expect(viewerPage).toHaveURL(/\/songbook$/);
+  await viewerPage.goto("/admin");
+  await expect(viewerPage).toHaveURL(/\/access-denied$/);
   await viewerPage.goto("/schedule");
   await viewerPage.getByRole("link", { name: new RegExp(scheduleTitle) }).click();
   await expect(viewerPage.getByRole("heading", { name: scheduleTitle })).toBeVisible();
