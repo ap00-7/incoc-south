@@ -17,7 +17,7 @@ export default async function PresentPage({ params }: { params: Promise<{ schedu
     getPublicChurchContext(),
   ]);
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, song_sections(id, section_type, label, position, lyrics, translation, translation_language)))")
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
     .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load presentation: ${error.message}`);
   if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();

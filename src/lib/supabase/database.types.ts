@@ -23,17 +23,17 @@ export type Database = {
         ];
       };
       songs: {
-        Row: { id: string; church_id: string; title: string; language: string; author: string | null; source: string | null; created_by: string; created_at: string; updated_at: string };
-        Insert: { id?: string; church_id: string; title: string; language: string; author?: string | null; source?: string | null; created_by: string; created_at?: string; updated_at?: string };
-        Update: { id?: string; church_id?: string; title?: string; language?: string; author?: string | null; source?: string | null; created_by?: string; created_at?: string; updated_at?: string };
+        Row: { id: string; church_id: string; title: string; language: string; author: string | null; source: string | null; has_translation: boolean; start_with_chorus: boolean; created_by: string; created_at: string; updated_at: string };
+        Insert: { id?: string; church_id: string; title: string; language: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; created_by: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; church_id?: string; title?: string; language?: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; created_by?: string; created_at?: string; updated_at?: string };
         Relationships: [
           { foreignKeyName: "songs_church_id_fkey"; columns: ["church_id"]; isOneToOne: false; referencedRelation: "churches"; referencedColumns: ["id"] },
         ];
       };
       song_sections: {
-        Row: { id: string; song_id: string; section_type: Database["public"]["Enums"]["song_section_type"]; label: string | null; position: number; lyrics: string; translation: string | null; translation_language: string | null; created_at: string; updated_at: string };
-        Insert: { id?: string; song_id: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position: number; lyrics?: string; translation?: string | null; translation_language?: string | null; created_at?: string; updated_at?: string };
-        Update: { id?: string; song_id?: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position?: number; lyrics?: string; translation?: string | null; translation_language?: string | null; created_at?: string; updated_at?: string };
+        Row: { id: string; song_id: string; section_type: Database["public"]["Enums"]["song_section_type"]; label: string | null; position: number; lyrics: string; translation: string | null; translation_language: string | null; is_hidden: boolean; created_at: string; updated_at: string };
+        Insert: { id?: string; song_id: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position: number; lyrics?: string; translation?: string | null; translation_language?: string | null; is_hidden?: boolean; created_at?: string; updated_at?: string };
+        Update: { id?: string; song_id?: string; section_type?: Database["public"]["Enums"]["song_section_type"]; label?: string | null; position?: number; lyrics?: string; translation?: string | null; translation_language?: string | null; is_hidden?: boolean; created_at?: string; updated_at?: string };
         Relationships: [
           { foreignKeyName: "song_sections_song_id_fkey"; columns: ["song_id"]; isOneToOne: false; referencedRelation: "songs"; referencedColumns: ["id"] },
         ];

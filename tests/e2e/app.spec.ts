@@ -18,23 +18,28 @@ test("home presents exactly three clear destinations", async ({ page }) => {
   await expect(options.nth(1)).toHaveAttribute("href", "/schedule");
   await expect(options.nth(2)).toContainText("Slides");
   await expect(options.nth(2)).toHaveAttribute("href", "/slides");
-  await expect(page.getByRole("navigation", { name: "Main navigation" }).getByRole("link")).toHaveText([
-    "Songs",
-    "Sunday Schedule",
-    "Slides",
-  ]);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
 });
 
 test("homepage layout fits mobile, tablet, and laptop widths", async ({ page }) => {
   await page.goto("/");
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await expect(page.locator(".home-options > a")).toHaveCount(3);
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     expect(hasHorizontalOverflow, `horizontal overflow at ${width}px`).toBe(false);
+  }
+});
+
+test("public content routes remain directly reachable without a global navigation bar", async ({ page }) => {
+  for (const path of ["/songbook", "/schedule", "/slides"]) {
+    await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await expect(page.locator(".site-header .brand")).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+    await expect(page.locator(".page-main")).toBeVisible();
   }
 });
 

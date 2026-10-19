@@ -16,6 +16,20 @@ export const songLanguages = [
   { value: songLanguageValues[5], label: "తెలుగు · Telugu" },
 ] as const;
 
+export const songEditorLanguages = [
+  { value: "English", label: "English" },
+  { value: "Kannada", label: "ಕನ್ನಡ · Kannada" },
+  { value: "Tamil", label: "தமிழ் · Tamil" },
+  { value: "Hindi", label: "हिन्दी · Hindi" },
+] as const;
+
+export const songEditorLanguageValues = songEditorLanguages.map(({ value }) => value) as [
+  "English",
+  "Kannada",
+  "Tamil",
+  "Hindi",
+];
+
 export const songSectionValues = [
   "verse",
   "chorus",

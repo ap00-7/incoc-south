@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseDurationMinutes } from "@/lib/domain/validation";
-import { songLanguageValues, songSectionValues } from "@/lib/domain/songs";
+import { songEditorLanguageValues, songLanguageValues, songSectionValues } from "@/lib/domain/songs";
 
 const songMetadataSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -59,6 +59,132 @@ function parseSongSections(formData: FormData) {
   const parsed = z.array(songSectionSchema).min(1).max(50).safeParse(sectionsValue);
   if (!parsed.success) throw new Error("Add a valid lyric and translation for every section.");
   return parsed.data;
+}
+
+const editorSectionSchema = z.object({
+  id: z.string().uuid().optional(),
+  section_type: z.enum(songSectionValues),
+  section_label: z.string().trim().max(100),
+  lyrics: z.string().max(20000),
+  translation: z.string().max(20000),
+  translation_language: z.string().max(80),
+  is_hidden: z.boolean(),
+});
+
+function parseEditorSections(formData: FormData) {
+  const rawSections = formData.get("sections");
+  if (typeof rawSections !== "string") throw new Error("Add a valid lyric section.");
+  let sectionsValue: unknown;
+  try {
+    sectionsValue = JSON.parse(rawSections);
+  } catch {
+    throw new Error("The lyric sections could not be read. Review the form and try again.");
+  }
+  const parsed = z.array(editorSectionSchema).min(1).max(50).safeParse(sectionsValue);
+  if (!parsed.success) throw new Error("Review the song sections and try again.");
+  const ids = parsed.data.flatMap((section) => section.id ? [section.id] : []);
+  if (new Set(ids).size !== ids.length) throw new Error("A lyric section appears more than once.");
+  return parsed.data;
+}
+
+export async function saveSong(formData: FormData) {
+  const member = await requireOwner();
+  const songIdValue = formData.get("song_id");
+  const songId = typeof songIdValue === "string" && songIdValue ? z.string().uuid().parse(songIdValue) : null;
+  const languageSchema = songId ? z.string().trim().min(1).max(80) : z.enum(songEditorLanguageValues);
+  const parsedMetadata = z.object({
+    title: z.string().trim().min(1).max(200),
+    language: languageSchema,
+    has_translation: z.boolean(),
+    start_with_chorus: z.boolean(),
+  }).safeParse({
+    title: formData.get("title"),
+    language: formData.get("language"),
+    has_translation: formData.get("has_translation") === "on",
+    start_with_chorus: formData.get("start_with_chorus") === "on",
+  });
+  if (!parsedMetadata.success) throw new Error("Enter a title and select one of the supported song languages.");
+  const sections = parseEditorSections(formData);
+  const supabase = await createClient();
+
+  if (!songId) {
+    const { data: song, error } = await supabase.from("songs").insert({
+      church_id: member.churchId,
+      created_by: member.user.id,
+      title: parsedMetadata.data.title,
+      language: parsedMetadata.data.language,
+      has_translation: parsedMetadata.data.has_translation,
+      start_with_chorus: parsedMetadata.data.start_with_chorus,
+    }).select("id").single();
+    if (error) throw new Error(`Unable to create song: ${error.message}`);
+    const { error: sectionError } = await supabase.from("song_sections").insert(sections.map((section, position) => ({
+      song_id: song.id,
+      section_type: section.section_type,
+      label: section.section_label || null,
+      position,
+      lyrics: section.lyrics,
+      translation: section.translation.trim() || null,
+      translation_language: section.translation.trim() ? section.translation_language || null : null,
+      is_hidden: section.is_hidden,
+    })));
+    if (sectionError) {
+      const { error: cleanupError } = await supabase.from("songs").delete()
+        .eq("id", song.id).eq("church_id", member.churchId);
+      if (cleanupError) throw new Error(`Song sections could not be saved (${sectionError.message}), and cleanup failed (${cleanupError.message}). Review the new song before retrying.`);
+      throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
+    }
+    revalidatePath("/songbook");
+    revalidatePath("/admin/songs");
+    redirect(`/admin/songs/${song.id}`);
+  }
+
+  const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
+  const { data: existingSong, error: lookupError } = await supabase.from("songs")
+    .select("id").eq("id", songId).eq("church_id", member.churchId)
+    .eq("updated_at", expectedUpdatedAt).maybeSingle();
+  if (lookupError) throw new Error(`Unable to verify song details: ${lookupError.message}`);
+  if (!existingSong) throw new Error("This song was changed by another owner. Reload and review the latest version before saving.");
+
+  const { data: updatedSong, error: updateError } = await supabase.from("songs").update({
+    title: parsedMetadata.data.title,
+    language: parsedMetadata.data.language,
+    has_translation: parsedMetadata.data.has_translation,
+    start_with_chorus: parsedMetadata.data.start_with_chorus,
+  }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
+  if (updateError) throw new Error(`Unable to update song: ${updateError.message}`);
+  if (!updatedSong) throw new Error("This song was changed by another owner. Reload and review the latest version before saving.");
+
+  const { data: existingSections, error: sectionLookupError } = await supabase.from("song_sections")
+    .select("id, position").eq("song_id", songId).order("position");
+  if (sectionLookupError) throw new Error(`Unable to load lyric sections: ${sectionLookupError.message}`);
+  const existingIds = new Set((existingSections ?? []).map(({ id }) => id));
+  if (sections.some((section) => section.id && !existingIds.has(section.id))) {
+    throw new Error("A lyric section no longer belongs to this song. Reload and review the latest version.");
+  }
+
+  const positionOffset = Math.max(0, ...(existingSections ?? []).map(({ position }) => position)) + sections.length + 1;
+  for (const [index, section] of (existingSections ?? []).entries()) {
+    const { error } = await supabase.from("song_sections").update({ position: positionOffset + index })
+      .eq("id", section.id).eq("song_id", songId);
+    if (error) throw new Error(`Unable to prepare lyric section ordering: ${error.message}`);
+  }
+  const rows = sections.map((section, position) => ({
+    ...(section.id ? { id: section.id } : {}),
+    song_id: songId,
+    section_type: section.section_type,
+    label: section.section_label || null,
+    position,
+    lyrics: section.lyrics,
+    translation: section.translation.trim() || null,
+    translation_language: section.translation.trim() ? section.translation_language || null : null,
+    is_hidden: section.is_hidden,
+  }));
+  const { error: saveSectionsError } = await supabase.from("song_sections").upsert(rows, { onConflict: "id" });
+  if (saveSectionsError) throw new Error(`Unable to save lyric sections: ${saveSectionsError.message}`);
+  revalidatePath("/songbook");
+  revalidatePath(`/songbook/${songId}`);
+  revalidatePath(`/admin/songs/${songId}`);
+  redirect(`/admin/songs/${songId}`);
 }
 
 export async function createSong(formData: FormData) {

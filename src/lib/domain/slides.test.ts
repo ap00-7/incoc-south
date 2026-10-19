@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, generateSlides, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, generateSlides, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
@@ -51,6 +51,40 @@ describe("generateSlides", () => {
     ])]);
     expect(slides.map((slide) => slide.sectionLabel)).toEqual(["Chorus", "Chorus · Tamil"]);
     expect(slides.map((slide) => slide.lines[0])).toEqual(["Original chorus", "தமிழ் மொழிபெயர்ப்பு"]);
+  });
+
+  it("repeats the stored chorus after verses and keeps all translations after originals", () => {
+    const sections: LyricSection[] = [
+      { id: "v1", section_type: "verse", label: "Verse 1", position: 0, lyrics: "Verse one", translation: "Translation one" },
+      { id: "p", section_type: "pre_chorus", label: null, position: 1, lyrics: "Lift" },
+      { id: "c", section_type: "chorus", label: null, position: 2, lyrics: "Refrain", translation: "Translated refrain" },
+      { id: "v2", section_type: "verse", label: "Verse 2", position: 3, lyrics: "Verse two" },
+    ];
+    expect(sequenceSongSections(sections).map((section) => section.id)).toEqual(["v1", "p", "c", "v2", "p", "c"]);
+    const slides = generateSlides([songItem("Sequence", 0, sections)]);
+    expect(slides.map((slide) => slide.lines[0])).toEqual([
+      "Verse one", "Lift", "Refrain", "Verse two", "Lift", "Refrain",
+      "Translation one", "Translated refrain", "Translated refrain",
+    ]);
+  });
+
+  it("starts with one chorus and excludes hidden sections", () => {
+    const sequence = sequenceSongSections([
+      { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Verse" },
+      { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Chorus" },
+      { id: "h", section_type: "bridge", label: null, position: 2, lyrics: "Hidden", is_hidden: true },
+    ], true);
+    expect(sequence.map((section) => section.id)).toEqual(["c", "v", "c"]);
+  });
+
+  it("preserves distinct legacy chorus sections but removes copied chorus duplicates", () => {
+    const sequence = sequenceSongSections([
+      { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Verse" },
+      { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Refrain" },
+      { id: "c-copy", section_type: "chorus", label: null, position: 2, lyrics: "Refrain" },
+      { id: "c-alt", section_type: "chorus", label: "Alternate", position: 3, lyrics: "Different refrain" },
+    ]);
+    expect(sequence.map((section) => section.id)).toEqual(["v", "c", "c-alt"]);
   });
 
   it("keeps unusually long words intact and scales down the slide", () => {
