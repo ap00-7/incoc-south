@@ -36,6 +36,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .header-login { display: inline-flex; gap: 8px; align-items: center; color: #4b5565; font-size: 13px; font-weight: 600; }
 .header-login:hover { color: var(--navy); }
 .header-login { color: var(--navy); padding: 10px 14px; border: 1px solid var(--border); border-radius: 9px; }
+.header-session-status { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; }
+.owner-session-label { display: inline-flex; align-items: center; gap: 7px; color: #c9c9c9; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.owner-session-label:hover { color: #fff; }
+.header-session-action { min-height: 40px; padding: 0 12px; color: #c9c9c9; background: transparent; border: 1px solid #383838; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 600; }
+.header-session-action:hover { color: #fff; background: #202020; }
+.header-session-neutral { color: #aaa; font-size: 11px; white-space: nowrap; }
 .page-main { min-height: calc(100vh - 140px); }
 .site-footer { max-width: 1180px; min-height: 64px; margin: auto; padding: 18px 30px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); }
 .route-loading { min-height: 100vh; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
@@ -327,6 +333,10 @@ html { color-scheme: dark; }
   .brand small { font-size: 9px; }
   .brand-mark { width: 34px; height: 34px; flex: 0 0 auto; }
   .header-login { flex: 0 0 auto; padding: 8px 10px; font-size: 11px; }
+  .header-session-status { gap: 7px; }
+  .owner-session-label { font-size: 10px; }
+  .header-session-action { min-height: 40px; padding: 0 8px; font-size: 10px; }
+  .header-session-neutral { max-width: 120px; font-size: 9px; text-align: right; white-space: normal; }
 }
 
 @media (max-width: 760px) {
@@ -361,6 +371,10 @@ html { color-scheme: dark; }
 @media (max-width: 420px) {
   .header-inner { padding-inline: 12px; }
   .header-login { padding: 7px 8px; }
+  .header-session-status { gap: 5px; }
+  .owner-session-label { gap: 4px; font-size: 9px; }
+  .owner-session-label svg { width: 14px; }
+  .header-session-action { min-height: 38px; padding: 0 6px; font-size: 9px; }
   .home-main { padding-inline: 16px; }
   .home-main h1 { font-size: clamp(34px, 10vw, 42px); }
   .home-option { padding: 17px; }

@@ -102,6 +102,9 @@ test("unauthenticated visitors cannot open owner pages", async ({ page }) => {
     "/admin",
     "/admin/songs",
     "/admin/songs/new",
+    "/admin/schedules",
+    "/admin/members",
+    "/admin/settings",
   ];
 
   for (const path of protectedPaths) {
@@ -111,6 +114,7 @@ test("unauthenticated visitors cannot open owner pages", async ({ page }) => {
       if (new URL(page.url()).pathname === "/login") return "login";
       return (await accessState.count()) ? "configuration-notice" : "pending";
     }, { timeout: 15_000 }).not.toBe("pending");
+    await expect(page.getByRole("heading", { name: "Welcome to INCOC South" })).toHaveCount(0);
 
     if (new URL(page.url()).pathname === "/login") {
       await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { PageShell } from "@/components/page-shell";
-import { signOut } from "@/app/actions/auth";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { requireOwner } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
@@ -24,7 +23,6 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/songs">Songs</Link>
           <Link href="/admin/schedules">Schedules</Link>
           <Link href="/admin/settings">Settings</Link>
-          <form action={signOut}><button className="admin-nav-button">Sign out</button></form>
         </aside>
         <section className="admin-content">{children}</section>
       </div>

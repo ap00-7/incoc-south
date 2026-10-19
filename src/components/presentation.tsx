@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Maximize, Pause, Play } from "luc
 import { createClient } from "@/lib/supabase/browser";
 import { clampSlideIndex, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { OwnerSessionStatus } from "@/components/owner-session-status";
 
 export function Presentation({
   scheduleId,
@@ -155,6 +156,7 @@ export function Presentation({
           <Link href={`/schedule/${scheduleId}`}><ArrowLeft size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Return to service</Link>
           <span style={{ marginLeft: 16 }}>{scheduleTitle}</span>
           <span style={{ marginLeft: 14, color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
+          <OwnerSessionStatus configured />
         </div>
         <div className="presentation-controls" aria-label="Presentation controls">
           {isOwner && <button type="button" onClick={() => void toggleSync()} aria-label={syncActive ? "Stop synchronized presentation" : "Start synchronized presentation"}>{syncActive ? <Pause size={15} /> : <Play size={15} />}</button>}

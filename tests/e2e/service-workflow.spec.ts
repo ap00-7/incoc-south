@@ -25,6 +25,33 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
   await expect(ownerPage).toHaveURL(/\/admin$/);
+  const ownerStatus = ownerPage.getByRole("link", { name: "Owner signed in" });
+  await expect(ownerStatus).toBeVisible();
+  await ownerPage.goto("/login");
+  await expect(ownerPage).toHaveURL(/\/admin$/);
+  await expect(ownerStatus).toBeVisible();
+  await ownerPage.reload();
+  await expect(ownerPage).toHaveURL(/\/admin$/);
+  await expect(ownerStatus).toBeVisible();
+
+  for (const path of ["/", "/songbook", "/schedule", "/slides"]) {
+    await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
+    await expect(ownerStatus).toBeVisible();
+  }
+  await ownerPage.setViewportSize({ width: 360, height: 800 });
+  const hasHeaderOverflow = await ownerPage.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHeaderOverflow).toBe(false);
+  await ownerPage.setViewportSize({ width: 1280, height: 900 });
+  await ownerPage.goto("/admin");
+  await expect(ownerStatus).toBeVisible();
+
+  const secondTab = await ownerContext.newPage();
+  await secondTab.goto("/admin", { waitUntil: "domcontentloaded" });
+  await expect(secondTab).toHaveURL(/\/admin$/);
+  await expect(secondTab.getByRole("link", { name: "Owner signed in" })).toBeVisible();
+  await secondTab.close();
 
   const uniqueSuffix = Date.now();
   const songTitle = `E2E Song ${uniqueSuffix}`;
@@ -104,7 +131,7 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
 
   const addItemForm = ownerPage.locator("form").last();
   await addItemForm.getByLabel("Type").selectOption("song");
-  await addItemForm.getByLabel(/choose for a song item/).selectOption({ label: `${songTitle} · English` });
+  await addItemForm.getByLabel(/choose for a song item/).selectOption({ label: `${songTitle} · Kannada` });
   await addItemForm.getByRole("button", { name: "Add programme item" }).click();
   await expect(ownerPage.getByRole("heading", { name: songTitle })).toBeVisible();
 
@@ -119,10 +146,18 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await ownerPage.getByRole("button", { name: "Publish service" }).click();
   await expect(ownerPage.getByRole("button", { name: "Unpublish" })).toBeVisible();
 
+  await ownerPage.getByRole("button", { name: "Sign out" }).click();
+  await expect(ownerPage).toHaveURL(/\/login$/);
+  await expect(ownerPage.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await ownerPage.goto("/admin");
+  await expect(ownerPage).toHaveURL(/\/login$/);
+  await expect(ownerPage.getByRole("heading", { name: "Welcome to INCOC South" })).toHaveCount(0);
+
   const viewerContext = await browser.newContext();
   const viewerPage = await viewerContext.newPage();
   await signIn(viewerPage, viewerEmail!, viewerPassword!);
   await expect(viewerPage).toHaveURL(/\/songbook$/);
+  await expect(viewerPage.getByRole("link", { name: "Signed in · no owner access" })).toBeVisible();
   await viewerPage.goto("/admin");
   await expect(viewerPage).toHaveURL(/\/access-denied$/);
   await viewerPage.goto("/schedule");

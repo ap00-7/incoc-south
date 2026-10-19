@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getMembership } from "@/lib/auth";
+import { getMembership, getOwnerSessionStatus } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const loginSchema = z.object({
@@ -33,4 +33,8 @@ export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error(`Unable to sign out: ${error.message}`);
   redirect("/");
+}
+
+export async function readOwnerSessionStatus() {
+  return getOwnerSessionStatus();
 }

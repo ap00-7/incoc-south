@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
+
+export type OwnerSessionStatus = "owner" | "restricted" | "signed-out" | "unavailable";
 
 export async function getMembership() {
   const supabase = await createClient();
@@ -8,7 +11,11 @@ export async function getMembership() {
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError?.name === "AuthSessionMissingError") return null;
+  if (
+    authError?.name === "AuthSessionMissingError" ||
+    authError?.status === 401 ||
+    authError?.code === "session_not_found"
+  ) return null;
   if (authError) throw new Error("Unable to verify the signed-in account.");
   if (!user) return null;
 
@@ -32,6 +39,17 @@ export async function getMembership() {
   }
   if (!membership) return null;
   return { user, churchId: church.id, role: membership.role };
+}
+
+export async function getOwnerSessionStatus(): Promise<OwnerSessionStatus> {
+  if (!isSupabaseConfigured()) return "unavailable";
+  try {
+    const membership = await getMembership();
+    if (!membership) return "signed-out";
+    return membership.role === "owner" ? "owner" : "restricted";
+  } catch {
+    return "unavailable";
+  }
 }
 
 export async function requireMember() {

@@ -1,14 +1,21 @@
 import Link from "next/link";
 import { connection } from "next/server";
+import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/app/login/login-form";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { getOwnerSessionStatus } from "@/lib/auth";
 
 export const instant = false;
 
 export default async function LoginPage() {
   await connection();
   const configured = isSupabaseConfigured();
+  if (configured) {
+    const status = await getOwnerSessionStatus();
+    if (status === "owner") redirect("/admin");
+    if (status === "restricted") redirect("/access-denied");
+  }
   return (
     <main className="auth-page">
       <section className="auth-card">

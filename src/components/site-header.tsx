@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { LogIn } from "lucide-react";
+import { OwnerSessionStatus } from "@/components/owner-session-status";
 import { BrandMark } from "@/components/brand-mark";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 
 export function SiteHeader() {
   return (
@@ -10,7 +11,7 @@ export function SiteHeader() {
           <BrandMark />
           <span><strong>INCOC South</strong><small>Indian Church of Christ · South Sector</small></span>
         </Link>
-        <Link className="header-login" href="/login"><LogIn size={16} /> Sign in</Link>
+        <OwnerSessionStatus configured={isSupabaseConfigured()} />
       </div>
     </header>
   );
