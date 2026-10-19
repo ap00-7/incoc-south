@@ -29,29 +29,66 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const uniqueSuffix = Date.now();
   const songTitle = `E2E Song ${uniqueSuffix}`;
   await ownerPage.goto("/admin/songs/new");
-  await ownerPage.getByLabel("Song title").fill(songTitle);
-  await ownerPage.getByLabel("Song language").selectOption("English");
-  await ownerPage.getByLabel(/Section label/).fill("Verse 1");
-  await ownerPage.getByLabel("Lyrics").fill([
-    "First verse line one",
-    "First verse line two",
-    "First verse line three",
-    "First verse line four",
-    "First verse line five",
-    "First verse line six",
-    "First verse line seven",
-  ].join("\n"));
-  await ownerPage.getByRole("button", { name: "Save song" }).click();
-  await expect(ownerPage.getByRole("heading", { name: songTitle })).toBeVisible();
+  await ownerPage.getByLabel("Title").fill(songTitle);
+  await ownerPage.getByLabel("Language").selectOption("Kannada");
+  await ownerPage.getByLabel("Has Translation").check();
+  await ownerPage.getByLabel("Start With Chorus").check();
 
-  const addSectionForm = ownerPage.locator("form").filter({
-    has: ownerPage.locator('textarea[name="lyrics"]'),
-  }).last();
-  await addSectionForm.getByLabel("Section type").selectOption("chorus");
-  await addSectionForm.getByLabel("Custom label").fill("Chorus");
-  await addSectionForm.locator('textarea[name="lyrics"]').fill("Sing together\nIn hope");
-  await addSectionForm.getByRole("button", { name: "Add section" }).click();
-  await expect(ownerPage.getByRole("heading", { name: "Chorus" })).toBeVisible();
+  const firstVerse = ownerPage.getByRole("button", { name: /Verse 1 No lyrics added/ });
+  await firstVerse.click();
+  const firstVerseDialog = ownerPage.getByRole("dialog", { name: "Edit Verse" });
+  await firstVerseDialog.getByLabel("Lyrics").fill("First verse lyrics");
+  await firstVerseDialog.getByLabel("Translation").fill("First verse translation");
+  await firstVerseDialog.getByRole("button", { name: "Apply" }).click();
+
+  await ownerPage.getByRole("button", { name: "Add item" }).click();
+  const secondVerseDialog = ownerPage.getByRole("dialog", { name: "Edit Verse" });
+  await secondVerseDialog.getByLabel("Lyrics").fill("Second verse lyrics");
+  await secondVerseDialog.getByLabel("Translation").fill("Second verse translation");
+  await secondVerseDialog.getByRole("button", { name: "Apply" }).click();
+  await ownerPage.getByRole("button", { name: "Move verse 2 up" }).click();
+
+  await ownerPage.locator(".song-part").nth(0).locator("summary").click();
+  await ownerPage.locator(".song-part").nth(1).locator("summary").click();
+  await ownerPage.locator(".song-part").nth(2).locator("summary").click();
+  await ownerPage.locator("#pre_chorus-lyrics").fill("Pre-chorus lyrics");
+  await ownerPage.locator("#chorus-lyrics").fill("Chorus lyrics");
+  await ownerPage.locator("#chorus-translation").fill("Chorus translation");
+  await ownerPage.locator("#chorus-translation-language").selectOption("Tamil");
+  await ownerPage.locator("#bridge-lyrics").fill("Bridge lyrics");
+
+  await ownerPage.getByRole("button", { name: "Add item" }).click();
+  const hiddenVerseDialog = ownerPage.getByRole("dialog", { name: "Edit Verse" });
+  await hiddenVerseDialog.getByLabel("Lyrics").fill("Hidden verse lyrics");
+  await hiddenVerseDialog.getByLabel("Hide").check();
+  await hiddenVerseDialog.getByRole("button", { name: "Apply" }).click();
+
+  await ownerPage.getByRole("button", { name: "Create song" }).click();
+  await expect(ownerPage.getByRole("heading", { name: songTitle })).toBeVisible();
+  const songId = ownerPage.url().match(/\/admin\/songs\/([0-9a-f-]{36})$/i)?.[1];
+  expect(songId).toBeTruthy();
+  await expect(ownerPage.getByLabel("Language")).toHaveValue("Kannada");
+  await expect(ownerPage.getByLabel("Has Translation")).toBeChecked();
+  await expect(ownerPage.getByLabel("Start With Chorus")).toBeChecked();
+  await ownerPage.goto(`/songbook/${songId}`);
+  await expect(ownerPage.locator(".lyrics-section .lyrics-text")).toHaveText([
+    "Chorus lyrics",
+    "Second verse lyrics",
+    "Pre-chorus lyrics",
+    "Chorus lyrics",
+    "Bridge lyrics",
+    "First verse lyrics",
+    "Pre-chorus lyrics",
+    "Chorus lyrics",
+  ]);
+  await expect(ownerPage.locator(".lyrics-section .lyrics-text")).not.toContainText("Hidden verse lyrics");
+  await expect(ownerPage.locator(".song-translation-section .lyrics-text")).toHaveText([
+    "Chorus translation",
+    "Second verse translation",
+    "Chorus translation",
+    "First verse translation",
+    "Chorus translation",
+  ]);
 
   const sunday = new Date();
   sunday.setUTCDate(sunday.getUTCDate() + ((7 - sunday.getUTCDay()) % 7 || 7));

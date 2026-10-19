@@ -9,7 +9,7 @@ This is a standalone Next.js App Router application with Supabase Auth, PostgreS
 - Responsive near-black INCOC South design with Songs, Sunday Schedule, and Slides as the three homepage destinations and a white-cross favicon.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
 - Server-side membership/owner route checks and database RLS.
-- Owner song creation, metadata editing, six supported song languages, repeated lyric sections, optional section translations, chorus-first ordering, and deletion protection for songs referenced by schedules.
+- Owner song creation and editing, four primary song languages, reusable chorus sequencing, optional section translations, and deletion protection for songs referenced by schedules.
 - Public songbook search, language filtering, lyric sections, and translations.
 - Dated service drafts, reusable song references, non-song programme items, leaders, durations, private notes, ordering, publishing, and unpublishing.
 - Public published service details that omit private notes and draft schedules.
@@ -48,31 +48,25 @@ npx supabase@latest status
 
 Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `.env.local` using the local values printed by `supabase status`. The app also accepts `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` when a publishable key is available. The reset command applies the ordered SQL migrations to the local database. It deletes and recreates the local database; do not use it with production data.
 
-To use a hosted project, link only the intended new INCOC South Supabase project and apply migrations:
+For hosted projects, SQL changes are supplied as reviewed SQL in the task response and must be run manually in the intended Supabase SQL Editor. Inspect the live schema and project configuration first. Never apply hosted SQL or migrations automatically, and do not assume a change is applied until the operator confirms it. Routine database changes do not create migration files.
 
-```powershell
-npx supabase@latest login
-npx supabase@latest link --project-ref YOUR_INCOC_SOUTH_PROJECT_REF
-npm run db:push
-```
-
-Review the linked project before running `db:push`. The migrations are version controlled under `supabase/migrations/`; do not modify migrations after they have been applied to a shared or production database.
+The migration files in `supabase/migrations/` preserve the database's historical bootstrap. Do not edit or remove migrations already recorded as applied by a shared or production database.
 
 ### Environment variables
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes for data features | Supabase project URL. Safe to expose publicly. |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes for data features | Preferred public publishable key. RLS must remain enabled. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Alternative | Legacy name for the public anon/publishable key. Used only if the preferred variable is unset. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional | Server-only key used by the owner invitation action. Never use a `NEXT_PUBLIC_` prefix or send it to a client. |
-| `NEXT_PUBLIC_SITE_URL` | Optional | Invitation callback origin; set it to the deployed HTTPS URL in production. |
+| Variable                               | Required              | Purpose                                                                                                        |
+| -------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Yes for data features | Supabase project URL. Safe to expose publicly.                                                                 |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes for data features | Preferred public publishable key. RLS must remain enabled.                                                     |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`        | Alternative           | Legacy name for the public anon/publishable key. Used only if the preferred variable is unset.                 |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Optional              | Server-only key used by the owner invitation action. Never use a `NEXT_PUBLIC_` prefix or send it to a client. |
+| `NEXT_PUBLIC_SITE_URL`                 | Optional              | Invitation callback origin; set it to the deployed HTTPS URL in production.                                    |
 
 The `.env.example` file contains placeholders only. `.env.local` is ignored by Git. Never store credentials or real user tokens in source control.
 
 ## First owner provisioning
 
-1. Apply migrations to the intended Supabase project.
+1. Apply only the SQL explicitly provided for the intended project, manually in its Supabase SQL Editor, after reviewing its schema and configuration.
 2. In the Supabase dashboard, create the first owner's Auth user and verify the email. Do not enable public sign-up.
 3. Copy that user's UUID from Supabase Auth.
 4. In the SQL editor for the same project, run the following after replacing the UUID:
@@ -91,16 +85,18 @@ The bootstrap is a deliberate SQL operation so the first owner is never granted 
 
 ## Database and access model
 
-Migration inventory:
+Migration inventory (hosted ledger checked read-only on 2026-10-19):
 
 1. `202610160001_initial_schema.sql` — church, profile, membership, song, schedule, programme, session, and disabled link tables; constraints, indexes, helper functions, triggers, RLS, and Realtime publication setup.
 2. `202610160002_ordering_functions.sql` — owner-checked, transactional section and programme reordering.
 3. `202610160003_membership_profiles.sql` — profile relationship and authenticated table grants.
 4. `202610160004_private_notes.sql` — owner-only programme notes stored separately from viewer-readable programme rows.
 5. `202610160005_realtime_tables.sql` — scoped table additions to the Supabase Realtime publication.
-6. `202610160006_public_content_and_translations.sql` — additive section translation fields and read-only public access scoped to INCOC South content and published schedules.
+6. `202610160006_public_content_and_translations.sql` — additive section translation fields and read-only public access scoped to INCOC South content and published schedules; recorded as applied.
 
-`src/lib/supabase/database.types.ts` provides strict table, enum, relationship, and RPC types to both browser and server Supabase clients. After applying migrations to the linked project, refresh the file with `npx supabase@latest gen types typescript --linked > src/lib/supabase/database.types.ts` and run `npm run typecheck`.
+The five original migrations (`001`–`005`) are recorded as applied. The song-editor columns (`has_translation`, `start_with_chorus`, and `is_hidden`) are not yet recorded as applied. Their additive SQL is provided in the task response and must be run manually before the updated editor and public rendering can use those columns. No migration file is kept for this routine change.
+
+`src/lib/supabase/database.types.ts` provides strict table, enum, relationship, and RPC types to both browser and server Supabase clients. After manually applying approved SQL, refresh types from the intended project and run `npm run typecheck`.
 
 All exposed application tables have RLS enabled. Membership helpers use fixed search paths and `SECURITY DEFINER` so policies do not recurse through membership RLS. Owners are checked server-side and again by database policies. Anonymous and authenticated readers can access INCOC South songs and sections, plus published INCOC South schedules and their programme items. Draft schedules, private service notes, membership/profile data, and presentation-session controls are not public. Owner actions and membership role boundaries remain enforced by PostgreSQL. Songs referenced by a programme item cannot be deleted because of the database foreign key.
 
@@ -168,12 +164,12 @@ The test exercises sign-in as owner, song and lyric-section creation, a dated Su
 2. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
 3. Add `SUPABASE_SERVICE_ROLE_KEY` only if member invitations are enabled; keep it server-only.
 4. Add the production callback URL to the Supabase Auth redirect allow-list.
-5. Apply the reviewed SQL migrations to the dedicated Supabase project.
+5. Apply reviewed SQL manually in the dedicated Supabase project's SQL Editor; do not push migrations automatically.
 6. Deploy using Vercel's Next.js build settings and verify public reads, sign-in, membership authorization, RLS, and presentation behavior against that project's test accounts.
 
 ## Known limitations / follow-up verification
 
-- The latest public-content migration must be applied to each intended Supabase project before anonymous content pages can query it. No hosted database changes are made automatically.
+- The hosted project has migrations `001`–`006` recorded as applied. Song-editor option SQL remains pending manual execution before those features work against a database without the new columns.
 - Realtime content clients refetch on notified changes and initial subscription; live multi-client behavior still needs testing against a configured Supabase project.
 - Invitation email delivery, SMTP settings, account recovery, and Vercel production configuration remain deployment tasks.
 - Restricted presentation links remain disabled by design.

@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "db:push": "npx supabase@latest db push",
     "db:test": "npx supabase@latest test db"
   },
   "dependencies": {
