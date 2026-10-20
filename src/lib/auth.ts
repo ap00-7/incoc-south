@@ -1,9 +1,15 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export type OwnerSessionStatus = "owner" | "restricted" | "signed-out" | "unavailable";
+
+export const hasSupabaseAuthCookie = cache(async () => {
+  const cookieStore = await cookies();
+  return cookieStore.getAll().some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
+});
 
 export const getMembership = cache(async (
   client?: Awaited<ReturnType<typeof createClient>>,

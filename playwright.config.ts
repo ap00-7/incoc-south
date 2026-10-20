@@ -5,6 +5,7 @@ const port = process.env.PLAYWRIGHT_PORT ?? "3000";
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  workers: 1,
   reporter: "list",
   use: {
     baseURL: `http://localhost:${port}`,

@@ -1,24 +1,37 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Presentation } from "@/components/presentation";
-import { getMembership } from "@/lib/auth";
+import { getMembership, hasSupabaseAuthCookie } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
-export const instant = false;
+type Props = { params: Promise<{ scheduleId: string }> };
 
-export default async function PresentPage({ params }: { params: Promise<{ scheduleId: string }> }) {
+export default function PresentPage({ params }: Props) {
+  return (
+    <Suspense fallback={<main className="presentation-page" role="status" aria-busy="true">Loading presentation…</main>}>
+      <PresentationContent params={params} />
+    </Suspense>
+  );
+}
+
+async function PresentationContent({ params }: Props) {
   await connection();
   if (!isSupabaseConfigured()) notFound();
   const { scheduleId } = await params;
-  const [membership, { supabase, churchId }] = await Promise.all([
-    getMembership(),
+  const [{ supabase, churchId }, hasAuthCookie] = await Promise.all([
     getPublicChurchContext(),
+    hasSupabaseAuthCookie(),
   ]);
-  const { data: schedule, error } = await supabase.from("schedules")
+  const membershipPromise = hasAuthCookie ? getMembership(supabase) : Promise.resolve(null);
+  const [membership, { data: schedule, error }] = await Promise.all([
+    membershipPromise,
+    supabase.from("schedules")
     .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
-    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
+    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle(),
+  ]);
   if (error) throw new Error(`Unable to load presentation: ${error.message}`);
   if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
   const programmeItems = schedule.schedule_items ?? [];

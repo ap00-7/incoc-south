@@ -162,11 +162,17 @@ export async function saveSong(formData: FormData) {
     throw new Error("A lyric section no longer belongs to this song. Reload and review the latest version.");
   }
 
-  const positionOffset = Math.max(0, ...(existingSections ?? []).map(({ position }) => position)) + sections.length + 1;
-  for (const [index, section] of (existingSections ?? []).entries()) {
-    const { error } = await supabase.from("song_sections").update({ position: positionOffset + index })
-      .eq("id", section.id).eq("song_id", songId);
-    if (error) throw new Error(`Unable to prepare lyric section ordering: ${error.message}`);
+  const savedPositionById = new Map((existingSections ?? []).map(({ id, position }) => [id, position]));
+  const sectionOrderChanged = sections.some((section, position) =>
+    section.id ? savedPositionById.get(section.id) !== position : (existingSections ?? []).some(({ position: savedPosition }) => savedPosition === position),
+  );
+  if (sectionOrderChanged) {
+    const positionOffset = Math.max(0, ...(existingSections ?? []).map(({ position }) => position)) + sections.length + 1;
+    for (const [index, section] of (existingSections ?? []).entries()) {
+      const { error } = await supabase.from("song_sections").update({ position: positionOffset + index })
+        .eq("id", section.id).eq("song_id", songId);
+      if (error) throw new Error(`Unable to prepare lyric section ordering: ${error.message}`);
+    }
   }
   const rows = sections.map((section, position) => ({
     ...(section.id ? { id: section.id } : {}),

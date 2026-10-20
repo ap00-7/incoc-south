@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { connection } from "next/server";
-import { PageShell, SectionHeading } from "@/components/page-shell";
+import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
@@ -11,32 +12,54 @@ const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-export default async function SchedulePage() {
+type Props = { searchParams: Promise<{ page?: string }> };
+const PAGE_SIZE = 50;
+
+export default function SchedulePage({ searchParams }: Props) {
+  return (
+    <PageShell>
+      <Suspense fallback={<PageContentLoading title="Gather together" />}>
+        <ScheduleContent searchParams={searchParams} />
+      </Suspense>
+    </PageShell>
+  );
+}
+
+async function ScheduleContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <PageShell><div className="content-wrap"><SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div></PageShell>;
+    return <div className="content-wrap"><SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div>;
   }
+  const params = await searchParams;
+  const requestedPage = Number.parseInt(params.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
   const { supabase, churchId } = await getPublicChurchContext();
   const { data: schedules, error } = await supabase.from("schedules")
       .select("id, title, service_date, venue, description, church:churches!inner(slug)")
       .eq("church.slug", "incoc-south").eq("status", "published")
-      .order("service_date", { ascending: false }).limit(50);
+      .order("service_date", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (error) throw new Error(`Unable to load services: ${error.message}`);
+  const schedulesForPage = schedules ?? [];
+  const hasNextPage = schedulesForPage.length > PAGE_SIZE;
 
   return (
-    <PageShell>
+    <>
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "church_id", value: churchId },
       ]} />
       <div className="content-wrap">
         <SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" description="Find the published service plans shared with your church." />
-        {schedules?.length ? <div className="results-list">
-          {schedules.map((schedule) => <Link className="result-card" href={`/schedule/${schedule.id}`} key={schedule.id}>
+        {schedulesForPage.length ? <div className="results-list">
+          {schedulesForPage.slice(0, PAGE_SIZE).map((schedule) => <Link className="result-card" href={`/schedule/${schedule.id}`} key={schedule.id}>
             <div><h2>{schedule.title}</h2><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div>
             <ArrowRight size={17} aria-hidden="true" />
           </Link>)}
         </div> : <div className="empty-state">There are no published services to show yet.</div>}
+        {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">
+          {page > 1 && <Link className="button button-secondary" href={`/schedule?page=${page - 1}`}>Newer services</Link>}
+          {hasNextPage && <Link className="button button-secondary" href={`/schedule?page=${page + 1}`}>Older services</Link>}
+        </nav>}
       </div>
-    </PageShell>
+    </>
   );
 }

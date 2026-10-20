@@ -96,6 +96,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .search-input { max-width: 430px; }
 .toolbar select { min-height: 44px; padding: 0 34px 0 12px; background: #fff; border: 1px solid #d4d9e1; border-radius: 7px; color: #4b5565; }
 .results-list { display: grid; gap: 10px; }
+.list-pagination { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
 .result-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 19px 21px; background: white; border: 1px solid var(--border); border-radius: 10px; }
 .result-card:hover { border-color: #c8b47e; }
 .result-card h2 { margin: 0; color: var(--navy); font-size: 16px; }

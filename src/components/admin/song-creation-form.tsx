@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useFormStatus } from "react-dom";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { saveSong } from "@/app/admin/actions";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
@@ -29,6 +30,15 @@ type SongEditorFormProps = {
     sections: Array<SectionInput & { id: string }>;
   };
 };
+
+function SaveSongButton({ editing }: { editing: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <button className="button button-primary song-save-button" disabled={pending}>
+      {pending ? "Saving…" : editing ? "Save song" : "Create song"}
+    </button>
+  );
+}
 
 function blankSection(key: string, type: SongSectionType): SectionDraft {
   return { key, section_type: type, label: "", lyrics: "", translation: "", translation_language: "", is_hidden: false };
@@ -69,9 +79,9 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
     }
     return initial;
   });
-  const [ending, setEnding] = useState<SongEnding>(() => initialEnding(
-    song?.sections.map((section, index) => ({ ...section, key: `initial-${index}` })) ?? [],
-  ));
+  const [ending, setEnding] = useState<SongEnding>(() => song
+    ? initialEnding(song.sections.map((section, index) => ({ ...section, key: `initial-${index}` })))
+    : "pre_chorus_chorus");
   const [nextKey, setNextKey] = useState((song?.sections.length ?? 0) + 4);
   const [hasTranslation, setHasTranslation] = useState(song?.has_translation ?? false);
   const [startWithChorus, setStartWithChorus] = useState(song?.start_with_chorus ?? false);
@@ -257,7 +267,7 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
         </div>
       </details>}
 
-      <button className="button button-primary song-save-button">{song ? "Save song" : "Create song"}</button>
+          <SaveSongButton editing={Boolean(song)} />
 
       {workingSection && <div className="verse-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeVerse(); }}>
         <section className="verse-dialog" role="dialog" aria-modal="true" aria-labelledby="verse-dialog-title" onKeyDown={handleDialogKeyDown}>

@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { OwnerSessionProvider } from "@/components/owner-session-status";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,11 +14,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="dark">
-      <body>
-        <OwnerSessionProvider configured={isSupabaseConfigured()}>
-          {children}
-        </OwnerSessionProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

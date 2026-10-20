@@ -1,30 +1,44 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { ArrowRight } from "lucide-react";
 import { connection } from "next/server";
-import { PageShell, SectionHeading } from "@/components/page-shell";
+import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { songLanguageValues } from "@/lib/domain/songs";
 
-type Props = { searchParams: Promise<{ q?: string; language?: string }> };
+type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string }> };
+const PAGE_SIZE = 50;
 
-export default async function SongbookPage({ searchParams }: Props) {
+export default function SongbookPage({ searchParams }: Props) {
+  return (
+    <PageShell>
+      <Suspense fallback={<PageContentLoading title="Songs for worship" />}>
+        <SongbookContent searchParams={searchParams} />
+      </Suspense>
+    </PageShell>
+  );
+}
+
+async function SongbookContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <PageShell><div className="content-wrap"><SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div></PageShell>;
+    return <div className="content-wrap"><SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div>;
   }
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
   const language = params.language?.trim() ?? "";
+  const requestedPage = Number.parseInt(params.page ?? "1", 10);
+  const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
   const { supabase, churchId } = await getPublicChurchContext();
   let songsQuery = supabase.from("songs").select("id, title, language, author")
-    .eq("church_id", churchId).order("title").limit(100);
+    .eq("church_id", churchId).order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
   const [{ data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
     songsQuery,
-    supabase.from("songs").select("language").eq("church_id", churchId).order("language").limit(200),
+    supabase.from("songs").select("language").eq("church_id", churchId).order("language").limit(1000),
   ]);
   if (error) throw new Error(`Unable to load songs: ${error.message}`);
   if (languageError) throw new Error(`Unable to load song languages: ${languageError.message}`);
@@ -32,9 +46,19 @@ export default async function SongbookPage({ searchParams }: Props) {
     ...songLanguageValues,
     ...(languageRows ?? []).map((row) => row.language),
   ])].sort((first, second) => first.localeCompare(second));
+  const songsForPage = songs ?? [];
+  const hasNextPage = songsForPage.length > PAGE_SIZE;
+  const filters = new URLSearchParams();
+  if (query) filters.set("q", query);
+  if (language) filters.set("language", language);
+  const pageHref = (targetPage: number) => {
+    const pageParams = new URLSearchParams(filters);
+    pageParams.set("page", String(targetPage));
+    return `/songbook?${pageParams.toString()}`;
+  };
 
   return (
-    <PageShell>
+    <>
       <RealtimeRefresh subscriptions={[
         { table: "songs", column: "church_id", value: churchId },
       ]} />
@@ -48,13 +72,17 @@ export default async function SongbookPage({ searchParams }: Props) {
           </select>
           <button className="button button-primary">Search</button>
         </form>
-        {songs?.length ? <div className="results-list">
-          {songs.map((song) => <Link className="result-card" href={`/songbook/${song.id}`} key={song.id}>
+        {songsForPage.length ? <div className="results-list">
+          {songsForPage.slice(0, PAGE_SIZE).map((song) => <Link className="result-card" href={`/songbook/${song.id}`} key={song.id}>
             <div><h2>{song.title}</h2><p>{song.author ? `${song.author} · ` : ""}{song.language}</p></div>
             <ArrowRight size={17} aria-hidden="true" />
           </Link>)}
         </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
+        {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
+          {page > 1 && <Link className="button button-secondary" href={pageHref(page - 1)}>Previous songs</Link>}
+          {hasNextPage && <Link className="button button-secondary" href={pageHref(page + 1)}>More songs</Link>}
+        </nav>}
       </div>
-    </PageShell>
+    </>
   );
 }

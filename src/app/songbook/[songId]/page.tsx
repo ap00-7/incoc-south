@@ -1,17 +1,30 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
-import { PageShell } from "@/components/page-shell";
+import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 
-export default async function SongPage({ params }: { params: Promise<{ songId: string }> }) {
+type Props = { params: Promise<{ songId: string }> };
+
+export default function SongPage({ params }: Props) {
+  return (
+    <PageShell>
+      <Suspense fallback={<PageContentLoading title="Loading song" />}>
+        <SongContent params={params} />
+      </Suspense>
+    </PageShell>
+  );
+}
+
+async function SongContent({ params }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <PageShell><div className="content-wrap"><div className="notice notice-warning">Songbook access requires a configured Supabase project.</div></div></PageShell>;
+    return <div className="content-wrap"><div className="notice notice-warning">Songbook access requires a configured Supabase project.</div></div>;
   }
   const { songId } = await params;
   const { supabase, churchId } = await getPublicChurchContext();
@@ -25,7 +38,7 @@ export default async function SongPage({ params }: { params: Promise<{ songId: s
   const translatedSections = song.has_translation ? labeledSections.filter(({ section }) => section.translation?.trim()) : [];
 
   return (
-    <PageShell>
+    <>
       <RealtimeRefresh subscriptions={[
         { table: "songs", column: "id", value: songId },
         { table: "song_sections", column: "song_id", value: songId },
@@ -51,6 +64,6 @@ export default async function SongPage({ params }: { params: Promise<{ songId: s
           </div>)}
         </section>}
       </article>
-    </PageShell>
+    </>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { PageShell } from "@/components/page-shell";
+import { SiteHeader } from "@/components/site-header";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { requireOwner } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
@@ -15,16 +16,18 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
   await requireOwner();
   return (
-    <PageShell>
-      <div className="admin-layout">
-        <UnsavedChangesGuard />
-        <aside className="admin-nav" aria-label="Owner navigation">
-          <Link href="/songbook">Songs</Link>
-          <Link href="/schedule">Schedules</Link>
-          <Link href="/slides">Slides</Link>
-        </aside>
-        <section className="admin-content">{children}</section>
-      </div>
-    </PageShell>
+    <>
+      <SiteHeader />
+      <PageShell>
+        <div className="admin-layout">
+          <UnsavedChangesGuard />
+          <aside className="admin-nav" aria-label="Owner navigation">
+            <Link href="/admin/songs">Songs</Link>
+            <Link href="/admin/schedules">Sunday Schedule &amp; Slides</Link>
+          </aside>
+          <section className="admin-content">{children}</section>
+        </div>
+      </PageShell>
+    </>
   );
 }

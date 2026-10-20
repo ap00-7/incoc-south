@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
-import { PageShell } from "@/components/page-shell";
+import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
@@ -10,26 +11,36 @@ import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" });
 
-export default async function ScheduleDetailPage({ params }: { params: Promise<{ scheduleId: string }> }) {
+type Props = { params: Promise<{ scheduleId: string }> };
+
+export default function ScheduleDetailPage({ params }: Props) {
+  return (
+    <PageShell>
+      <Suspense fallback={<PageContentLoading title="Loading service" />}>
+        <ScheduleDetailContent params={params} />
+      </Suspense>
+    </PageShell>
+  );
+}
+
+async function ScheduleDetailContent({ params }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <PageShell><div className="content-wrap"><div className="notice notice-warning">Service details require a configured Supabase project.</div></div></PageShell>;
+    return <div className="content-wrap"><div className="notice notice-warning">Service details require a configured Supabase project.</div></div>;
   }
   const { scheduleId } = await params;
   const { supabase, churchId } = await getPublicChurchContext();
-  const [membership, { data: schedule, error }] = await Promise.all([
-    getMembership(supabase),
-    supabase.from("schedules")
-      .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
-      .eq("id", scheduleId).eq("church_id", churchId).maybeSingle(),
-  ]);
+  const { data: schedule, error } = await supabase.from("schedules")
+    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
+    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
-  if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
+  if (!schedule) notFound();
+  if (schedule.status !== "published" && (await getMembership(supabase))?.role !== "owner") notFound();
   const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);
   const totalMinutes = items.reduce((total, item) => total + (item.duration_minutes ?? 0), 0);
 
   return (
-    <PageShell>
+    <>
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "id", value: scheduleId },
         { table: "schedule_items", column: "schedule_id", value: scheduleId },
@@ -57,6 +68,6 @@ export default async function ScheduleDetailPage({ params }: { params: Promise<{
         {totalMinutes > 0 && <p className="muted" style={{ marginTop: 14, fontSize: 12 }}>Estimated duration: {Math.floor(totalMinutes / 60) ? `${Math.floor(totalMinutes / 60)} hr ` : ""}{totalMinutes % 60} min</p>}
         <div className="schedule-actions"><Link className="button button-primary" href={`/schedule/${schedule.id}/slides`}><MonitorPlay size={16} /> Open slides</Link></div>
       </article>
-    </PageShell>
+    </>
   );
 }

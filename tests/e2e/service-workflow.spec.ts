@@ -24,19 +24,17 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
-  await expect(ownerPage).toHaveURL(/\/admin$/);
-  const ownerStatus = ownerPage.getByRole("link", { name: "Owner signed in" });
-  await expect(ownerStatus).toBeVisible();
+  await expect(ownerPage).toHaveURL(/\/admin\/songs$/);
+  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
   await ownerPage.goto("/login");
-  await expect(ownerPage).toHaveURL(/\/admin$/);
-  await expect(ownerStatus).toBeVisible();
+  await expect(ownerPage).toHaveURL(/\/admin\/songs$/);
   await ownerPage.reload();
-  await expect(ownerPage).toHaveURL(/\/admin$/);
-  await expect(ownerStatus).toBeVisible();
+  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
 
   for (const path of ["/", "/songbook", "/schedule", "/slides"]) {
     await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
-    await expect(ownerStatus).toBeVisible();
+    await expect(ownerPage.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
+    await expect(ownerPage.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
   }
   await ownerPage.setViewportSize({ width: 360, height: 800 });
   const hasHeaderOverflow = await ownerPage.evaluate(
@@ -44,13 +42,13 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   );
   expect(hasHeaderOverflow).toBe(false);
   await ownerPage.setViewportSize({ width: 1280, height: 900 });
-  await ownerPage.goto("/admin");
-  await expect(ownerStatus).toBeVisible();
+  await ownerPage.goto("/admin/songs");
+  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
 
   const secondTab = await ownerContext.newPage();
-  await secondTab.goto("/admin", { waitUntil: "domcontentloaded" });
-  await expect(secondTab).toHaveURL(/\/admin$/);
-  await expect(secondTab.getByRole("link", { name: "Owner signed in" })).toBeVisible();
+  await secondTab.goto("/admin/songs", { waitUntil: "domcontentloaded" });
+  await expect(secondTab).toHaveURL(/\/admin\/songs$/);
+  await expect(secondTab.getByRole("link", { name: "Owner" })).toBeVisible();
   await secondTab.close();
 
   const uniqueSuffix = Date.now();
@@ -107,6 +105,8 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
     "Pre-Chorus",
     "Chorus",
     "Bridge",
+    "Pre-Chorus",
+    "Chorus",
   ]);
   await expect(ownerPage.locator(".lyrics-section .lyrics-text")).toHaveText([
     "Chorus lyrics",
@@ -117,6 +117,8 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
     "Pre-chorus lyrics",
     "Chorus lyrics",
     "Bridge lyrics",
+    "Pre-chorus lyrics",
+    "Chorus lyrics",
   ]);
   await expect(ownerPage.locator(".lyrics-section .lyrics-text")).not.toContainText("Hidden verse lyrics");
   await expect(ownerPage.locator(".song-translation-section .lyrics-text")).toHaveText([
@@ -124,6 +126,7 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
     "Second verse translation",
     "Chorus translation",
     "First verse translation",
+    "Chorus translation",
     "Chorus translation",
   ]);
 
@@ -167,7 +170,6 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const viewerPage = await viewerContext.newPage();
   await signIn(viewerPage, viewerEmail!, viewerPassword!);
   await expect(viewerPage).toHaveURL(/\/songbook$/);
-  await expect(viewerPage.getByRole("link", { name: "Signed in · no owner access" })).toBeVisible();
   await viewerPage.goto("/admin");
   await expect(viewerPage).toHaveURL(/\/access-denied$/);
   await viewerPage.goto("/schedule");

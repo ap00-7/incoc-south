@@ -1,19 +1,16 @@
-import { OwnerSessionStatus } from "@/components/owner-session-status";
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
+import { signOut } from "@/app/actions/auth";
 
 export function SiteHeader() {
   return (
     <header className="site-header">
       <div className="header-inner">
-        <OwnerSessionStatus />
+        <Link className="owner-session-label" href="/admin/songs"><ShieldCheck size={15} /> Owner</Link>
+        <form action={signOut}>
+          <button type="submit" className="header-session-action">Sign out</button>
+        </form>
       </div>
     </header>
-  );
-}
-
-export function SiteFooter() {
-  return (
-    <footer className="site-footer">
-      <span>Indian Church of Christ · South Sector</span>
-    </footer>
   );
 }

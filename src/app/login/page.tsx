@@ -4,16 +4,16 @@ import { redirect } from "next/navigation";
 import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/app/login/login-form";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getOwnerSessionStatus } from "@/lib/auth";
+import { getOwnerSessionStatus, hasSupabaseAuthCookie } from "@/lib/auth";
 
 export const instant = false;
 
 export default async function LoginPage() {
   await connection();
   const configured = isSupabaseConfigured();
-  if (configured) {
+  if (configured && await hasSupabaseAuthCookie()) {
     const status = await getOwnerSessionStatus();
-    if (status === "owner") redirect("/songbook");
+    if (status === "owner") redirect("/admin/songs");
     if (status === "restricted") redirect("/access-denied");
   }
   return (

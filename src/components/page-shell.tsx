@@ -1,13 +1,25 @@
 import type { ReactNode } from "react";
-import { SiteFooter, SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 
 export function PageShell({ children }: { children: ReactNode }) {
   return (
     <>
-      <SiteHeader />
       <main className="page-main">{children}</main>
       <SiteFooter />
     </>
+  );
+}
+
+export function PageContentLoading({ title }: { title: string }) {
+  return (
+    <div className="content-wrap route-loading-shell" role="status" aria-busy="true">
+      <p className="eyebrow">INCOC SOUTH</p>
+      <h1 className="detail-title">{title}</h1>
+      <span className="loading-line loading-line-wide" />
+      <span className="loading-line" />
+      <span className="loading-line loading-line-short" />
+      <span className="sr-only">Loading content…</span>
+    </div>
   );
 }
 

@@ -34,10 +34,11 @@ test("homepage layout fits mobile, tablet, and laptop widths", async ({ page }) 
   }
 });
 
-test("public content routes remain directly reachable without a global navigation bar", async ({ page }) => {
+test("public content routes remain reachable without authentication controls", async ({ page }) => {
   for (const path of ["/songbook", "/schedule", "/slides"]) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await expect(page.locator(".site-header .brand")).toBeVisible();
+    await expect(page.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await expect(page.locator(".page-main")).toBeVisible();
   }
@@ -62,6 +63,8 @@ test("sign-in page identifies the church and explains membership access", async 
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expect(page.getByText("Sign-in is restricted to the website owner.")).toBeVisible();
   await expect(page.getByText(/available without signing in/i)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
 });
 
 test("public content routes do not require sign-in", async ({ page }) => {

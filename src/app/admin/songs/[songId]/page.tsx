@@ -43,6 +43,6 @@ export default async function EditSongPage({ params }: { params: Promise<{ songI
         is_hidden: section.is_hidden,
       })),
     }} />
-    <form className="delete-song-form"><input type="hidden" name="song_id" value={song.id} /><ConfirmButton action={deleteSong} message="Delete this song? It cannot be deleted if a service schedule uses it." className="button button-danger"><Trash2 size={15} /> Delete song</ConfirmButton></form>
+    <form className="delete-song-form"><input type="hidden" name="song_id" value={song.id} /><ConfirmButton action={deleteSong} message="Delete this song? It cannot be deleted if a service schedule uses it." className="button button-danger" pendingLabel="Deleting…"><Trash2 size={15} /> Delete song</ConfirmButton></form>
   </>;
 }

@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { getMembership, getOwnerSessionStatus } from "@/lib/auth";
+import { getMembership } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 const loginSchema = z.object({
@@ -25,16 +25,12 @@ export async function signIn(
   if (error) return "Sign-in failed. Check your email and password.";
 
   const membership = await getMembership();
-  redirect(membership ? "/songbook" : "/access-denied");
+  redirect(membership?.role === "owner" ? "/admin/songs" : membership ? "/songbook" : "/access-denied");
 }
 
 export async function signOut() {
   const supabase = await createClient();
   const { error } = await supabase.auth.signOut();
   if (error) throw new Error(`Unable to sign out: ${error.message}`);
-  redirect("/");
-}
-
-export async function readOwnerSessionStatus() {
-  return getOwnerSessionStatus();
+  redirect("/login");
 }

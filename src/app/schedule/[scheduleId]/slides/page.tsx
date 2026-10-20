@@ -1,32 +1,43 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
-import { PageShell } from "@/components/page-shell";
+import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
-export default async function SlidesPage({ params }: { params: Promise<{ scheduleId: string }> }) {
+type Props = { params: Promise<{ scheduleId: string }> };
+
+export default function SlidesPage({ params }: Props) {
+  return (
+    <PageShell>
+      <Suspense fallback={<PageContentLoading title="Loading presentation" />}>
+        <SlidesContent params={params} />
+      </Suspense>
+    </PageShell>
+  );
+}
+
+async function SlidesContent({ params }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <PageShell><div className="content-wrap"><div className="notice notice-warning">Presentation preview requires a configured Supabase project.</div></div></PageShell>;
+    return <div className="content-wrap"><div className="notice notice-warning">Presentation preview requires a configured Supabase project.</div></div>;
   }
   const { scheduleId } = await params;
   const supabase = await createClient();
-  const [membership, { data: schedule, error }] = await Promise.all([
-    getMembership(),
-    supabase.from("schedules")
-      .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
-      .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle(),
-  ]);
+  const { data: schedule, error } = await supabase.from("schedules")
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load slide preview: ${error.message}`);
-  if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
+  if (!schedule) notFound();
+  if (schedule.status !== "published" && (await getMembership(supabase))?.role !== "owner") notFound();
   const slides = generateSlides(normalizeProgrammeItems(schedule.schedule_items ?? []));
 
   return (
-    <PageShell>
+    <>
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "id", value: scheduleId },
         { table: "schedule_items", column: "schedule_id", value: scheduleId },
@@ -48,6 +59,6 @@ export default async function SlidesPage({ params }: { params: Promise<{ schedul
         </div> : <div className="empty-state" style={{ marginTop: 24 }}>Add lyric sections or public content to programme items to generate slides.</div>}
         <div className="schedule-actions"><Link className="button button-primary" href={`/present/${schedule.id}`}><MonitorPlay size={16} /> Present service</Link></div>
       </div>
-    </PageShell>
+    </>
   );
 }
