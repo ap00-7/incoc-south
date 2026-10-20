@@ -2,9 +2,10 @@
 
 import { useActionState } from "react";
 import { signIn } from "@/app/actions/auth";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 
 export function LoginForm() {
-  const [error, action, pending] = useActionState(signIn, null);
+  const [error, action] = useActionState(signIn, null);
   return (
     <form className="form-stack" action={action}>
       <label htmlFor="email">Email address</label>
@@ -12,9 +13,7 @@ export function LoginForm() {
       <label htmlFor="password">Password</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required />
       {error && <p className="form-error" role="alert">{error}</p>}
-      <button className="button button-primary button-wide" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
+      <PendingSubmitButton className="button button-primary button-wide" pendingLabel="Signing in…">Sign in</PendingSubmitButton>
     </form>
   );
 }

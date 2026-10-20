@@ -1,10 +1,11 @@
 import { ConfirmButton } from "@/components/confirm-button";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/auth";
-import { inviteMember, removeMember, updateMemberRole } from "@/app/admin/members/actions";
+import { removeMember } from "@/app/admin/members/actions";
 import { Trash2 } from "lucide-react";
 import { connection } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { InviteMemberForm, MemberRoleForm } from "@/components/admin/member-action-forms";
 
 export default async function AdminMembersPage() {
   await connection();
@@ -26,20 +27,20 @@ export default async function AdminMembersPage() {
         return <article className="member-row" key={item.user_id}>
         <div><h2>{profile?.display_name || "Church member"}</h2><p>{item.user_id === current.user.id ? "You · " : ""}Added {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(item.created_at))}</p></div>
         <div className="member-actions">
-          <form action={updateMemberRole}><input type="hidden" name="user_id" value={item.user_id} /><select name="role" aria-label={`Role for ${profile?.display_name || "member"}`} defaultValue={item.role} disabled={item.user_id === current.user.id}><option value="viewer">Viewer</option><option value="owner">Owner</option></select><button className="button button-secondary" disabled={item.user_id === current.user.id}>Save role</button></form>
-          {item.user_id !== current.user.id && <form><input type="hidden" name="user_id" value={item.user_id} /><ConfirmButton action={removeMember} message="Remove this member's church access?" className="icon-button danger"><Trash2 size={15} /></ConfirmButton></form>}
+          <MemberRoleForm
+            userId={item.user_id}
+            displayName={profile?.display_name || "member"}
+            role={item.role}
+            disabled={item.user_id === current.user.id}
+          />
+          {item.user_id !== current.user.id && <form><input type="hidden" name="user_id" value={item.user_id} /><ConfirmButton action={removeMember} title="Remove member?" message={`Remove ${profile?.display_name || "this member"} from the church? They will lose access to private content.`} className="icon-button danger"><Trash2 size={15} /></ConfirmButton></form>}
         </div>
       </article>;
       })}
     </div>
     <h2 className="admin-section-title">Invite a member</h2>
     <p className="muted">Supabase sends a sign-in invitation. New members set their password after opening the email link.</p>
-    <form className="form-stack admin-form" action={inviteMember}>
-      <label htmlFor="display_name">Name</label><input id="display_name" name="display_name" required maxLength={100} />
-      <label htmlFor="email">Email</label><input id="email" name="email" type="email" required />
-      <label htmlFor="role">Role</label><select id="role" name="role" defaultValue="viewer"><option value="viewer">Viewer</option><option value="owner">Owner</option></select>
-      <button className="button button-primary">Send invitation</button>
-      {!process.env.SUPABASE_SERVICE_ROLE_KEY && <p className="notice notice-warning">Set the server-only SUPABASE_SERVICE_ROLE_KEY in your environment to enable invitations. Never expose it in a NEXT_PUBLIC variable.</p>}
-    </form>
+    <InviteMemberForm />
+    {!process.env.SUPABASE_SERVICE_ROLE_KEY && <p className="notice notice-warning">Set the server-only SUPABASE_SERVICE_ROLE_KEY in your environment to enable invitations. Never expose it in a NEXT_PUBLIC variable.</p>}
   </>;
 }

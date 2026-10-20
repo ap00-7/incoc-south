@@ -62,7 +62,9 @@ async function ScheduleDetailContent({ params }: Props) {
             <span className="programme-position">{String(index + 1).padStart(2, "0")}</span>
             <div>
               <h2>{item.title}</h2>
-              <p>{item.item_type.replaceAll("_", " ")}</p>
+              <p>{item.item_type === "scripture_reading"
+                ? "Scripture reading"
+                : item.item_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase())}</p>
               {song && <p>Song: <Link href={`/songbook/${song.id}`}>{song.title}</Link></p>}
               {item.leader_name && <p>{item.item_type === "song" ? "Song leader" : "Responsible"}: {item.leader_name}</p>}
               {item.duration_minutes != null && <p>{item.duration_minutes} min</p>}

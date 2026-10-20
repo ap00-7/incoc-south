@@ -10,6 +10,7 @@ import {
   Film,
   ImagePlus,
   Link2,
+  LoaderCircle,
   MoreHorizontal,
   Plus,
   Search,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import {
   createSchedule,
+  deleteSchedule,
   deleteScheduleItem,
   duplicateScheduleItem,
   moveScheduleItem,
@@ -27,6 +29,8 @@ import {
   type ScheduleItemInput,
 } from "@/app/admin/actions";
 import { ConfirmButton } from "@/components/confirm-button";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { useServerFormAction } from "@/components/use-server-form-action";
 import { createClient } from "@/lib/supabase/browser";
 
 type SongOption = { id: string; title: string; language: string };
@@ -52,14 +56,14 @@ type ScheduleItem = {
 };
 
 const itemTypes = [
+  ["welcome", "Welcome"],
   ["other", "Other"],
   ["worship", "Worship"],
-  ["prayer", "Prayer"],
   ["sermon", "Sermon"],
-  ["scripture_reading", "Scripture reading"],
   ["announcement", "Announcement"],
   ["communion", "Communion"],
   ["offering", "Offering"],
+  ["closing", "Closing"],
 ] as const;
 const mediaTypes: Record<string, string> = {
   "image/png": "png",
@@ -161,6 +165,7 @@ export function InlineScheduleManager({
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [mediaValidation, setMediaValidation] = useState("");
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   function openAdd(itemType = "other") {
     setDraft(emptyDraft(itemType));
@@ -270,6 +275,8 @@ export function InlineScheduleManager({
   }
 
   async function duplicateItem(item: ScheduleItem) {
+    if (duplicatingId) return;
+    setDuplicatingId(item.id);
     setFeedback("");
     try {
       const result = await duplicateScheduleItem({ schedule_id: schedule.id, item_id: item.id });
@@ -281,12 +288,13 @@ export function InlineScheduleManager({
       router.refresh();
     } catch (duplicateError) {
       setFeedback(duplicateError instanceof Error ? duplicateError.message : "Unable to duplicate this item.");
+    } finally {
+      setDuplicatingId(null);
     }
   }
 
   return (
     <section className="inline-owner-editor">
-      <h3 className="inline-owner-heading">Manage schedule items</h3>
       <div className="inline-item-toolbar">
         <button className="button button-primary" type="button" onClick={() => openAdd()}>
           <Plus size={15} /> Add Item
@@ -307,7 +315,7 @@ export function InlineScheduleManager({
               </div>
               <div className="mini-actions">
                 <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)}>Edit</button>
-                <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)}>Duplicate</button>
+                <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
                 <form action={moveScheduleItem}>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="direction" value="-1" />
@@ -323,7 +331,12 @@ export function InlineScheduleManager({
                 <form>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="return_to" value={returnTo} />
-                  <ConfirmButton action={deleteScheduleItem} message="Delete this schedule item?" className="icon-button danger"><Trash2 size={15} /></ConfirmButton>
+                  <ConfirmButton
+                    action={deleteScheduleItem}
+                    title="Delete schedule item?"
+                    message={`Delete “${item.title}” from this schedule? The selected Songbook entry will remain.`}
+                    className="icon-button danger"
+                  ><Trash2 size={15} /></ConfirmButton>
                 </form>
               </div>
             </div>
@@ -345,8 +358,9 @@ export function InlineScheduleManager({
 
             {draft.item_type !== "song" && <>
               <label htmlFor="schedule-item-type">Item type</label>
-              <select id="schedule-item-type" value={draft.item_type} onChange={(event) => setDraft({ ...draft, item_type: event.target.value })}>
-                {itemTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              <select id="schedule-item-type" value={draft.item_type === "prayer" || draft.item_type === "scripture_reading" ? "" : draft.item_type} onChange={(event) => setDraft({ ...draft, item_type: event.target.value })}>
+              {(draft.item_type === "prayer" || draft.item_type === "scripture_reading") && <option value="" disabled>{draft.item_type === "prayer" ? "Prayer" : "Scripture reading"} (legacy; preserved unless changed)</option>}
+              {itemTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </>}
 
@@ -416,7 +430,7 @@ export function InlineScheduleManager({
             {error && <p className="item-modal-error" role="alert">{error}</p>}
             <footer className="item-modal-footer">
               <button type="button" className="button button-secondary" onClick={closeModal} disabled={saving}>Cancel</button>
-              <button type="submit" className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+              <button type="submit" className="button button-primary" disabled={saving} aria-busy={saving}>{saving && <LoaderCircle size={15} className="button-spinner" aria-hidden="true" />}{saving ? "Saving…" : "Save"}</button>
             </footer>
           </form>
         </section>
@@ -582,53 +596,109 @@ function MediaPicker({
 
 export function InlineScheduleDetails({
   schedule,
-  returnTo,
 }: {
   schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; status: "draft" | "published"; updated_at: string };
-  returnTo: string;
 }) {
+  const { error, formAction } = useServerFormAction(updateSchedule);
   return (
-    <details className="inline-owner-editor">
-      <summary>Manage schedule details</summary>
-      <form className="form-stack schedule-edit-form" action={updateSchedule} data-dirty-form>
-        <input type="hidden" name="return_to" value={returnTo} />
+    <section className="schedule-editor-details">
+      <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
+        <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
         <input type="hidden" name="schedule_id" value={schedule.id} />
         <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
+        <input type="hidden" name="description" value={schedule.description ?? ""} />
         <label htmlFor={`title-${schedule.id}`}>Title</label>
         <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
         <label htmlFor={`venue-${schedule.id}`}>Venue</label>
         <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
         <label htmlFor={`date-${schedule.id}`}>Date</label>
         <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <PendingSubmitButton pendingLabel="Saving…">Save schedule</PendingSubmitButton>
+      </form>
+    </section>
+  );
+}
+
+export function ScheduleDescriptionForm({
+  schedule,
+}: {
+  schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; updated_at: string };
+}) {
+  const { error, formAction } = useServerFormAction(updateSchedule);
+  return (
+    <section className="schedule-description-editor">
+      <h2>Description</h2>
+      <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
+        <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
+        <input type="hidden" name="schedule_id" value={schedule.id} />
+        <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
+        <input type="hidden" name="title" value={schedule.title} />
+        <input type="hidden" name="service_date" value={schedule.service_date} />
+        <input type="hidden" name="venue" value={schedule.venue ?? ""} />
         <label htmlFor={`description-${schedule.id}`}>Description</label>
         <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={3} maxLength={2000} />
-        <button className="button button-secondary">Save schedule</button>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <PendingSubmitButton pendingLabel="Saving…">Save description</PendingSubmitButton>
       </form>
-      <form className="schedule-actions" action={setScheduleStatus}>
-        <input type="hidden" name="schedule_id" value={schedule.id} />
-        <input type="hidden" name="status" value={schedule.status === "published" ? "draft" : "published"} />
-        <input type="hidden" name="return_to" value={returnTo} />
-        <ConfirmButton action={setScheduleStatus} message={schedule.status === "published" ? "Unpublish this service?" : "Publish this service for public viewing?"} className="button button-primary">
-          {schedule.status === "published" ? "Unpublish service" : "Publish service"}
-        </ConfirmButton>
-      </form>
-    </details>
+    </section>
+  );
+}
+
+export function SchedulePublicationControls({
+  schedule,
+}: {
+  schedule: { id: string; title: string; status: "draft" | "published" };
+}) {
+  return (
+    <div className="schedule-editor-actions">
+        <form>
+          <input type="hidden" name="schedule_id" value={schedule.id} />
+          <input type="hidden" name="status" value={schedule.status === "published" ? "draft" : "published"} />
+          <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
+          <ConfirmButton
+            action={setScheduleStatus}
+            message={schedule.status === "published" ? "This schedule will no longer be visible to the public." : "This schedule and its items will become visible to the public."}
+            title={schedule.status === "published" ? "Unpublish schedule?" : "Publish schedule?"}
+            confirmLabel={schedule.status === "published" ? "Unpublish" : "Publish"}
+            pendingLabel={schedule.status === "published" ? "Unpublishing…" : "Publishing…"}
+            confirmClassName="button button-primary"
+            className="button button-primary"
+          >
+            {schedule.status === "published" ? "Unpublish schedule" : "Publish schedule"}
+          </ConfirmButton>
+        </form>
+        <form>
+          <input type="hidden" name="schedule_id" value={schedule.id} />
+          <input type="hidden" name="return_to" value="/admin/schedules" />
+          <ConfirmButton
+            action={deleteSchedule}
+            title={`Delete “${schedule.title}”?`}
+            message="This permanently deletes the schedule and its items. Songs in the Songbook are not deleted."
+            className="button button-danger"
+            pendingLabel="Deleting…"
+          >
+            Delete schedule
+          </ConfirmButton>
+        </form>
+    </div>
   );
 }
 
 export function NewScheduleForm() {
+  const { error, formAction } = useServerFormAction(createSchedule);
   return (
-    <form className="form-stack schedule-edit-form" action={createSchedule} data-dirty-form>
-      <input type="hidden" name="return_to" value="/schedule" />
+    <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
       <label htmlFor="new-service-title">Title</label><input id="new-service-title" name="title" required maxLength={200} />
       <label htmlFor="new-service-venue">Venue</label><input id="new-service-venue" name="venue" maxLength={200} />
       <label htmlFor="new-service-date">Date</label><input id="new-service-date" type="date" name="service_date" required />
       <fieldset className="new-schedule-items">
-        <legend>Schedule items</legend>
-        <p className="muted">Save this schedule first. Its own item list will then be available below.</p>
+        <legend>Schedule Items</legend>
+        <p className="muted">Create the schedule first, then add items directly in its editing view.</p>
       </fieldset>
       <label htmlFor="new-service-description">Description</label><textarea id="new-service-description" name="description" rows={3} maxLength={2000} />
-      <button className="button button-primary">Create schedule</button>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <PendingSubmitButton pendingLabel="Creating schedule…">Create schedule</PendingSubmitButton>
     </form>
   );
 }

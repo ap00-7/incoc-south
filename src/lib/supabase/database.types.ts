@@ -91,7 +91,7 @@ export type Database = {
     Enums: {
       member_role: "owner" | "viewer";
       schedule_status: "draft" | "published";
-      schedule_item_type: "song" | "worship" | "prayer" | "sermon" | "scripture_reading" | "announcement" | "communion" | "offering" | "other";
+      schedule_item_type: "song" | "worship" | "prayer" | "sermon" | "scripture_reading" | "announcement" | "communion" | "offering" | "other" | "welcome" | "closing";
       song_section_type: "verse" | "chorus" | "pre_chorus" | "bridge" | "intro" | "outro" | "other";
     };
     CompositeTypes: Record<string, never>;

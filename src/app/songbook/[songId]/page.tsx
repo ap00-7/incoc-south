@@ -32,10 +32,13 @@ async function SongContent({ params, searchParams }: Props) {
   }
   const [{ songId }, routeParams] = await Promise.all([params, searchParams]);
   const { supabase, churchId } = await getPublicChurchContext();
-  const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
-  const { data: song, error } = await supabase.from("songs")
-    .select("id, title, language, author, source, has_translation, start_with_chorus, is_published, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
-    .eq("id", songId).eq("church_id", churchId).maybeSingle();
+  const hasAuthCookie = await hasSupabaseAuthCookie();
+  const [{ data: song, error }, membership] = await Promise.all([
+    supabase.from("songs")
+      .select("id, title, language, author, source, has_translation, start_with_chorus, is_published, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
+      .eq("id", songId).eq("church_id", churchId).maybeSingle(),
+    hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
+  ]);
   if (error) throw new Error(`Unable to load song: ${error.message}`);
   if (!song) notFound();
   const sections = sequenceSongSections(song.song_sections ?? [], song.start_with_chorus);
@@ -49,11 +52,9 @@ async function SongContent({ params, searchParams }: Props) {
         { table: "song_sections", column: "song_id", value: songId },
       ]} />
       <article className="content-wrap song-reading">
-        <Link href="/songbook" className="back-link"><ArrowLeft size={15} /> Back to songbook</Link>
-        <p className="eyebrow">WORSHIP SONG</p>
+        <Link href="/songbook" className="back-link"><ArrowLeft size={15} /> Back to Songbook</Link>
         <h1 className="detail-title">{song.title}</h1>
         <hr className="song-reading-divider" />
-        <div className="detail-meta"><span className="meta-tag">{song.language}</span>{song.author && <span>Written by {song.author}</span>}{song.source && <span>· {song.source}</span>}</div>
         {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
           <section className="lyrics-section" key={`${section.id}-${index}`}>
             <h2>[{label}]</h2>
@@ -98,7 +99,7 @@ async function SongContent({ params, searchParams }: Props) {
           <form className="delete-song-form">
             <input type="hidden" name="song_id" value={song.id} />
             <input type="hidden" name="return_to" value="/songbook" />
-            <ConfirmButton action={deleteSong} message="Delete this song? It cannot be deleted if a service schedule uses it." className="button button-danger" pendingLabel="Deleting…">Delete song</ConfirmButton>
+            <ConfirmButton action={deleteSong} title="Delete song?" message="This permanently deletes the song from the Songbook. A song used by a schedule cannot be deleted." className="button button-danger" pendingLabel="Deleting…">Delete song</ConfirmButton>
           </form>
         </div>}
       </article>

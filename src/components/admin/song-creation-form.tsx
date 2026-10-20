@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { saveSong } from "@/app/admin/actions";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
+import { ConfirmationDialog } from "@/components/confirm-button";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { useServerFormAction } from "@/components/use-server-form-action";
 
 type SectionInput = {
   id?: string;
@@ -34,15 +36,6 @@ type SongEditorFormProps = {
     sections: Array<SectionInput & { id: string }>;
   };
 };
-
-function SaveSongButton({ editing }: { editing: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <button className="button button-primary song-save-button" disabled={pending}>
-      {pending ? "Saving…" : editing ? "Save song" : "Create song"}
-    </button>
-  );
-}
 
 function blankSection(key: string, type: SongSectionType): SectionDraft {
   return { key, section_type: type, label: "", lyrics: "", translation: "", translation_language: "", is_hidden: false };
@@ -74,6 +67,7 @@ function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
 }
 
 export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id}` : "/admin/songs" }: SongEditorFormProps) {
+  const { error, formAction } = useServerFormAction(saveSong);
   const [sections, setSections] = useState<SectionDraft[]>(() => {
     let keyIndex = 0;
     const initial: SectionDraft[] = song?.sections.map((section) => ({ ...section, key: `section-${keyIndex++}` })) ?? [];
@@ -93,6 +87,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   const [language, setLanguage] = useState(song?.language ?? "English");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [workingSection, setWorkingSection] = useState<SectionDraft | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
 
@@ -135,7 +130,16 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   }
 
   function closeVerse() {
-    if (modalDirty && !window.confirm("Discard unapplied verse changes?")) return;
+    if (modalDirty) {
+      setConfirmDiscard(true);
+      return;
+    }
+    setEditingKey(null);
+    setWorkingSection(null);
+  }
+
+  function discardVerse() {
+    setConfirmDiscard(false);
     setEditingKey(null);
     setWorkingSection(null);
   }
@@ -182,7 +186,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   }
 
   return (
-    <form className="form-stack admin-form song-editor" action={saveSong} data-dirty-form>
+    <form className="form-stack admin-form song-editor" action={formAction} data-dirty-form>
       {song && <>
         <input type="hidden" name="song_id" value={song.id} />
         <input type="hidden" name="expected_updated_at" value={song.updated_at} />
@@ -278,7 +282,10 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
         </div>
       </details>}
 
-          <SaveSongButton editing={Boolean(song)} />
+      {error && <p className="form-error" role="alert">{error}</p>}
+          <PendingSubmitButton className="button button-primary song-save-button" pendingLabel="Saving song…">
+            {song ? "Save song" : "Create song"}
+          </PendingSubmitButton>
 
       {workingSection && <div className="verse-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeVerse(); }}>
         <section className="verse-dialog" role="dialog" aria-modal="true" aria-labelledby="verse-dialog-title" onKeyDown={handleDialogKeyDown}>
@@ -303,6 +310,14 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           </footer>
         </section>
       </div>}
+      {confirmDiscard && <ConfirmationDialog
+        title="Discard verse changes?"
+        description="Your changes to this verse have not been applied to the song."
+        confirmLabel="Discard changes"
+        pendingLabel="Discarding…"
+        onConfirm={discardVerse}
+        onCancel={() => setConfirmDiscard(false)}
+      />}
     </form>
   );
 }

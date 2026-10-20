@@ -36,12 +36,13 @@ async function SongbookContent({ searchParams }: Props) {
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
   const { supabase, churchId } = await getPublicChurchContext();
-  const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
+  const hasAuthCookie = await hasSupabaseAuthCookie();
   let songsQuery = supabase.from("songs").select("id, title, language, author, is_published, updated_at")
     .eq("church_id", churchId).order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
-  const [{ data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
+  const [membership, { data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
+    hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
     songsQuery,
     supabase.from("songs").select("language").eq("church_id", churchId).order("language").limit(1000),
   ]);
@@ -98,6 +99,10 @@ async function SongbookContent({ searchParams }: Props) {
                 <ConfirmButton
                   action={setSongPublication}
                   message={song.is_published ? "Unpublish this song? It will no longer be visible to public visitors." : "Publish this song for public viewing?"}
+                  title={song.is_published ? "Unpublish song?" : "Publish song?"}
+                  confirmLabel={song.is_published ? "Unpublish" : "Publish"}
+                  pendingLabel={song.is_published ? "Unpublishing…" : "Publishing…"}
+                  confirmClassName="button button-primary"
                   className="text-link"
                 >
                   {song.is_published ? "Unpublish" : "Publish"}

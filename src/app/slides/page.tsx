@@ -4,7 +4,6 @@ import { ArrowRight, CalendarDays, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { InlineScheduleDetails, InlineScheduleManager } from "@/components/admin/inline-schedule-manager";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
@@ -48,23 +47,6 @@ async function SlidesIndexContent({ searchParams }: Props) {
   const schedulesForPage = schedules ?? [];
   const hasNextPage = schedulesForPage.length > PAGE_SIZE;
   const visibleSchedules = schedulesForPage.slice(0, PAGE_SIZE);
-  const scheduleIds = visibleSchedules.map(({ id }) => id);
-  const [{ data: items, error: itemsError }, { data: songs, error: songsError }] = isOwner ? await Promise.all([
-    scheduleIds.length
-      ? supabase.from("schedule_items").select("id, schedule_id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, updated_at, song:songs(title)").in("schedule_id", scheduleIds).order("position")
-      : Promise.resolve({ data: [], error: null }),
-    supabase.from("songs").select("id, title, language").eq("church_id", churchId).order("title").limit(1000),
-  ]) : [{ data: [], error: null }, { data: [], error: null }];
-  if (itemsError) throw new Error(`Unable to load slide content: ${itemsError.message}`);
-  if (songsError) throw new Error(`Unable to load songs for slide editing: ${songsError.message}`);
-  const notesByItem = new Map<string, string>();
-  const itemIds = (items ?? []).map(({ id }) => id);
-  if (isOwner && itemIds.length) {
-    const { data: notes, error: notesError } = await supabase.from("schedule_item_notes").select("schedule_item_id, notes").in("schedule_item_id", itemIds);
-    if (notesError) throw new Error(`Unable to load private service notes: ${notesError.message}`);
-    for (const note of notes ?? []) notesByItem.set(note.schedule_item_id, note.notes);
-  }
-
   return (
     <>
       <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: churchId }]} />
@@ -79,14 +61,7 @@ async function SlidesIndexContent({ searchParams }: Props) {
               </div>
               <span className="public-entry-meta">{schedule.status === "draft" ? "Draft" : ""}<MonitorPlay size={15} /> Open slides <ArrowRight size={15} /></span>
             </Link>
-            {isOwner && <InlineScheduleDetails schedule={schedule} returnTo="/slides" />}
-            {isOwner && <InlineScheduleManager
-              schedule={schedule}
-              items={(items ?? []).filter((item) => item.schedule_id === schedule.id).map((item) => ({ ...item, notes: notesByItem.get(item.id) ?? "" }))}
-              songs={songs ?? []}
-              returnTo="/slides"
-              churchId={churchId}
-            />}
+            {isOwner && <Link className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</Link>}
           </article>)}
         </div> : <div className="empty-state">There are no {isOwner ? "presentations" : "published presentations"} yet.</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Slides pages">

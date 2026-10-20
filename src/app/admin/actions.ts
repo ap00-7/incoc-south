@@ -56,8 +56,8 @@ function isCalendarDate(value: string) {
 }
 
 const scheduleItemTypeSchema = z.enum([
-  "song", "worship", "prayer", "sermon", "scripture_reading",
-  "announcement", "communion", "offering", "other",
+  "song", "worship", "sermon", "announcement", "communion", "offering",
+  "other", "welcome", "closing", "prayer", "scripture_reading",
 ]);
 const itemTranslationLanguageSchema = z.enum(["Kannada", "Tamil", "English"]).or(z.literal(""));
 const scheduleItemInputSchema = z.object({
@@ -121,6 +121,16 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
       .eq("id", parsed.data.song_id).eq("church_id", member.churchId).maybeSingle();
     if (songError) return { ok: false, message: `Unable to verify the selected song: ${songError.message}` };
     if (!song) return { ok: false, message: "Select a song from this church's Songbook." };
+  }
+  if (parsed.data.item_type === "prayer" || parsed.data.item_type === "scripture_reading") {
+    if (!parsed.data.item_id) return { ok: false, message: "This item type is only available on existing legacy items." };
+    const { data: existingItem, error: existingItemError } = await supabase.from("schedule_items")
+      .select("item_type").eq("id", parsed.data.item_id).eq("schedule_id", schedule.id)
+      .eq("church_id", member.churchId).maybeSingle();
+    if (existingItemError) return { ok: false, message: `Unable to verify this legacy item: ${existingItemError.message}` };
+    if (existingItem?.item_type !== parsed.data.item_type) {
+      return { ok: false, message: "Prayer and scripture reading are no longer available for new schedule items." };
+    }
   }
 
   const row = {
@@ -324,7 +334,7 @@ export async function saveSong(formData: FormData) {
     }
     revalidatePath("/songbook");
     revalidatePath("/admin/songs");
-    redirect(getReturnPath(formData, `/admin/songs/${song.id}`));
+    return { redirectTo: getReturnPath(formData, `/admin/songs/${song.id}`) };
   }
 
   const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
@@ -382,7 +392,7 @@ export async function saveSong(formData: FormData) {
   revalidatePath("/songbook");
   revalidatePath(`/songbook/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
-  redirect(getReturnPath(formData, `/admin/songs/${songId}`));
+  return { redirectTo: getReturnPath(formData, `/admin/songs/${songId}`) };
 }
 
 export async function setSongPublication(formData: FormData) {
@@ -398,7 +408,7 @@ export async function setSongPublication(formData: FormData) {
   if (!data) throw new Error("This song was changed by another owner. Reload and review the latest version before changing publication.");
   revalidatePath("/songbook");
   revalidatePath(`/songbook/${songId}`);
-  redirect(getReturnPath(formData, "/songbook"));
+  return { redirectTo: getReturnPath(formData, "/songbook") };
 }
 
 export async function createSong(formData: FormData) {
@@ -575,7 +585,8 @@ export async function deleteSong(formData: FormData) {
   }
   revalidatePath("/admin/songs");
   revalidatePath("/songbook");
-  redirect(getReturnPath(formData, "/admin/songs"));
+  const returnTo = getReturnPath(formData, "/admin/songs");
+  return { redirectTo: returnTo === "/admin/songs" ? "/songbook" : returnTo };
 }
 
 export async function createSchedule(formData: FormData) {
@@ -595,7 +606,7 @@ export async function createSchedule(formData: FormData) {
   revalidatePath("/admin/schedules");
   revalidatePath("/schedule");
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${schedule.id}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${schedule.id}`) };
 }
 
 export async function updateSchedule(formData: FormData) {
@@ -623,13 +634,13 @@ export async function updateSchedule(formData: FormData) {
   revalidatePath(`/schedule/${scheduleId}`);
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
 export async function addScheduleItem(formData: FormData) {
   const member = await requireOwner();
   const scheduleId = z.string().uuid().parse(formData.get("schedule_id"));
-  const itemType = z.enum(["song", "worship", "prayer", "sermon", "scripture_reading", "announcement", "communion", "offering", "other"]).parse(formData.get("item_type"));
+  const itemType = z.enum(["song", "worship", "sermon", "announcement", "communion", "offering", "other", "welcome", "closing"]).parse(formData.get("item_type"));
   const submittedTitle = z.string().trim().max(200).parse(formData.get("title") ?? "");
   const songId = formData.get("song_id")?.toString() || "";
   const durationRaw = formData.get("duration_minutes")?.toString() || "";
@@ -699,7 +710,7 @@ export async function updateScheduleItem(formData: FormData) {
   const scheduleId = z.string().uuid().parse(formData.get("schedule_id"));
   const itemId = z.string().uuid().parse(formData.get("item_id"));
   const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
-  const itemType = z.enum(["song", "worship", "prayer", "sermon", "scripture_reading", "announcement", "communion", "offering", "other"]).parse(formData.get("item_type"));
+  const itemType = z.enum(["song", "worship", "sermon", "announcement", "communion", "offering", "other", "welcome", "closing", "prayer", "scripture_reading"]).parse(formData.get("item_type"));
   const songId = formData.get("song_id")?.toString() || "";
   const titleValue = z.string().trim().max(200).parse(formData.get("title") ?? "");
   const leaderName = z.string().trim().max(200).parse(formData.get("leader_name") ?? "");
@@ -707,6 +718,13 @@ export async function updateScheduleItem(formData: FormData) {
   const publicContent = z.string().trim().max(5000).parse(formData.get("public_content") ?? "");
   const notes = z.string().trim().max(2000).parse(formData.get("notes") ?? "");
   const supabase = await createClient();
+  if (itemType === "prayer" || itemType === "scripture_reading") {
+    const { data: existingItem, error: existingItemError } = await supabase.from("schedule_items")
+      .select("item_type").eq("id", itemId).eq("schedule_id", scheduleId)
+      .eq("church_id", member.churchId).maybeSingle();
+    if (existingItemError) throw new Error(`Unable to verify this legacy item: ${existingItemError.message}`);
+    if (existingItem?.item_type !== itemType) throw new Error("This item type is no longer available for new schedule items.");
+  }
   let title = titleValue;
   if (itemType === "song") {
     const validSongId = z.string().uuid().safeParse(songId);
@@ -756,7 +774,20 @@ export async function deleteScheduleItem(formData: FormData) {
   revalidatePath(`/admin/schedules/${item.schedule_id}`);
   revalidatePath(`/schedule/${item.schedule_id}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${item.schedule_id}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${item.schedule_id}`) };
+}
+
+export async function deleteSchedule(formData: FormData) {
+  const member = await requireOwner();
+  const scheduleId = z.string().uuid().parse(formData.get("schedule_id"));
+  const supabase = await createClient();
+  const { error } = await supabase.from("schedules").delete()
+    .eq("id", scheduleId).eq("church_id", member.churchId);
+  if (error) throw new Error(`Unable to delete schedule: ${error.message}`);
+  revalidatePath("/admin/schedules");
+  revalidatePath("/schedule");
+  revalidatePath("/slides");
+  return { redirectTo: getReturnPath(formData, "/admin/schedules") };
 }
 
 export async function setScheduleStatus(formData: FormData) {
@@ -774,5 +805,5 @@ export async function setScheduleStatus(formData: FormData) {
   revalidatePath(`/schedule/${scheduleId}/slides`);
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
