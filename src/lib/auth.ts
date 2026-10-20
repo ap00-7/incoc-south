@@ -1,11 +1,14 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { createClient } from "@/lib/supabase/server";
 
 export type OwnerSessionStatus = "owner" | "restricted" | "signed-out" | "unavailable";
 
-export async function getMembership() {
-  const supabase = await createClient();
+export const getMembership = cache(async (
+  client?: Awaited<ReturnType<typeof createClient>>,
+) => {
+  const supabase = client ?? await createClient();
   const {
     data: { user },
     error: authError,
@@ -19,27 +22,18 @@ export async function getMembership() {
   if (authError) throw new Error("Unable to verify the signed-in account.");
   if (!user) return null;
 
-  const { data: church, error: churchError } = await supabase
-    .from("churches")
-    .select("id")
-    .eq("slug", "incoc-south")
-    .single();
-  if (churchError?.code === "PGRST116") return null;
-  if (churchError) throw new Error(`Unable to load church: ${churchError.message}`);
-  if (!church) return null;
-
   const { data: membership, error } = await supabase
     .from("church_members")
-    .select("role")
-    .eq("church_id", church.id)
+    .select("church_id, role, church:churches!inner(slug)")
     .eq("user_id", user.id)
-    .single();
-  if (error && error.code !== "PGRST116") {
+    .eq("church.slug", "incoc-south")
+    .maybeSingle();
+  if (error) {
     throw new Error(`Unable to verify church membership: ${error.message}`);
   }
   if (!membership) return null;
-  return { user, churchId: church.id, role: membership.role };
-}
+  return { user, churchId: membership.church_id, role: membership.role };
+});
 
 export async function getOwnerSessionStatus(): Promise<OwnerSessionStatus> {
   if (!isSupabaseConfigured()) return "unavailable";

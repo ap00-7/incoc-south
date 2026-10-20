@@ -37,7 +37,6 @@ export function RealtimeRefresh({ subscriptions }: { subscriptions: RealtimeFilt
       }, refresh);
     }
     channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") refresh();
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
         setError("Live updates are unavailable. Refresh the page to see the latest changes.");
       }

@@ -13,7 +13,7 @@ export default async function LoginPage() {
   const configured = isSupabaseConfigured();
   if (configured) {
     const status = await getOwnerSessionStatus();
-    if (status === "owner") redirect("/admin");
+    if (status === "owner") redirect("/songbook");
     if (status === "restricted") redirect("/access-denied");
   }
   return (

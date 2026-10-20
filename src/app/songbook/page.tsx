@@ -5,6 +5,7 @@ import { PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { songLanguageValues } from "@/lib/domain/songs";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string }> };
 
@@ -27,7 +28,10 @@ export default async function SongbookPage({ searchParams }: Props) {
   ]);
   if (error) throw new Error(`Unable to load songs: ${error.message}`);
   if (languageError) throw new Error(`Unable to load song languages: ${languageError.message}`);
-  const languages = [...new Set((languageRows ?? []).map((row) => row.language))];
+  const languages = [...new Set([
+    ...songLanguageValues,
+    ...(languageRows ?? []).map((row) => row.language),
+  ])].sort((first, second) => first.localeCompare(second));
 
   return (
     <PageShell>

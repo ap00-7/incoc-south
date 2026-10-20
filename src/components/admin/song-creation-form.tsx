@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { saveSong } from "@/app/admin/actions";
+import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
 
 type SectionInput = {
@@ -15,6 +16,7 @@ type SectionInput = {
   is_hidden: boolean;
 };
 type SectionDraft = SectionInput & { key: string };
+type SongEnding = "bridge" | "chorus" | "pre_chorus_chorus";
 
 type SongEditorFormProps = {
   song?: {
@@ -32,6 +34,31 @@ function blankSection(key: string, type: SongSectionType): SectionDraft {
   return { key, section_type: type, label: "", lyrics: "", translation: "", translation_language: "", is_hidden: false };
 }
 
+function sectionTitle(section: SectionDraft, verseNumber: number) {
+  return getSectionDisplayLabel(section, verseNumber);
+}
+
+function initialEnding(sections: SectionDraft[]): SongEnding {
+  const bridgeIndex = sections.findIndex(({ section_type }) => section_type === "bridge");
+  const chorusIndex = sections.findIndex(({ section_type }) => section_type === "chorus");
+  const preChorusIndex = sections.findIndex(({ section_type }) => section_type === "pre_chorus");
+  if (bridgeIndex < 0 || chorusIndex < 0 || bridgeIndex > chorusIndex) return "bridge";
+  return preChorusIndex >= 0 && bridgeIndex < preChorusIndex
+    ? "pre_chorus_chorus"
+    : "chorus";
+}
+
+function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
+  const bridgeIndex = sections.findIndex(({ section_type }) => section_type === "bridge");
+  if (bridgeIndex < 0) return sections;
+  const [bridge] = sections.splice(bridgeIndex, 1);
+  if (ending === "bridge") return [...sections, bridge];
+  const targetType = ending === "pre_chorus_chorus" ? "pre_chorus" : "chorus";
+  const targetIndex = sections.findIndex(({ section_type }) => section_type === targetType);
+  sections.splice(targetIndex < 0 ? sections.length : targetIndex, 0, bridge);
+  return sections;
+}
+
 export function SongEditorForm({ song }: SongEditorFormProps) {
   const [sections, setSections] = useState<SectionDraft[]>(() => {
     let keyIndex = 0;
@@ -42,6 +69,9 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
     }
     return initial;
   });
+  const [ending, setEnding] = useState<SongEnding>(() => initialEnding(
+    song?.sections.map((section, index) => ({ ...section, key: `initial-${index}` })) ?? [],
+  ));
   const [nextKey, setNextKey] = useState((song?.sections.length ?? 0) + 4);
   const [hasTranslation, setHasTranslation] = useState(song?.has_translation ?? false);
   const [startWithChorus, setStartWithChorus] = useState(song?.start_with_chorus ?? false);
@@ -59,7 +89,9 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
     }
   }, [editingKey]);
 
-  const sectionPayload = JSON.stringify(sections.map((section) => ({
+  const sectionPayload = JSON.stringify(orderSectionsForEnding([...sections], ending).filter((section) =>
+    section.id || section.section_type === "verse" || section.lyrics.trim() || section.translation.trim(),
+  ).map((section) => ({
     ...(section.id ? { id: section.id } : {}),
     section_type: section.section_type,
     section_label: section.label,
@@ -69,6 +101,12 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
     is_hidden: section.is_hidden,
   })));
   const verses = sections.filter((section) => section.section_type === "verse");
+  let visibleVerseNumber = 0;
+  const numberedVerses = verses.map((section, index) => ({
+    section,
+    index,
+    number: section.is_hidden ? visibleVerseNumber + 1 : ++visibleVerseNumber,
+  }));
   const primarySpecialKeys = new Set((["pre_chorus", "chorus", "bridge"] as const)
     .map((type) => sections.find((section) => section.section_type === type)?.key));
   const additionalSections = sections.filter((section) => section.section_type !== "verse" && !primarySpecialKeys.has(section.key));
@@ -152,6 +190,15 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
         <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>
       </fieldset>
 
+      <label className="song-ending-control" htmlFor="song-ending">
+        <span>Ending</span>
+        <select id="song-ending" value={ending} onChange={(event) => setEnding(event.target.value as SongEnding)}>
+          <option value="bridge">End with Bridge</option>
+          <option value="chorus">End with Chorus after Bridge</option>
+          {sections.some(({ section_type }) => section_type === "pre_chorus") && <option value="pre_chorus_chorus">End with Pre-Chorus and Chorus after Bridge</option>}
+        </select>
+      </label>
+
       <section className="song-editor-section" aria-labelledby="verses-heading">
         <div className="song-editor-section-heading">
           <div><p className="eyebrow">LYRICS</p><h2 id="verses-heading">Verses</h2></div>
@@ -163,10 +210,10 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
           }}><Plus size={16} /> Add item</button>
         </div>
         <ol className="verse-list">
-          {verses.map((section, index) => <li className="verse-row" key={section.key}>
+          {numberedVerses.map(({ section, index, number }) => <li className="verse-row" key={section.key}>
             <button className="verse-open" type="button" onClick={(event) => openVerse(section, event.currentTarget)}>
               <span className="verse-number">{String(index + 1).padStart(2, "0")}</span>
-              <span className="verse-row-copy"><strong>{section.label.trim() || `Verse ${index + 1}`}</strong><span>{section.is_hidden ? "Hidden" : section.lyrics.trim() || "No lyrics added"}</span></span>
+              <span className="verse-row-copy"><strong>{sectionTitle(section, number)}</strong><span>{section.is_hidden ? "Hidden" : section.lyrics.trim() || "No lyrics added"}</span></span>
             </button>
             <div className="verse-actions">
               <button type="button" className="icon-button" aria-label={`Move verse ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => moveVerse(section.key, -1)}><ArrowUp size={16} /></button>
@@ -178,7 +225,7 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
 
       {(["pre_chorus", "chorus", "bridge"] as const).map((type) => {
         const section = sections.find((item) => item.section_type === type)!;
-        const title = type === "pre_chorus" ? "Pre Chorus" : `${type[0].toUpperCase()}${type.slice(1)}`;
+        const title = type === "pre_chorus" ? "Pre-Chorus" : `${type[0].toUpperCase()}${type.slice(1)}`;
         return <details className="song-part" key={type}>
           <summary><span>{title}</span><span className="muted">{section.is_hidden ? "Hidden" : "Lyrics"}</span></summary>
           <div className="form-stack song-part-fields">
@@ -202,7 +249,7 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
         <summary><span>Other saved sections</span><span className="muted">Existing content</span></summary>
         <div className="song-part-fields">
           {additionalSections.map((section) => <div className="form-stack legacy-section" key={section.key}>
-            <h3>{section.label || section.section_type.replaceAll("_", " ")}</h3>
+            <h3>{getSectionDisplayLabel(section)}</h3>
             <label className="check-row"><input type="checkbox" checked={section.is_hidden} onChange={(event) => updateSection(section.key, { is_hidden: event.target.checked })} /> Hide section</label>
             <label htmlFor={`${section.key}-lyrics`}>Lyrics</label><textarea id={`${section.key}-lyrics`} value={section.lyrics} onChange={(event) => updateSection(section.key, { lyrics: event.target.value })} rows={5} />
             {hasTranslation && <><label htmlFor={`${section.key}-translation`}>Translation</label><textarea id={`${section.key}-translation`} value={section.translation} onChange={(event) => updateSection(section.key, { translation: event.target.value })} rows={5} /></>}

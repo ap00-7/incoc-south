@@ -16,13 +16,13 @@ export default async function ScheduleDetailPage({ params }: { params: Promise<{
     return <PageShell><div className="content-wrap"><div className="notice notice-warning">Service details require a configured Supabase project.</div></div></PageShell>;
   }
   const { scheduleId } = await params;
-  const [membership, { supabase, churchId }] = await Promise.all([
-    getMembership(),
-    getPublicChurchContext(),
+  const { supabase, churchId } = await getPublicChurchContext();
+  const [membership, { data: schedule, error }] = await Promise.all([
+    getMembership(supabase),
+    supabase.from("schedules")
+      .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
+      .eq("id", scheduleId).eq("church_id", churchId).maybeSingle(),
   ]);
-  const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
-    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
   if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
   const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);

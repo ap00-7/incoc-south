@@ -170,6 +170,6 @@ The test exercises sign-in as owner, song and lyric-section creation, a dated Su
 ## Known limitations / follow-up verification
 
 - The hosted project has migrations `001`–`006` recorded as applied. Song-editor option SQL remains pending manual execution before those features work against a database without the new columns.
-- Realtime content clients refetch on notified changes and initial subscription; live multi-client behavior still needs testing against a configured Supabase project.
+- Initial content is server-rendered once; Realtime refetches only after notified changes. Live multi-client behavior still needs testing against a configured Supabase project.
 - Invitation email delivery, SMTP settings, account recovery, and Vercel production configuration remain deployment tasks.
 - Restricted presentation links remain disabled by design.

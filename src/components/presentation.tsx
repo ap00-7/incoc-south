@@ -156,7 +156,7 @@ export function Presentation({
           <Link href={`/schedule/${scheduleId}`}><ArrowLeft size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Return to service</Link>
           <span style={{ marginLeft: 16 }}>{scheduleTitle}</span>
           <span style={{ marginLeft: 14, color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
-          <OwnerSessionStatus configured />
+          <OwnerSessionStatus />
         </div>
         <div className="presentation-controls" aria-label="Presentation controls">
           {isOwner && <button type="button" onClick={() => void toggleSync()} aria-label={syncActive ? "Stop synchronized presentation" : "Start synchronized presentation"}>{syncActive ? <Pause size={15} /> : <Play size={15} />}</button>}

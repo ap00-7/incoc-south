@@ -18,9 +18,9 @@ export default async function SchedulePage() {
   }
   const { supabase, churchId } = await getPublicChurchContext();
   const { data: schedules, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description")
-    .eq("church_id", churchId).eq("status", "published")
-    .order("service_date", { ascending: false }).limit(50);
+      .select("id, title, service_date, venue, description, church:churches!inner(slug)")
+      .eq("church.slug", "incoc-south").eq("status", "published")
+      .order("service_date", { ascending: false }).limit(50);
   if (error) throw new Error(`Unable to load services: ${error.message}`);
 
   return (

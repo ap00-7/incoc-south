@@ -5,8 +5,7 @@ import { connection } from "next/server";
 import { PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
 export default async function SlidesPage({ params }: { params: Promise<{ scheduleId: string }> }) {
@@ -15,13 +14,13 @@ export default async function SlidesPage({ params }: { params: Promise<{ schedul
     return <PageShell><div className="content-wrap"><div className="notice notice-warning">Presentation preview requires a configured Supabase project.</div></div></PageShell>;
   }
   const { scheduleId } = await params;
-  const [membership, { supabase, churchId }] = await Promise.all([
+  const supabase = await createClient();
+  const [membership, { data: schedule, error }] = await Promise.all([
     getMembership(),
-    getPublicChurchContext(),
+    supabase.from("schedules")
+      .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+      .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle(),
   ]);
-  const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
-    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load slide preview: ${error.message}`);
   if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
   const slides = generateSlides(normalizeProgrammeItems(schedule.schedule_items ?? []));

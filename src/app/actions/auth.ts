@@ -25,7 +25,7 @@ export async function signIn(
   if (error) return "Sign-in failed. Check your email and password.";
 
   const membership = await getMembership();
-  redirect(membership ? (membership.role === "owner" ? "/admin" : "/songbook") : "/access-denied");
+  redirect(membership ? "/songbook" : "/access-denied");
 }
 
 export async function signOut() {

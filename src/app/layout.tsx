@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
+import { OwnerSessionProvider } from "@/components/owner-session-status";
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,9 +17,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="dark">
       <body>
-        <Suspense fallback={<div className="route-loading" role="status">Loading INCOC South…</div>}>
+        <OwnerSessionProvider configured={isSupabaseConfigured()}>
           {children}
-        </Suspense>
+        </OwnerSessionProvider>
       </body>
     </html>
   );

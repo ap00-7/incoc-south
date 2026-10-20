@@ -98,15 +98,25 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await expect(ownerPage.getByLabel("Has Translation")).toBeChecked();
   await expect(ownerPage.getByLabel("Start With Chorus")).toBeChecked();
   await ownerPage.goto(`/songbook/${songId}`);
+  await expect(ownerPage.locator(".lyrics-section h2")).toHaveText([
+    "Chorus",
+    "Verse 1",
+    "Pre-Chorus",
+    "Chorus",
+    "Verse 2",
+    "Pre-Chorus",
+    "Chorus",
+    "Bridge",
+  ]);
   await expect(ownerPage.locator(".lyrics-section .lyrics-text")).toHaveText([
     "Chorus lyrics",
     "Second verse lyrics",
     "Pre-chorus lyrics",
     "Chorus lyrics",
-    "Bridge lyrics",
     "First verse lyrics",
     "Pre-chorus lyrics",
     "Chorus lyrics",
+    "Bridge lyrics",
   ]);
   await expect(ownerPage.locator(".lyrics-section .lyrics-text")).not.toContainText("Hidden verse lyrics");
   await expect(ownerPage.locator(".song-translation-section .lyrics-text")).toHaveText([

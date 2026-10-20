@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, generateSlides, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, generateSlides, getSectionDisplayLabel, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
   position: number,
   sections: LyricSection[],
+  startWithChorus = false,
 ): ProgrammeItem => ({
   id: `item-${position}`,
   item_type: "song",
   title,
   position,
   public_content: null,
-  song: { title, song_sections: sections },
+  song: { title, start_with_chorus: startWithChorus, song_sections: sections },
 });
 
 describe("generateSlides", () => {
@@ -77,14 +78,89 @@ describe("generateSlides", () => {
     expect(sequence.map((section) => section.id)).toEqual(["c", "v", "c"]);
   });
 
+  it("places the bridge after all verses in both chorus modes", () => {
+    const sections: LyricSection[] = [
+      { id: "v1", section_type: "verse", label: null, position: 0, lyrics: "Verse one" },
+      { id: "p", section_type: "pre_chorus", label: "Pre Chorus 1", position: 1, lyrics: "Lift" },
+      { id: "c", section_type: "chorus", label: "Chorus 2", position: 2, lyrics: "Refrain" },
+      { id: "v2", section_type: "verse", label: "Verse 4", position: 3, lyrics: "Verse two" },
+      { id: "b", section_type: "bridge", label: "Bridge Ending", position: 4, lyrics: "Bridge" },
+    ];
+    expect(sequenceSongSections(sections).map((section) => section.id)).toEqual([
+      "v1", "p", "c", "v2", "p", "c", "b",
+    ]);
+    expect(sequenceSongSections(sections, true).map((section) => section.id)).toEqual([
+      "c", "v1", "p", "c", "v2", "p", "c", "b",
+    ]);
+    expect(generateSlides([songItem("Bridge final", 0, sections, true)]).map((slide) => slide.sectionLabel)).toEqual([
+      "Chorus", "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus", "Bridge",
+    ]);
+  });
+
+  it("handles songs without verses without duplicating the chorus", () => {
+    const sections: LyricSection[] = [
+      { id: "p", section_type: "pre_chorus", label: null, position: 0, lyrics: "Pre-Chorus" },
+      { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Chorus" },
+      { id: "b", section_type: "bridge", label: null, position: 2, lyrics: "Bridge" },
+    ];
+    expect(sequenceSongSections(sections).map(({ id }) => id)).toEqual(["p", "c", "b"]);
+    expect(sequenceSongSections(sections, true).map(({ id }) => id)).toEqual(["c", "p", "b"]);
+  });
+
+  it("uses saved section ordering to place an intended ending after the bridge", () => {
+    const sections: LyricSection[] = [
+      { id: "v1", section_type: "verse", label: null, position: 0, lyrics: "Verse one" },
+      { id: "b", section_type: "bridge", label: null, position: 1, lyrics: "Bridge" },
+      { id: "p", section_type: "pre_chorus", label: null, position: 2, lyrics: "Lift" },
+      { id: "c", section_type: "chorus", label: null, position: 3, lyrics: "Refrain" },
+      { id: "v2", section_type: "verse", label: null, position: 4, lyrics: "Verse two" },
+    ];
+    expect(sequenceSongSections(sections).map(({ id }) => id)).toEqual([
+      "v1", "p", "c", "v2", "p", "c", "b", "p", "c",
+    ]);
+    expect(labelSongSections(sequenceSongSections(sections)).map(({ label }) => label)).toEqual([
+      "Verse 1", "Pre-Chorus", "Chorus", "Verse 2", "Pre-Chorus", "Chorus",
+      "Bridge", "Pre-Chorus", "Chorus",
+    ]);
+  });
+
+  it("numbers only verses and normalizes numbered legacy special-section labels", () => {
+    expect(getSectionDisplayLabel({ section_type: "verse", label: "Verse 9" }, 2)).toBe("Verse 2");
+    expect(getSectionDisplayLabel({ section_type: "verse", label: "Opening refrain" }, 2)).toBe("Verse 2");
+    expect(getSectionDisplayLabel({ section_type: "verse", label: null }, 3)).toBe("Verse 3");
+    expect(getSectionDisplayLabel({ section_type: "pre_chorus", label: "Pre Chorus 1" })).toBe("Pre-Chorus");
+    expect(getSectionDisplayLabel({ section_type: "chorus", label: "Chorus 2" })).toBe("Chorus");
+    expect(getSectionDisplayLabel({ section_type: "bridge", label: "Bridge 1" })).toBe("Bridge");
+  });
+
+  it("numbers visible verses in sequence while leaving hidden content saved", () => {
+    const sections: LyricSection[] = [
+      { id: "hidden", section_type: "verse", label: "Verse 1", position: 0, lyrics: "Hidden verse", is_hidden: true },
+      { id: "visible", section_type: "verse", label: "Verse 3", position: 1, lyrics: "Visible verse" },
+    ];
+    const labeled = labelSongSections(sequenceSongSections(sections));
+    expect(labeled.map(({ label }) => label)).toEqual(["Verse 1"]);
+    expect(sections.find(({ id }) => id === "hidden")?.lyrics).toBe("Hidden verse");
+  });
+
   it("preserves distinct legacy chorus sections but removes copied chorus duplicates", () => {
     const sequence = sequenceSongSections([
       { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Verse" },
       { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Refrain" },
-      { id: "c-copy", section_type: "chorus", label: null, position: 2, lyrics: "Refrain" },
+      { id: "c-copy", section_type: "chorus", label: "Chorus 2", position: 2, lyrics: "Refrain" },
       { id: "c-alt", section_type: "chorus", label: "Alternate", position: 3, lyrics: "Different refrain" },
     ]);
     expect(sequence.map((section) => section.id)).toEqual(["v", "c", "c-alt"]);
+  });
+
+  it("repeats one stored pre-chorus and removes copied pre-chorus rows", () => {
+    const sequence = sequenceSongSections([
+      { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Verse" },
+      { id: "p", section_type: "pre_chorus", label: null, position: 1, lyrics: "Lift" },
+      { id: "p-copy", section_type: "pre_chorus", label: "Pre-Chorus 2", position: 2, lyrics: "Lift" },
+      { id: "v2", section_type: "verse", label: null, position: 3, lyrics: "Verse two" },
+    ]);
+    expect(sequence.map(({ id }) => id)).toEqual(["v", "p", "v2", "p"]);
   });
 
   it("keeps unusually long words intact and scales down the slide", () => {

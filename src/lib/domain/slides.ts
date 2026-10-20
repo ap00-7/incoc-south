@@ -32,16 +32,20 @@ export function sequenceSongSections(
   const chorus = ordered.find((section) => section.section_type === "chorus");
   const preChorus = ordered.find((section) => section.section_type === "pre_chorus");
   const verses = ordered.filter((section) => section.section_type === "verse");
+  const bridges = uniqueSections(ordered.filter((section) => section.section_type === "bridge"));
+  const bridge = bridges[0];
+  const endingSections = bridge
+    ? [preChorus, chorus].filter(
+        (section): section is LyricSection => Boolean(section && section.position > bridge.position),
+      )
+    : [];
   const sequence: LyricSection[] = [];
 
   if (startWithChorus && chorus) sequence.push(chorus);
   for (const section of ordered) {
-    if (section === chorus || section === preChorus) continue;
-    if (section.section_type === "chorus" && chorus
-      && section.lyrics.trim() === chorus.lyrics.trim()
-      && (section.label?.trim() ?? "") === (chorus.label?.trim() ?? "")
-      && (section.translation?.trim() ?? "") === (chorus.translation?.trim() ?? "")
-      && (section.translation_language ?? "") === (chorus.translation_language ?? "")) continue;
+    if (section.section_type === "bridge" || section === preChorus || section === chorus) continue;
+    if (section.section_type === "pre_chorus" && preChorus && hasSameSectionContent(section, preChorus)) continue;
+    if (section.section_type === "chorus" && chorus && hasSameSectionContent(section, chorus)) continue;
     sequence.push(section);
     if (section.section_type === "verse") {
       if (preChorus) sequence.push(preChorus);
@@ -50,10 +54,50 @@ export function sequenceSongSections(
   }
 
   if (verses.length === 0) {
-    if (preChorus) sequence.push(preChorus);
+    if (preChorus) sequence.splice(startWithChorus && chorus ? 1 : 0, 0, preChorus);
     if (chorus && !startWithChorus) sequence.push(chorus);
   }
+  sequence.push(...bridges);
+  sequence.push(...endingSections);
   return sequence;
+}
+
+function hasSameSectionContent(first: LyricSection, second: LyricSection) {
+  return first.lyrics.trim() === second.lyrics.trim()
+    && (first.translation?.trim() ?? "") === (second.translation?.trim() ?? "")
+    && (first.translation_language ?? "") === (second.translation_language ?? "");
+}
+
+function uniqueSections(sections: LyricSection[]) {
+  return sections.filter((section, index) => !sections.slice(0, index)
+    .some((previous) => hasSameSectionContent(section, previous)));
+}
+
+export function getSectionDisplayLabel(
+  section: Pick<LyricSection, "section_type" | "label">,
+  verseNumber?: number,
+) {
+  const label = section.label?.trim() ?? "";
+  if (section.section_type === "verse") {
+    return `Verse ${verseNumber ?? 1}`;
+  }
+
+  const canonicalLabel: Record<string, string> = {
+    pre_chorus: "Pre-Chorus",
+    chorus: "Chorus",
+    bridge: "Bridge",
+  };
+  const canonical = canonicalLabel[section.section_type];
+  if (canonical) return canonical;
+  return label || section.section_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+}
+
+export function labelSongSections(sections: LyricSection[]) {
+  let verseNumber = 0;
+  return sections.map((section) => ({
+    section,
+    label: getSectionDisplayLabel(section, section.section_type === "verse" ? ++verseNumber : undefined),
+  }));
 }
 
 export function normalizeProgrammeItems(
@@ -88,6 +132,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
         item.song.start_with_chorus,
       );
       const showTranslations = item.song.has_translation !== false;
+      const labeledSections = labelSongSections(sections);
       const addTextSlides = (text: string, label: string) => {
         const lines = text.replace(/\r\n/g, "\n").split("\n");
         for (let start = 0; start < lines.length; start += LINES_PER_SLIDE) {
@@ -102,17 +147,16 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
           });
         }
       };
-      for (const section of sections) {
-        const sectionLabel = section.label?.trim() || section.section_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
+      for (const { section, label } of labeledSections) {
+        const sectionLabel = label;
         if (section.lyrics.trim()) addTextSlides(section.lyrics, sectionLabel);
       }
       if (showTranslations) {
-        for (const section of sections) {
+        for (const { section, label } of labeledSections) {
           if (!section.translation?.trim()) continue;
-          const sectionLabel = section.label?.trim() || section.section_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase());
           addTextSlides(
             section.translation,
-            `${sectionLabel} · ${section.translation_language ?? "Translation"}`,
+            `${label} · ${section.translation_language ?? "Translation"}`,
           );
         }
       }

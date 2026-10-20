@@ -19,10 +19,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       <div className="admin-layout">
         <UnsavedChangesGuard />
         <aside className="admin-nav" aria-label="Owner navigation">
-          <Link href="/admin">Overview</Link>
-          <Link href="/admin/songs">Songs</Link>
-          <Link href="/admin/schedules">Schedules</Link>
-          <Link href="/admin/settings">Settings</Link>
+          <Link href="/songbook">Songs</Link>
+          <Link href="/schedule">Schedules</Link>
+          <Link href="/slides">Slides</Link>
         </aside>
         <section className="admin-content">{children}</section>
       </div>

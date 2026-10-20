@@ -6,7 +6,7 @@ import { PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
-import { sequenceSongSections } from "@/lib/domain/slides";
+import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 
 export default async function SongPage({ params }: { params: Promise<{ songId: string }> }) {
   await connection();
@@ -21,7 +21,8 @@ export default async function SongPage({ params }: { params: Promise<{ songId: s
   if (error) throw new Error(`Unable to load song: ${error.message}`);
   if (!song) notFound();
   const sections = sequenceSongSections(song.song_sections ?? [], song.start_with_chorus);
-  const translatedSections = song.has_translation ? sections.filter((section) => section.translation?.trim()) : [];
+  const labeledSections = labelSongSections(sections);
+  const translatedSections = song.has_translation ? labeledSections.filter(({ section }) => section.translation?.trim()) : [];
 
   return (
     <PageShell>
@@ -29,21 +30,22 @@ export default async function SongPage({ params }: { params: Promise<{ songId: s
         { table: "songs", column: "id", value: songId },
         { table: "song_sections", column: "song_id", value: songId },
       ]} />
-      <article className="content-wrap">
+      <article className="content-wrap song-reading">
         <Link href="/songbook" className="back-link"><ArrowLeft size={15} /> Back to songbook</Link>
         <p className="eyebrow">WORSHIP SONG</p>
         <h1 className="detail-title">{song.title}</h1>
+        <hr className="song-reading-divider" />
         <div className="detail-meta"><span className="meta-tag">{song.language}</span>{song.author && <span>Written by {song.author}</span>}{song.source && <span>· {song.source}</span>}</div>
-        {sections.some((section) => section.lyrics.trim()) ? sections.filter((section) => section.lyrics.trim()).map((section, index) => (
-          <section className="lyrics-section" key={section.id}>
-            <h2>{section.label?.trim() || `${section.section_type.replaceAll("_", " ")} ${index + 1}`}</h2>
+        {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
+          <section className="lyrics-section" key={`${section.id}-${index}`}>
+            <h2>[{label}]</h2>
             <p className="lyrics-text">{section.lyrics}</p>
           </section>
         )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
         {translatedSections.length > 0 && <section className="song-translation-section" aria-label="Song translation">
           <h2>Translation</h2>
-          {translatedSections.map((section, index) => <div className="translation-entry" key={`${section.id}-${index}`}>
-            <h3>{section.label?.trim() || section.section_type.replaceAll("_", " ")}</h3>
+          {translatedSections.map(({ section, label }, index) => <div className="translation-entry" key={`${section.id}-${index}`}>
+            <h3>[{label}]</h3>
             {section.translation_language && <p className="translation-language">{section.translation_language}</p>}
             <p className="lyrics-text">{section.translation}</p>
           </div>)}
