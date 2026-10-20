@@ -34,7 +34,7 @@ async function SongContent({ params, searchParams }: Props) {
   const { supabase, churchId } = await getPublicChurchContext();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const { data: song, error } = await supabase.from("songs")
-    .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
+    .select("id, title, language, author, source, has_translation, start_with_chorus, is_published, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
     .eq("id", songId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load song: ${error.message}`);
   if (!song) notFound();
@@ -82,6 +82,7 @@ async function SongContent({ params, searchParams }: Props) {
                 source: song.source,
                 has_translation: song.has_translation,
                 start_with_chorus: song.start_with_chorus,
+                is_published: song.is_published,
                 sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
                   id: section.id,
                   section_type: section.section_type,

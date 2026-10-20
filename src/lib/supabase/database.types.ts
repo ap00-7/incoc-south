@@ -23,9 +23,9 @@ export type Database = {
         ];
       };
       songs: {
-        Row: { id: string; church_id: string; title: string; language: string; author: string | null; source: string | null; has_translation: boolean; start_with_chorus: boolean; created_by: string; created_at: string; updated_at: string };
-        Insert: { id?: string; church_id: string; title: string; language: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; created_by: string; created_at?: string; updated_at?: string };
-        Update: { id?: string; church_id?: string; title?: string; language?: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; created_by?: string; created_at?: string; updated_at?: string };
+        Row: { id: string; church_id: string; title: string; language: string; author: string | null; source: string | null; has_translation: boolean; start_with_chorus: boolean; is_published: boolean; created_by: string; created_at: string; updated_at: string };
+        Insert: { id?: string; church_id: string; title: string; language: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; is_published?: boolean; created_by: string; created_at?: string; updated_at?: string };
+        Update: { id?: string; church_id?: string; title?: string; language?: string; author?: string | null; source?: string | null; has_translation?: boolean; start_with_chorus?: boolean; is_published?: boolean; created_by?: string; created_at?: string; updated_at?: string };
         Relationships: [
           { foreignKeyName: "songs_church_id_fkey"; columns: ["church_id"]; isOneToOne: false; referencedRelation: "churches"; referencedColumns: ["id"] },
         ];

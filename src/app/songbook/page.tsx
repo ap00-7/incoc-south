@@ -9,6 +9,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
+import { setSongPublication } from "@/app/admin/actions";
+import { ConfirmButton } from "@/components/confirm-button";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string }> };
 const PAGE_SIZE = 50;
@@ -35,7 +37,7 @@ async function SongbookContent({ searchParams }: Props) {
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
   const { supabase, churchId } = await getPublicChurchContext();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
-  let songsQuery = supabase.from("songs").select("id, title, language, author")
+  let songsQuery = supabase.from("songs").select("id, title, language, author, is_published, updated_at")
     .eq("church_id", churchId).order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
@@ -85,7 +87,23 @@ async function SongbookContent({ searchParams }: Props) {
               <div><h2>{song.title}</h2><p>{song.author ? `${song.author} · ` : ""}{song.language}</p></div>
               <ArrowRight size={17} aria-hidden="true" />
             </Link>
-            {membership?.role === "owner" && <Link className="text-link" href={`/songbook/${song.id}?edit=1#owner-edit`}>Edit</Link>}
+            {membership?.role === "owner" && <div className="song-owner-actions">
+              <span className={`status-pill status-${song.is_published ? "published" : "draft"}`}>{song.is_published ? "Published" : "Draft"}</span>
+              <Link className="text-link" href={`/songbook/${song.id}?edit=1#owner-edit`}>Edit</Link>
+              <form>
+                <input type="hidden" name="song_id" value={song.id} />
+                <input type="hidden" name="is_published" value={String(!song.is_published)} />
+                <input type="hidden" name="expected_updated_at" value={song.updated_at} />
+                <input type="hidden" name="return_to" value="/songbook" />
+                <ConfirmButton
+                  action={setSongPublication}
+                  message={song.is_published ? "Unpublish this song? It will no longer be visible to public visitors." : "Publish this song for public viewing?"}
+                  className="text-link"
+                >
+                  {song.is_published ? "Unpublish" : "Publish"}
+                </ConfirmButton>
+              </form>
+            </div>}
           </div>)}
         </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">

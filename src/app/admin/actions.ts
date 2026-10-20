@@ -105,6 +105,7 @@ export async function saveSong(formData: FormData) {
     language: languageSchema,
     author: z.string().trim().max(200),
     source: z.string().trim().max(300),
+    is_published: z.boolean(),
     has_translation: z.boolean(),
     start_with_chorus: z.boolean(),
   }).safeParse({
@@ -112,6 +113,7 @@ export async function saveSong(formData: FormData) {
     language: formData.get("language"),
     author: formData.get("author") ?? "",
     source: formData.get("source") ?? "",
+    is_published: formData.get("is_published") === "on",
     has_translation: formData.get("has_translation") === "on",
     start_with_chorus: formData.get("start_with_chorus") === "on",
   });
@@ -127,6 +129,7 @@ export async function saveSong(formData: FormData) {
       language: parsedMetadata.data.language,
       author: parsedMetadata.data.author || null,
       source: parsedMetadata.data.source || null,
+      is_published: parsedMetadata.data.is_published,
       has_translation: parsedMetadata.data.has_translation,
       start_with_chorus: parsedMetadata.data.start_with_chorus,
     }).select("id").single();
@@ -164,6 +167,7 @@ export async function saveSong(formData: FormData) {
     language: parsedMetadata.data.language,
     author: parsedMetadata.data.author || null,
     source: parsedMetadata.data.source || null,
+    is_published: parsedMetadata.data.is_published,
     has_translation: parsedMetadata.data.has_translation,
     start_with_chorus: parsedMetadata.data.start_with_chorus,
   }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
@@ -207,6 +211,22 @@ export async function saveSong(formData: FormData) {
   revalidatePath(`/songbook/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
   redirect(getReturnPath(formData, `/admin/songs/${songId}`));
+}
+
+export async function setSongPublication(formData: FormData) {
+  const member = await requireOwner();
+  const songId = z.string().uuid().parse(formData.get("song_id"));
+  const isPublished = z.enum(["true", "false"]).transform((value) => value === "true").parse(formData.get("is_published"));
+  const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("songs").update({ is_published: isPublished })
+    .eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt)
+    .select("id").maybeSingle();
+  if (error) throw new Error(`Unable to ${isPublished ? "publish" : "unpublish"} song: ${error.message}`);
+  if (!data) throw new Error("This song was changed by another owner. Reload and review the latest version before changing publication.");
+  revalidatePath("/songbook");
+  revalidatePath(`/songbook/${songId}`);
+  redirect(getReturnPath(formData, "/songbook"));
 }
 
 export async function createSong(formData: FormData) {

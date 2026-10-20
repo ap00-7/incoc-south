@@ -99,6 +99,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .public-list-entry { display: grid; gap: 0; }
 .result-card-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: inherit; }
 .public-entry-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.song-owner-actions { display: flex; align-items: center; gap: 10px; }
+.song-owner-actions form { margin: 0; }
+.song-owner-actions button.text-link { padding: 0; background: none; border: 0; cursor: pointer; }
 .inline-owner-editor { margin: 20px 0; padding: 14px 17px; background: #111; border: 1px solid #303030; border-radius: 8px; }
 .inline-owner-editor > summary, .inline-add-item > summary { cursor: pointer; color: #e8d9b2; font-size: 13px; font-weight: 600; }
 .inline-owner-editor .schedule-edit-form { margin-bottom: 0; }

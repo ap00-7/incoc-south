@@ -30,6 +30,7 @@ type SongEditorFormProps = {
     source: string | null;
     has_translation: boolean;
     start_with_chorus: boolean;
+    is_published: boolean;
     sections: Array<SectionInput & { id: string }>;
   };
 };
@@ -88,6 +89,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   const [nextKey, setNextKey] = useState((song?.sections.length ?? 0) + 4);
   const [hasTranslation, setHasTranslation] = useState(song?.has_translation ?? false);
   const [startWithChorus, setStartWithChorus] = useState(song?.start_with_chorus ?? false);
+  const [isPublished, setIsPublished] = useState(song?.is_published ?? true);
   const [language, setLanguage] = useState(song?.language ?? "English");
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [workingSection, setWorkingSection] = useState<SectionDraft | null>(null);
@@ -204,6 +206,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
 
       <fieldset className="song-options">
         <legend>Options</legend>
+        <label className="check-row"><input type="checkbox" name="is_published" checked={isPublished} onChange={(event) => setIsPublished(event.target.checked)} /> Published (visible to the public)</label>
         <label className="check-row"><input type="checkbox" name="has_translation" checked={hasTranslation} onChange={(event) => setHasTranslation(event.target.checked)} /> Has Translation</label>
         <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>
       </fieldset>
