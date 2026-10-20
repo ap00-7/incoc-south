@@ -41,6 +41,14 @@ const scheduleSchema = z.object({
   description: z.string().trim().max(2000),
 });
 
+function getReturnPath(formData: FormData, fallback: string) {
+  const value = formData.get("return_to");
+  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    return fallback;
+  }
+  return value;
+}
+
 function isCalendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -95,11 +103,15 @@ export async function saveSong(formData: FormData) {
   const parsedMetadata = z.object({
     title: z.string().trim().min(1).max(200),
     language: languageSchema,
+    author: z.string().trim().max(200),
+    source: z.string().trim().max(300),
     has_translation: z.boolean(),
     start_with_chorus: z.boolean(),
   }).safeParse({
     title: formData.get("title"),
     language: formData.get("language"),
+    author: formData.get("author") ?? "",
+    source: formData.get("source") ?? "",
     has_translation: formData.get("has_translation") === "on",
     start_with_chorus: formData.get("start_with_chorus") === "on",
   });
@@ -113,6 +125,8 @@ export async function saveSong(formData: FormData) {
       created_by: member.user.id,
       title: parsedMetadata.data.title,
       language: parsedMetadata.data.language,
+      author: parsedMetadata.data.author || null,
+      source: parsedMetadata.data.source || null,
       has_translation: parsedMetadata.data.has_translation,
       start_with_chorus: parsedMetadata.data.start_with_chorus,
     }).select("id").single();
@@ -135,7 +149,7 @@ export async function saveSong(formData: FormData) {
     }
     revalidatePath("/songbook");
     revalidatePath("/admin/songs");
-    redirect(`/admin/songs/${song.id}`);
+    redirect(getReturnPath(formData, `/admin/songs/${song.id}`));
   }
 
   const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
@@ -148,6 +162,8 @@ export async function saveSong(formData: FormData) {
   const { data: updatedSong, error: updateError } = await supabase.from("songs").update({
     title: parsedMetadata.data.title,
     language: parsedMetadata.data.language,
+    author: parsedMetadata.data.author || null,
+    source: parsedMetadata.data.source || null,
     has_translation: parsedMetadata.data.has_translation,
     start_with_chorus: parsedMetadata.data.start_with_chorus,
   }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
@@ -190,7 +206,7 @@ export async function saveSong(formData: FormData) {
   revalidatePath("/songbook");
   revalidatePath(`/songbook/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
-  redirect(`/admin/songs/${songId}`);
+  redirect(getReturnPath(formData, `/admin/songs/${songId}`));
 }
 
 export async function createSong(formData: FormData) {
@@ -367,7 +383,7 @@ export async function deleteSong(formData: FormData) {
   }
   revalidatePath("/admin/songs");
   revalidatePath("/songbook");
-  redirect("/admin/songs");
+  redirect(getReturnPath(formData, "/admin/songs"));
 }
 
 export async function createSchedule(formData: FormData) {
@@ -385,7 +401,9 @@ export async function createSchedule(formData: FormData) {
   }).select("id").single();
   if (error) throw new Error(`Unable to create service: ${error.message}`);
   revalidatePath("/admin/schedules");
-  redirect(`/admin/schedules/${schedule.id}`);
+  revalidatePath("/schedule");
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${schedule.id}`));
 }
 
 export async function updateSchedule(formData: FormData) {
@@ -412,7 +430,8 @@ export async function updateSchedule(formData: FormData) {
   revalidatePath("/schedule");
   revalidatePath(`/schedule/${scheduleId}`);
   revalidatePath(`/admin/schedules/${scheduleId}`);
-  redirect(`/admin/schedules/${scheduleId}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
 }
 
 export async function addScheduleItem(formData: FormData) {
@@ -464,7 +483,8 @@ export async function addScheduleItem(formData: FormData) {
   }
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath(`/schedule/${scheduleId}`);
-  redirect(`/admin/schedules/${scheduleId}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
 }
 
 export async function moveScheduleItem(formData: FormData) {
@@ -478,7 +498,8 @@ export async function moveScheduleItem(formData: FormData) {
   if (error) throw new Error(`Unable to reorder programme item: ${error.message}`);
   revalidatePath(`/admin/schedules/${item.schedule_id}`);
   revalidatePath(`/schedule/${item.schedule_id}`);
-  redirect(`/admin/schedules/${item.schedule_id}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${item.schedule_id}`));
 }
 
 export async function updateScheduleItem(formData: FormData) {
@@ -528,7 +549,8 @@ export async function updateScheduleItem(formData: FormData) {
   }
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath(`/schedule/${scheduleId}`);
-  redirect(`/admin/schedules/${scheduleId}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
 }
 
 export async function deleteScheduleItem(formData: FormData) {
@@ -541,7 +563,8 @@ export async function deleteScheduleItem(formData: FormData) {
   if (error) throw new Error(`Unable to remove programme item: ${error.message}`);
   revalidatePath(`/admin/schedules/${item.schedule_id}`);
   revalidatePath(`/schedule/${item.schedule_id}`);
-  redirect(`/admin/schedules/${item.schedule_id}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${item.schedule_id}`));
 }
 
 export async function setScheduleStatus(formData: FormData) {
@@ -558,5 +581,6 @@ export async function setScheduleStatus(formData: FormData) {
   revalidatePath(`/schedule/${scheduleId}`);
   revalidatePath(`/schedule/${scheduleId}/slides`);
   revalidatePath(`/admin/schedules/${scheduleId}`);
-  redirect(`/admin/schedules/${scheduleId}`);
+  revalidatePath("/slides");
+  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
 }

@@ -96,6 +96,19 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .search-input { max-width: 430px; }
 .toolbar select { min-height: 44px; padding: 0 34px 0 12px; background: #fff; border: 1px solid #d4d9e1; border-radius: 7px; color: #4b5565; }
 .results-list { display: grid; gap: 10px; }
+.public-list-entry { display: grid; gap: 0; }
+.result-card-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: inherit; }
+.public-entry-meta { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; }
+.inline-owner-editor { margin: 20px 0; padding: 14px 17px; background: #111; border: 1px solid #303030; border-radius: 8px; }
+.inline-owner-editor > summary, .inline-add-item > summary { cursor: pointer; color: #e8d9b2; font-size: 13px; font-weight: 600; }
+.inline-owner-editor .schedule-edit-form { margin-bottom: 0; }
+.inline-owner-heading { margin: 28px 0 12px; color: #e8e8e8; font-size: 15px; }
+.inline-programme-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.inline-programme-item { padding: 14px; border: 1px solid #303030; border-radius: 7px; }
+.inline-programme-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #eee; font-size: 13px; }
+.inline-add-item { margin-top: 20px; }
+.inline-owner-area { margin-top: 40px; }
+.inline-owner-area .delete-song-form { margin-top: 14px; }
 .list-pagination { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
 .result-card { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 19px 21px; background: white; border: 1px solid var(--border); border-radius: 10px; }
 .result-card:hover { border-color: #c8b47e; }

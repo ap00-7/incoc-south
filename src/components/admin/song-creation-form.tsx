@@ -20,11 +20,14 @@ type SectionDraft = SectionInput & { key: string };
 type SongEnding = "bridge" | "chorus" | "pre_chorus_chorus";
 
 type SongEditorFormProps = {
+  returnTo?: string;
   song?: {
     id: string;
     updated_at: string;
     title: string;
     language: string;
+    author: string | null;
+    source: string | null;
     has_translation: boolean;
     start_with_chorus: boolean;
     sections: Array<SectionInput & { id: string }>;
@@ -69,7 +72,7 @@ function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
   return sections;
 }
 
-export function SongEditorForm({ song }: SongEditorFormProps) {
+export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id}` : "/admin/songs" }: SongEditorFormProps) {
   const [sections, setSections] = useState<SectionDraft[]>(() => {
     let keyIndex = 0;
     const initial: SectionDraft[] = song?.sections.map((section) => ({ ...section, key: `section-${keyIndex++}` })) ?? [];
@@ -182,11 +185,16 @@ export function SongEditorForm({ song }: SongEditorFormProps) {
         <input type="hidden" name="song_id" value={song.id} />
         <input type="hidden" name="expected_updated_at" value={song.updated_at} />
       </>}
+      <input type="hidden" name="return_to" value={returnTo} />
       <input type="hidden" name="language" value={language} />
       <input type="hidden" name="sections" value={sectionPayload} />
       <div className="song-editor-fields">
         <label htmlFor="title">Title</label>
         <input id="title" name="title" required defaultValue={song?.title} maxLength={200} />
+        <label htmlFor="author">Author (optional)</label>
+        <input id="author" name="author" defaultValue={song?.author ?? ""} maxLength={200} />
+        <label htmlFor="source">Source (optional)</label>
+        <input id="source" name="source" defaultValue={song?.source ?? ""} maxLength={300} />
         <label htmlFor="language">Language</label>
         <select id="language" value={songEditorLanguages.some((option) => option.value === language) ? language : "English"} onChange={(event) => setLanguage(event.target.value)} required>
           {songEditorLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}

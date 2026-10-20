@@ -5,31 +5,36 @@ import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
+import { SongEditorForm } from "@/components/admin/song-creation-form";
+import { ConfirmButton } from "@/components/confirm-button";
+import { deleteSong } from "@/app/admin/actions";
 
-type Props = { params: Promise<{ songId: string }> };
+type Props = { params: Promise<{ songId: string }>; searchParams: Promise<{ edit?: string }> };
 
-export default function SongPage({ params }: Props) {
+export default function SongPage({ params, searchParams }: Props) {
   return (
     <PageShell>
       <Suspense fallback={<PageContentLoading title="Loading song" />}>
-        <SongContent params={params} />
+        <SongContent params={params} searchParams={searchParams} />
       </Suspense>
     </PageShell>
   );
 }
 
-async function SongContent({ params }: Props) {
+async function SongContent({ params, searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
     return <div className="content-wrap"><div className="notice notice-warning">Songbook access requires a configured Supabase project.</div></div>;
   }
-  const { songId } = await params;
+  const [{ songId }, routeParams] = await Promise.all([params, searchParams]);
   const { supabase, churchId } = await getPublicChurchContext();
+  const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const { data: song, error } = await supabase.from("songs")
-    .select("id, title, language, author, source, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
+    .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
     .eq("id", songId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load song: ${error.message}`);
   if (!song) notFound();
@@ -63,6 +68,38 @@ async function SongContent({ params }: Props) {
             <p className="lyrics-text">{section.translation}</p>
           </div>)}
         </section>}
+        {membership?.role === "owner" && <div id="owner-edit" className="inline-owner-area">
+          <details className="inline-owner-editor" open={routeParams.edit === "1"}>
+            <summary>Edit song sections and translations</summary>
+            <SongEditorForm
+              returnTo={`/songbook/${song.id}?edit=1#owner-edit`}
+              song={{
+                id: song.id,
+                updated_at: song.updated_at,
+                title: song.title,
+                language: song.language,
+                author: song.author,
+                source: song.source,
+                has_translation: song.has_translation,
+                start_with_chorus: song.start_with_chorus,
+                sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
+                  id: section.id,
+                  section_type: section.section_type,
+                  label: section.label ?? "",
+                  lyrics: section.lyrics,
+                  translation: section.translation ?? "",
+                  translation_language: section.translation_language ?? "",
+                  is_hidden: section.is_hidden,
+                })),
+              }}
+            />
+          </details>
+          <form className="delete-song-form">
+            <input type="hidden" name="song_id" value={song.id} />
+            <input type="hidden" name="return_to" value="/songbook" />
+            <ConfirmButton action={deleteSong} message="Delete this song? It cannot be deleted if a service schedule uses it." className="button button-danger" pendingLabel="Deleting…">Delete song</ConfirmButton>
+          </form>
+        </div>}
       </article>
     </>
   );
