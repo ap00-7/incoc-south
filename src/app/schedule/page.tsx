@@ -4,8 +4,7 @@ import { ArrowRight, CalendarDays } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { InlineScheduleManager } from "@/components/admin/inline-schedule-manager";
-import { createSchedule } from "@/app/admin/actions";
+import { InlineScheduleDetails, InlineScheduleManager, NewScheduleForm } from "@/components/admin/inline-schedule-manager";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
@@ -53,9 +52,9 @@ async function ScheduleContent({ searchParams }: Props) {
   const scheduleIds = visibleSchedules.map(({ id }) => id);
   const [{ data: items, error: itemsError }, { data: songs, error: songsError }] = isOwner ? await Promise.all([
     scheduleIds.length
-      ? supabase.from("schedule_items").select("id, schedule_id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, updated_at, song:songs(title)").in("schedule_id", scheduleIds).order("position")
+      ? supabase.from("schedule_items").select("id, schedule_id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, updated_at, song:songs(title)").in("schedule_id", scheduleIds).order("position")
       : Promise.resolve({ data: [], error: null }),
-    supabase.from("songs").select("id, title, language").eq("church_id", churchId).order("title").limit(200),
+    supabase.from("songs").select("id, title, language").eq("church_id", churchId).order("title").limit(1000),
   ]) : [{ data: [], error: null }, { data: [], error: null }];
   if (itemsError) throw new Error(`Unable to load programme items: ${itemsError.message}`);
   if (songsError) throw new Error(`Unable to load songs for service editing: ${songsError.message}`);
@@ -76,26 +75,21 @@ async function ScheduleContent({ searchParams }: Props) {
         <SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" description="Find the published service plans shared with your church." />
         {isOwner && <details className="inline-owner-editor">
           <summary>Plan a service</summary>
-          <form className="form-stack schedule-edit-form" action={createSchedule} data-dirty-form>
-            <input type="hidden" name="return_to" value="/schedule" />
-            <label htmlFor="new-service-title">Service title</label><input id="new-service-title" name="title" required maxLength={200} />
-            <label htmlFor="new-service-date">Date</label><input id="new-service-date" type="date" name="service_date" required />
-            <label htmlFor="new-service-venue">Venue</label><input id="new-service-venue" name="venue" maxLength={200} />
-            <label htmlFor="new-service-description">Description</label><textarea id="new-service-description" name="description" rows={3} maxLength={2000} />
-            <button className="button button-primary">Create draft service</button>
-          </form>
+          <NewScheduleForm />
         </details>}
         {visibleSchedules.length ? <div className="results-list">
           {visibleSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
             <Link className="result-card" href={`/schedule/${schedule.id}`}>
-              <div><h2>{schedule.title}</h2><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div>
+              <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
               <span className="public-entry-meta">{schedule.status === "draft" ? "Draft" : ""}<ArrowRight size={17} aria-hidden="true" /></span>
             </Link>
+            {isOwner && <InlineScheduleDetails schedule={schedule} returnTo="/schedule" />}
             {isOwner && <InlineScheduleManager
               schedule={schedule}
               items={(items ?? []).filter((item) => item.schedule_id === schedule.id).map((item) => ({ ...item, notes: notesByItem.get(item.id) ?? "" }))}
               songs={songs ?? []}
               returnTo="/schedule"
+              churchId={churchId}
             />}
           </article>)}
         </div> : <div className="empty-state">There are no {isOwner ? "services" : "published services"} to show yet.</div>}

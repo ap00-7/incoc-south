@@ -12,7 +12,7 @@ import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { setSongPublication } from "@/app/admin/actions";
 import { ConfirmButton } from "@/components/confirm-button";
 
-type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string }> };
+type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string; create?: string }> };
 const PAGE_SIZE = 50;
 
 export default function SongbookPage({ searchParams }: Props) {
@@ -69,7 +69,7 @@ async function SongbookContent({ searchParams }: Props) {
       ]} />
       <div className="content-wrap">
         <SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" description="Browse the songs shared by your church. Select a song to read its lyrics and sections." />
-        {membership?.role === "owner" && <details className="inline-owner-editor">
+        {membership?.role === "owner" && <details className="inline-owner-editor" open={params.create === "1"}>
           <summary>Add a song</summary>
           <SongEditorForm returnTo="/songbook" />
         </details>}

@@ -15,6 +15,7 @@ export type ProgrammeItem = {
   title: string;
   position: number;
   public_content: string | null;
+  background_image_url?: string | null;
   song?: {
     title: string;
     start_with_chorus?: boolean;
@@ -114,6 +115,9 @@ export function normalizeProgrammeItems(
 export type PresentationSlide = {
   itemId: string;
   itemTitle: string;
+  itemHeader: string | null;
+  itemSubtitle: string | null;
+  backgroundImageUrl: string | null;
   sectionLabel: string | null;
   lines: string[];
   fontScale: number;
@@ -141,6 +145,9 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
           slides.push({
             itemId: item.id,
             itemTitle: songTitle,
+            itemHeader: item.title && item.title !== songTitle ? item.title : null,
+            itemSubtitle: null,
+            backgroundImageUrl: item.background_image_url ?? null,
             sectionLabel: label,
             lines: chunk,
             fontScale: Math.max(0.58, Math.min(1, TARGET_LINE_LENGTH / longest || 1)),
@@ -165,6 +172,9 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
       slides.push({
         itemId: item.id,
         itemTitle: item.title,
+        itemHeader: null,
+        itemSubtitle: null,
+        backgroundImageUrl: item.background_image_url ?? null,
         sectionLabel: null,
         lines: content ? content.replace(/\r\n/g, "\n").split("\n") : [],
         fontScale: 1,

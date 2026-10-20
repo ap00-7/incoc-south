@@ -55,6 +55,178 @@ function isCalendarDate(value: string) {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
+const scheduleItemTypeSchema = z.enum([
+  "song", "worship", "prayer", "sermon", "scripture_reading",
+  "announcement", "communion", "offering", "other",
+]);
+const itemTranslationLanguageSchema = z.enum(["Kannada", "Tamil", "English"]).or(z.literal(""));
+const scheduleItemInputSchema = z.object({
+  schedule_id: z.string().uuid(),
+  item_id: z.string().uuid().optional(),
+  expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  item_type: scheduleItemTypeSchema,
+  title: z.string().trim().min(1, "Enter an item title.").max(200),
+  song_id: z.string().uuid().or(z.literal("")),
+  duration_minutes: z.string(),
+  leader_name: z.string().trim().max(200),
+  translator_name: z.string().trim().max(200),
+  translation_language: itemTranslationLanguageSchema,
+  link_title: z.string().trim().max(200),
+  link_url: z.string().trim().max(2048),
+  public_content: z.string().trim().max(5000),
+  notes: z.string().trim().max(2000),
+  media_url: z.string().trim().max(2048),
+  background_image_url: z.string().trim().max(2048),
+}).superRefine((item, context) => {
+  if (Boolean(item.item_id) !== Boolean(item.expected_updated_at)) {
+    context.addIssue({ code: "custom", message: "Reload this schedule item and try again." });
+  }
+  for (const field of ["link_url", "media_url", "background_image_url"] as const) {
+    const value = item[field];
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
+    } catch {
+      context.addIssue({ code: "custom", path: [field], message: "Enter a valid web URL." });
+    }
+  }
+  if (item.link_url && !item.link_title) {
+    context.addIssue({ code: "custom", path: ["link_title"], message: "Enter a title for the link." });
+  }
+});
+
+export type ScheduleItemInput = z.input<typeof scheduleItemInputSchema>;
+export type ScheduleItemSaveResult = { ok: true; message: string } | { ok: false; message: string };
+
+export async function saveScheduleItem(input: ScheduleItemInput): Promise<ScheduleItemSaveResult> {
+  const member = await requireOwner();
+  const parsed = scheduleItemInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Check the item details and try again." };
+  let duration: number | null;
+  try {
+    duration = parseDurationMinutes(parsed.data.duration_minutes);
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : "Enter a valid duration." };
+  }
+
+  const supabase = await createClient();
+  const { data: schedule, error: scheduleError } = await supabase.from("schedules")
+    .select("id, church_id").eq("id", parsed.data.schedule_id).eq("church_id", member.churchId).maybeSingle();
+  if (scheduleError) return { ok: false, message: `Unable to verify the schedule: ${scheduleError.message}` };
+  if (!schedule) return { ok: false, message: "This schedule is not available to your account." };
+
+  if (parsed.data.song_id) {
+    const { data: song, error: songError } = await supabase.from("songs").select("id")
+      .eq("id", parsed.data.song_id).eq("church_id", member.churchId).maybeSingle();
+    if (songError) return { ok: false, message: `Unable to verify the selected song: ${songError.message}` };
+    if (!song) return { ok: false, message: "Select a song from this church's Songbook." };
+  }
+
+  const row = {
+    item_type: parsed.data.item_type,
+    title: parsed.data.title,
+    song_id: parsed.data.item_type === "song" ? parsed.data.song_id || null : null,
+    leader_name: parsed.data.leader_name || null,
+    translator_name: parsed.data.translator_name || null,
+    translation_language: parsed.data.translation_language || null,
+    duration_minutes: duration,
+    public_content: parsed.data.public_content || null,
+    link_title: parsed.data.link_title || null,
+    link_url: parsed.data.link_url || null,
+    media_url: parsed.data.media_url || null,
+    background_image_url: parsed.data.background_image_url || null,
+  };
+
+  let itemId = parsed.data.item_id;
+  if (itemId) {
+    const expectedUpdatedAt = parsed.data.expected_updated_at;
+    if (!expectedUpdatedAt) return { ok: false, message: "Reload this schedule item and try again." };
+    const { data, error } = await supabase.from("schedule_items").update(row)
+      .eq("id", itemId).eq("schedule_id", schedule.id).eq("church_id", member.churchId)
+      .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
+    if (error) return { ok: false, message: `Unable to save the item: ${error.message}` };
+    if (!data) return { ok: false, message: "This item changed since you opened it. Reload and review the latest version." };
+  } else {
+    const { data: lastItems, error: positionError } = await supabase.from("schedule_items")
+      .select("position").eq("schedule_id", schedule.id).order("position", { ascending: false }).limit(1);
+    if (positionError) return { ok: false, message: `Unable to determine item order: ${positionError.message}` };
+    const { data, error } = await supabase.from("schedule_items").insert({
+      ...row,
+      schedule_id: schedule.id,
+      church_id: schedule.church_id,
+      position: (lastItems?.[0]?.position ?? -1) + 1,
+    }).select("id").single();
+    if (error) return { ok: false, message: `Unable to add the item: ${error.message}` };
+    itemId = data.id;
+  }
+
+  if (!itemId) return { ok: false, message: "The item was saved, but could not be identified for its private note." };
+  if (parsed.data.notes) {
+    const { error } = await supabase.from("schedule_item_notes").upsert(
+      { schedule_item_id: itemId, notes: parsed.data.notes },
+      { onConflict: "schedule_item_id" },
+    );
+    if (error) return { ok: false, message: `The item was saved, but its private note was not: ${error.message}` };
+  } else if (itemId) {
+    const { error } = await supabase.from("schedule_item_notes").delete().eq("schedule_item_id", itemId);
+    if (error) return { ok: false, message: `The item was saved, but its private note could not be cleared: ${error.message}` };
+  }
+
+  revalidatePath("/schedule");
+  revalidatePath("/slides");
+  revalidatePath(`/schedule/${schedule.id}`);
+  revalidatePath(`/schedule/${schedule.id}/slides`);
+  return { ok: true, message: parsed.data.item_id ? "Schedule item saved." : "Schedule item added." };
+}
+
+export async function duplicateScheduleItem(input: { schedule_id: string; item_id: string }): Promise<ScheduleItemSaveResult> {
+  const member = await requireOwner();
+  const parsed = z.object({ schedule_id: z.string().uuid(), item_id: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) return { ok: false, message: "The item could not be duplicated." };
+  const supabase = await createClient();
+  const { data: source, error: sourceError } = await supabase.from("schedule_items")
+    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url")
+    .eq("id", parsed.data.item_id).eq("schedule_id", parsed.data.schedule_id)
+    .eq("church_id", member.churchId).maybeSingle();
+  if (sourceError) return { ok: false, message: `Unable to load item to duplicate: ${sourceError.message}` };
+  if (!source) return { ok: false, message: "This item is not available to your account." };
+  const [{ data: lastItems, error: positionError }, { data: notes, error: notesError }] = await Promise.all([
+    supabase.from("schedule_items").select("position").eq("schedule_id", source.schedule_id)
+      .order("position", { ascending: false }).limit(1),
+    supabase.from("schedule_item_notes").select("notes").eq("schedule_item_id", source.id).maybeSingle(),
+  ]);
+  if (positionError) return { ok: false, message: `Unable to determine item order: ${positionError.message}` };
+  if (notesError) return { ok: false, message: `Unable to copy the private note: ${notesError.message}` };
+  const { data: copy, error } = await supabase.from("schedule_items").insert({
+    schedule_id: source.schedule_id,
+    church_id: source.church_id,
+    item_type: source.item_type,
+    title: `${source.title} (copy)`,
+    song_id: source.song_id,
+    leader_name: source.leader_name,
+    translator_name: source.translator_name,
+    translation_language: source.translation_language,
+    duration_minutes: source.duration_minutes,
+    public_content: source.public_content,
+    link_title: source.link_title,
+    link_url: source.link_url,
+    media_url: source.media_url,
+    background_image_url: source.background_image_url,
+    position: (lastItems?.[0]?.position ?? -1) + 1,
+  }).select("id").single();
+  if (error) return { ok: false, message: `Unable to duplicate item: ${error.message}` };
+  if (notes) {
+    const { error: noteError } = await supabase.from("schedule_item_notes")
+      .insert({ schedule_item_id: copy.id, notes: notes.notes });
+    if (noteError) return { ok: false, message: `The item was duplicated, but its private note could not be copied: ${noteError.message}` };
+  }
+  revalidatePath("/schedule");
+  revalidatePath("/slides");
+  revalidatePath(`/schedule/${source.schedule_id}`);
+  return { ok: true, message: "Schedule item duplicated." };
+}
+
 function parseSongSections(formData: FormData) {
   const rawSections = formData.get("sections");
   if (typeof rawSections !== "string") throw new Error("Add at least one valid lyric section.");

@@ -169,10 +169,14 @@ export function Presentation({
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section className="slide-stage" aria-live="polite">
         {current ? <>
-          {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
-          <h1 className="slide-title">{current.itemTitle}</h1>
-          {current.lines.length ? <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * current.fontScale}vw, ${70 * current.fontScale}px)` }}>{current.lines.join("\n")}</div> : <p className="slide-empty">No display content was added for this programme item.</p>}
-        </> : <p className="slide-empty">There are no slides in this service yet.</p>}
+            {current.backgroundImageUrl && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
+            <div className="slide-content">
+            {current.itemHeader && <p className="slide-item-header">{current.itemHeader}</p>}
+            {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
+            <h1 className="slide-title">{current.itemTitle}</h1>
+            {current.lines.length ? <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * current.fontScale}vw, ${70 * current.fontScale}px)` }}>{current.lines.join("\n")}</div> : <p className="slide-empty">No display content was added for this programme item.</p>}
+            </div>
+          </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
     </main>
   );

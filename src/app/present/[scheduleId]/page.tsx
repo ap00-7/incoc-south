@@ -29,7 +29,7 @@ async function PresentationContent({ params }: Props) {
   const [membership, { data: schedule, error }] = await Promise.all([
     membershipPromise,
     supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
     .eq("id", scheduleId).eq("church_id", churchId).maybeSingle(),
   ]);
   if (error) throw new Error(`Unable to load presentation: ${error.message}`);

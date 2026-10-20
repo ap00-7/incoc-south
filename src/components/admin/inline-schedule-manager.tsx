@@ -1,34 +1,143 @@
-import { ArrowDown, ArrowUp, Trash2 } from "lucide-react";
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import {
-  addScheduleItem,
+  ArrowDown,
+  ArrowUp,
+  FileText,
+  Film,
+  ImagePlus,
+  Link2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import {
+  createSchedule,
   deleteScheduleItem,
+  duplicateScheduleItem,
   moveScheduleItem,
+  saveScheduleItem,
   setScheduleStatus,
   updateSchedule,
-  updateScheduleItem,
+  type ScheduleItemInput,
 } from "@/app/admin/actions";
 import { ConfirmButton } from "@/components/confirm-button";
+import { createClient } from "@/lib/supabase/browser";
 
 type SongOption = { id: string; title: string; language: string };
+type TranslationLanguage = ScheduleItemInput["translation_language"];
 type ScheduleItem = {
   id: string;
   item_type: string;
   title: string;
   position: number;
   leader_name: string | null;
+  translator_name: string | null;
+  translation_language: string | null;
   duration_minutes: number | null;
   public_content: string | null;
+  link_title: string | null;
+  link_url: string | null;
+  media_url: string | null;
+  background_image_url: string | null;
   song_id: string | null;
   updated_at: string;
   song: { title: string } | { title: string }[] | null;
   notes?: string;
 };
 
+const itemTypes = [
+  ["other", "Other"],
+  ["worship", "Worship"],
+  ["prayer", "Prayer"],
+  ["sermon", "Sermon"],
+  ["scripture_reading", "Scripture reading"],
+  ["announcement", "Announcement"],
+  ["communion", "Communion"],
+  ["offering", "Offering"],
+] as const;
+const mediaTypes: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+};
+const maxMediaSize = 50 * 1024 * 1024;
+
+type Draft = {
+  id?: string;
+  tempId: string;
+  expectedUpdatedAt?: string;
+  item_type: string;
+  title: string;
+  song_id: string;
+  duration_minutes: string;
+  leader_name: string;
+  translator_name: string;
+  translation_language: TranslationLanguage;
+  link_title: string;
+  link_url: string;
+  public_content: string;
+  notes: string;
+  media_url: string;
+  background_image_url: string;
+};
+
+function emptyDraft(itemType: string): Draft {
+  return {
+    tempId: crypto.randomUUID(),
+    item_type: itemType,
+    title: "",
+    song_id: "",
+    duration_minutes: "",
+    leader_name: "",
+    translator_name: "",
+    translation_language: "",
+    link_title: "",
+    link_url: "",
+    public_content: "",
+    notes: "",
+    media_url: "",
+    background_image_url: "",
+  };
+}
+
+function draftFromItem(item: ScheduleItem): Draft {
+  return {
+    id: item.id,
+    tempId: item.id,
+    expectedUpdatedAt: item.updated_at,
+    item_type: item.item_type,
+    title: item.title,
+    song_id: item.song_id ?? "",
+    duration_minutes: item.duration_minutes?.toString() ?? "",
+    leader_name: item.leader_name ?? "",
+    translator_name: item.translator_name ?? "",
+    translation_language: item.translation_language === "Kannada" || item.translation_language === "Tamil" || item.translation_language === "English"
+      ? item.translation_language
+      : "",
+    link_title: item.link_title ?? "",
+    link_url: item.link_url ?? "",
+    public_content: item.public_content ?? "",
+    notes: item.notes ?? "",
+    media_url: item.media_url ?? "",
+    background_image_url: item.background_image_url ?? "",
+  };
+}
+
 export function InlineScheduleManager({
   schedule,
   items,
   songs,
   returnTo,
+  churchId,
 }: {
   schedule: {
     id: string;
@@ -42,46 +151,163 @@ export function InlineScheduleManager({
   items: ScheduleItem[];
   songs: SongOption[];
   returnTo: string;
+  churchId: string;
 }) {
+  const router = useRouter();
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
+  const [selectedBackground, setSelectedBackground] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [mediaValidation, setMediaValidation] = useState("");
+
+  function openAdd(itemType = "other") {
+    setDraft(emptyDraft(itemType));
+    setSelectedMedia(null);
+    setSelectedBackground(null);
+    setError("");
+    setMediaValidation("");
+  }
+
+  function openEdit(item: ScheduleItem) {
+    setDraft(draftFromItem(item));
+    setSelectedMedia(null);
+    setSelectedBackground(null);
+    setError("");
+    setMediaValidation("");
+  }
+
+  const closeModal = useCallback(() => {
+    if (saving) return;
+    setDraft(null);
+    setSelectedMedia(null);
+    setSelectedBackground(null);
+    setError("");
+    setMediaValidation("");
+  }, [saving]);
+
+  async function uploadMedia(file: File, itemKey: string, kind: "media" | "background") {
+    const supabase = createClient();
+    const extension = mediaTypes[file.type];
+    if (!extension) throw new Error("This media format is not supported.");
+    const path = `${churchId}/${schedule.id}/${itemKey}/${kind}-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from("schedule-media").upload(path, file, {
+      cacheControl: "3600",
+      contentType: file.type,
+      upsert: false,
+    });
+    if (uploadError) throw new Error(`Unable to upload ${kind === "background" ? "background image" : "media"}: ${uploadError.message}`);
+    return supabase.storage.from("schedule-media").getPublicUrl(path).data.publicUrl;
+  }
+
+  useEffect(() => {
+    if (!draft) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !saving) closeModal();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closeModal, draft, saving]);
+
+  async function saveItem(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft) return;
+    if (mediaValidation) {
+      setError(mediaValidation);
+      return;
+    }
+    if (draft.item_type === "song" && !draft.song_id && !draft.id) {
+      setError("Select a song from the church Songbook.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      let mediaUrl = draft.media_url;
+      let backgroundImageUrl = draft.background_image_url;
+      if (selectedMedia) {
+        mediaUrl = await uploadMedia(selectedMedia, draft.tempId, "media");
+        setDraft((current) => current ? { ...current, media_url: mediaUrl } : current);
+        setSelectedMedia(null);
+      }
+      if (selectedBackground) {
+        backgroundImageUrl = await uploadMedia(selectedBackground, draft.tempId, "background");
+        setDraft((current) => current ? { ...current, background_image_url: backgroundImageUrl } : current);
+        setSelectedBackground(null);
+      }
+      const result = await saveScheduleItem({
+        schedule_id: schedule.id,
+        ...(draft.id ? { item_id: draft.id, expected_updated_at: draft.expectedUpdatedAt } : {}),
+        item_type: draft.item_type as ScheduleItemInput["item_type"],
+        title: draft.title,
+        song_id: draft.song_id,
+        duration_minutes: draft.duration_minutes,
+        leader_name: draft.leader_name,
+        translator_name: draft.translator_name,
+        translation_language: draft.translation_language,
+        link_title: draft.link_title,
+        link_url: draft.link_url,
+        public_content: draft.public_content,
+        notes: draft.notes,
+        media_url: mediaUrl,
+        background_image_url: backgroundImageUrl,
+      });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setFeedback(result.message);
+      setDraft(null);
+      setSelectedMedia(null);
+      setSelectedBackground(null);
+      router.refresh();
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "The item could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function duplicateItem(item: ScheduleItem) {
+    setFeedback("");
+    try {
+      const result = await duplicateScheduleItem({ schedule_id: schedule.id, item_id: item.id });
+      if (!result.ok) {
+        setFeedback(result.message);
+        return;
+      }
+      setFeedback(result.message);
+      router.refresh();
+    } catch (duplicateError) {
+      setFeedback(duplicateError instanceof Error ? duplicateError.message : "Unable to duplicate this item.");
+    }
+  }
+
   return (
-    <details className="inline-owner-editor">
-      <summary>Manage service and slides</summary>
-      <form className="form-stack schedule-edit-form" action={updateSchedule} data-dirty-form>
-        <input type="hidden" name="return_to" value={returnTo} />
-        <input type="hidden" name="schedule_id" value={schedule.id} />
-        <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
-        <label htmlFor={`title-${schedule.id}`}>Service title</label>
-        <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
-        <label htmlFor={`date-${schedule.id}`}>Date</label>
-        <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
-        <label htmlFor={`venue-${schedule.id}`}>Venue</label>
-        <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
-        <label htmlFor={`description-${schedule.id}`}>Description</label>
-        <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={3} maxLength={2000} />
-        <button className="button button-secondary">Save service details</button>
-      </form>
-
-      <form className="schedule-actions" action={setScheduleStatus}>
-        <input type="hidden" name="schedule_id" value={schedule.id} />
-        <input type="hidden" name="status" value={schedule.status === "published" ? "draft" : "published"} />
-        <input type="hidden" name="return_to" value={returnTo} />
-        <ConfirmButton
-          action={setScheduleStatus}
-          message={schedule.status === "published" ? "Unpublish this service?" : "Publish this service for public viewing?"}
-          className="button button-primary"
-        >
-          {schedule.status === "published" ? "Unpublish service" : "Publish service"}
-        </ConfirmButton>
-      </form>
-
-      <h3 className="inline-owner-heading">Programme and slide content</h3>
+    <section className="inline-owner-editor">
+      <h3 className="inline-owner-heading">Manage schedule items</h3>
+      <div className="inline-item-toolbar">
+        <button className="button button-primary" type="button" onClick={() => openAdd()}>
+          <Plus size={15} /> Add Item
+        </button>
+        <button className="button button-secondary" type="button" onClick={() => openAdd("song")}>
+          <Plus size={15} /> Add Song
+        </button>
+      </div>
+      {feedback && <p className="inline-item-feedback" role="status">{feedback}</p>}
       {items.length ? <ol className="inline-programme-list">
         {items.map((item, index) => {
           const relatedSong = Array.isArray(item.song) ? item.song[0] : item.song;
           return <li className="inline-programme-item" key={item.id}>
             <div className="inline-programme-actions">
-              <strong>{relatedSong?.title ?? item.title}</strong>
+              <div>
+                <strong>{item.title}</strong>
+                {relatedSong && <p className="muted">{relatedSong.title}</p>}
+              </div>
               <div className="mini-actions">
+                <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)}>Edit</button>
+                <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)}>Duplicate</button>
                 <form action={moveScheduleItem}>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="direction" value="-1" />
@@ -97,71 +323,312 @@ export function InlineScheduleManager({
                 <form>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="return_to" value={returnTo} />
-                  <ConfirmButton action={deleteScheduleItem} message="Remove this programme item?" className="icon-button danger"><Trash2 size={15} /></ConfirmButton>
+                  <ConfirmButton action={deleteScheduleItem} message="Delete this schedule item?" className="icon-button danger"><Trash2 size={15} /></ConfirmButton>
                 </form>
               </div>
             </div>
-            <form className="form-stack schedule-item-edit-form" action={updateScheduleItem} data-dirty-form>
-              <input type="hidden" name="return_to" value={returnTo} />
-              <input type="hidden" name="schedule_id" value={schedule.id} />
-              <input type="hidden" name="item_id" value={item.id} />
-              <input type="hidden" name="expected_updated_at" value={item.updated_at} />
-              <label htmlFor={`type-${item.id}`}>Type</label>
-              <select id={`type-${item.id}`} name="item_type" defaultValue={item.item_type}>
-                {["song", "worship", "prayer", "sermon", "scripture_reading", "announcement", "communion", "offering", "other"].map((type) =>
-                  <option key={type} value={type}>{type.replaceAll("_", " ")}</option>,
-                )}
-              </select>
-              <label htmlFor={`song-${item.id}`}>Song</label>
-              <select id={`song-${item.id}`} name="song_id" defaultValue={item.song_id ?? ""}>
-                <option value="">No song selected</option>
-                {songs.map((song) => <option key={song.id} value={song.id}>{song.title} · {song.language}</option>)}
-              </select>
-              <label htmlFor={`item-title-${item.id}`}>Programme title (for non-song items)</label>
-              <input id={`item-title-${item.id}`} name="title" defaultValue={item.song_id ? "" : item.title} maxLength={200} />
-              <label htmlFor={`leader-${item.id}`}>Leader / speaker</label>
-              <input id={`leader-${item.id}`} name="leader_name" defaultValue={item.leader_name ?? ""} maxLength={200} />
-              <label htmlFor={`duration-${item.id}`}>Estimated minutes</label>
-              <input id={`duration-${item.id}`} name="duration_minutes" type="number" min="0" max="1440" defaultValue={item.duration_minutes ?? ""} />
-              <label htmlFor={`public-${item.id}`}>Public / slide content</label>
-              <textarea id={`public-${item.id}`} name="public_content" defaultValue={item.public_content ?? ""} rows={3} maxLength={5000} />
-              <label htmlFor={`notes-${item.id}`}>Internal note (owners only)</label>
-              <textarea id={`notes-${item.id}`} name="notes" defaultValue={item.notes ?? ""} rows={2} maxLength={2000} />
-              <button className="button button-secondary">Save programme item</button>
-            </form>
           </li>;
         })}
-      </ol> : <p className="muted">No programme items yet.</p>}
+      </ol> : <p className="muted">No schedule items yet.</p>}
 
-      <details className="inline-add-item">
-        <summary>Add programme item</summary>
-        <form className="form-stack schedule-item-edit-form" action={addScheduleItem} data-dirty-form>
-          <input type="hidden" name="return_to" value={returnTo} />
-          <input type="hidden" name="schedule_id" value={schedule.id} />
-          <label htmlFor={`new-type-${schedule.id}`}>Type</label>
-          <select id={`new-type-${schedule.id}`} name="item_type" defaultValue="song">
-            {["song", "worship", "prayer", "sermon", "scripture_reading", "announcement", "communion", "offering", "other"].map((type) =>
-              <option key={type} value={type}>{type.replaceAll("_", " ")}</option>,
-            )}
-          </select>
-          <label htmlFor={`new-song-${schedule.id}`}>Song</label>
-          <select id={`new-song-${schedule.id}`} name="song_id" defaultValue="">
-            <option value="">Select a song</option>
-            {songs.map((song) => <option key={song.id} value={song.id}>{song.title} · {song.language}</option>)}
-          </select>
-          <label htmlFor={`new-title-${schedule.id}`}>Programme title (for non-song items)</label>
-          <input id={`new-title-${schedule.id}`} name="title" maxLength={200} />
-          <label htmlFor={`new-leader-${schedule.id}`}>Leader / speaker</label>
-          <input id={`new-leader-${schedule.id}`} name="leader_name" maxLength={200} />
-          <label htmlFor={`new-duration-${schedule.id}`}>Estimated minutes</label>
-          <input id={`new-duration-${schedule.id}`} name="duration_minutes" type="number" min="0" max="1440" />
-          <label htmlFor={`new-public-${schedule.id}`}>Public / slide content</label>
-          <textarea id={`new-public-${schedule.id}`} name="public_content" rows={3} maxLength={5000} />
-          <label htmlFor={`new-notes-${schedule.id}`}>Internal note (owners only)</label>
-          <textarea id={`new-notes-${schedule.id}`} name="notes" rows={2} maxLength={2000} />
-          <button className="button button-primary">Add programme item</button>
-        </form>
-      </details>
+      {draft && <div className="item-modal-backdrop" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeModal();
+      }}>
+        <section className="item-modal" role="dialog" aria-modal="true" aria-labelledby="item-modal-title">
+          <header className="item-modal-header">
+            <div><p className="eyebrow">SCHEDULE ITEM</p><h2 id="item-modal-title">{draft.id ? "Edit item" : "Add item"}</h2></div>
+            <button type="button" className="icon-button" aria-label="Close" onClick={closeModal}><X size={19} /></button>
+          </header>
+          <form className="item-modal-form" onSubmit={(event) => void saveItem(event)}>
+            <label htmlFor="schedule-item-title">{draft.item_type === "song" ? "Header" : "Title"} <span aria-hidden="true">*</span></label>
+            <input id="schedule-item-title" value={draft.title} required maxLength={200} onChange={(event) => setDraft({ ...draft, title: event.target.value })} autoFocus />
+
+            {draft.item_type !== "song" && <>
+              <label htmlFor="schedule-item-type">Item type</label>
+              <select id="schedule-item-type" value={draft.item_type} onChange={(event) => setDraft({ ...draft, item_type: event.target.value })}>
+                {itemTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </>}
+
+            {draft.item_type === "song" && <SongPicker
+              songs={songs}
+              value={draft.song_id}
+              onChange={(songId) => setDraft({ ...draft, song_id: songId })}
+              onCreate={() => window.open("/songbook?create=1", "_blank", "noopener,noreferrer")}
+            />}
+
+            {draft.item_type !== "song" && <>
+              <label htmlFor="schedule-item-duration">Duration <span className="muted">(minutes)</span></label>
+              <input id="schedule-item-duration" type="number" min="0" max="1440" step="1" value={draft.duration_minutes} onChange={(event) => setDraft({ ...draft, duration_minutes: event.target.value })} />
+            </>}
+
+            <label htmlFor="schedule-item-leader">{draft.item_type === "song" ? "Song leader" : "Responsible"}</label>
+            <input id="schedule-item-leader" value={draft.leader_name} maxLength={200} onChange={(event) => setDraft({ ...draft, leader_name: event.target.value })} />
+
+            {draft.item_type !== "song" && <>
+              <label htmlFor="schedule-item-translator">Translator</label>
+              <input id="schedule-item-translator" value={draft.translator_name} maxLength={200} onChange={(event) => setDraft({ ...draft, translator_name: event.target.value })} />
+              <label htmlFor="schedule-item-language">Translation in</label>
+              <select id="schedule-item-language" value={draft.translation_language} onChange={(event) => {
+                const language = event.target.value;
+                setDraft({ ...draft, translation_language: language === "Kannada" || language === "Tamil" || language === "English" ? language : "" });
+              }}>
+                <option value="">Select a language</option>
+                <option value="Kannada">Kannada</option>
+                <option value="Tamil">Tamil</option>
+                <option value="English">English</option>
+              </select>
+              <fieldset className="item-link-fields">
+                <legend><Link2 size={14} /> URL</legend>
+                <label htmlFor="schedule-item-link-title">Link Title</label>
+                <input id="schedule-item-link-title" value={draft.link_title} maxLength={200} onChange={(event) => setDraft({ ...draft, link_title: event.target.value })} />
+                <label htmlFor="schedule-item-link">Link</label>
+                <input id="schedule-item-link" type="url" value={draft.link_url} maxLength={2048} onChange={(event) => setDraft({ ...draft, link_url: event.target.value })} />
+              </fieldset>
+            </>}
+
+            {draft.item_type === "song" && <MediaPicker
+              label="Background Image"
+              value={draft.background_image_url}
+              file={selectedBackground}
+              imageOnly
+              onValue={(background_image_url) => setDraft({ ...draft, background_image_url })}
+              onFile={setSelectedBackground}
+              onValidation={setMediaValidation}
+            />}
+
+            {draft.item_type !== "song" && <MediaPicker
+              label="Media"
+              value={draft.media_url}
+              file={selectedMedia}
+              onValue={(media_url) => setDraft({ ...draft, media_url })}
+              onFile={setSelectedMedia}
+              onValidation={setMediaValidation}
+            />}
+
+            {draft.item_type !== "song" && <>
+              <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
+              <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
+            </>}
+            <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
+            <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+
+            {error && <p className="item-modal-error" role="alert">{error}</p>}
+            <footer className="item-modal-footer">
+              <button type="button" className="button button-secondary" onClick={closeModal} disabled={saving}>Cancel</button>
+              <button type="submit" className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Save"}</button>
+            </footer>
+          </form>
+        </section>
+      </div>}
+    </section>
+  );
+}
+
+function SongPicker({
+  songs,
+  value,
+  onChange,
+  onCreate,
+}: {
+  songs: SongOption[];
+  value: string;
+  onChange: (id: string) => void;
+  onCreate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const selected = songs.find((song) => song.id === value);
+  const filtered = songs.filter((song) => `${song.title} ${song.language}`.toLowerCase().includes(query.toLowerCase()));
+  return (
+    <div className="song-picker">
+      <label>Song</label>
+      <div className="song-picker-row">
+        <FileText size={18} aria-hidden="true" />
+        <button type="button" className="song-picker-select" aria-expanded={open} onClick={() => { setOpen(!open); setMenuOpen(false); }}>
+          {selected ? `${selected.title} · ${selected.language}` : "Select a Songbook song"}
+        </button>
+        <div className="song-picker-menu">
+          <button type="button" className="icon-button" aria-label="Song options" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>
+          {menuOpen && <div className="song-picker-menu-popover">
+            <button type="button" disabled={!selected} onClick={() => { onChange(""); setMenuOpen(false); }}>Clear</button>
+            <button type="button" onClick={() => { setOpen(true); setMenuOpen(false); }}>Replace</button>
+            {selected
+              ? <Link href={`/songbook/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
+              : <button type="button" onClick={() => { onCreate(); setMenuOpen(false); }}>Create in Songbook</button>}
+          </div>}
+        </div>
+      </div>
+      {open && <div className="song-picker-dropdown">
+        <label className="song-picker-search"><Search size={15} /><input type="search" value={query} placeholder="Search songs" autoFocus onChange={(event) => setQuery(event.target.value)} /></label>
+        <div className="song-picker-results">
+          {filtered.map((song) => <button type="button" key={song.id} onClick={() => { onChange(song.id); setOpen(false); setQuery(""); }}>
+            <FileText size={16} /><span>{song.title}<small>{song.language}</small></span>
+          </button>)}
+          {!filtered.length && <p>No matching songs.</p>}
+        </div>
+        <button type="button" className="song-picker-create" onClick={onCreate}><Plus size={15} /> Create a song in Songbook</button>
+        <button type="button" className="song-picker-close" onClick={() => setOpen(false)}>Close selector</button>
+      </div>}
+    </div>
+  );
+}
+
+function MediaPicker({
+  label,
+  value,
+  file,
+  imageOnly = false,
+  onValue,
+  onFile,
+  onValidation,
+}: {
+  label: string;
+  value: string;
+  file: File | null;
+  imageOnly?: boolean;
+  onValue: (url: string) => void;
+  onFile: (file: File | null) => void;
+  onValidation: (message: string) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [validation, setValidation] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const localPreviewRef = useRef<string | null>(null);
+  const previewUrl = localPreview ?? value;
+  useEffect(() => () => {
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+  }, []);
+
+  function selectFile(selected: File | undefined) {
+    if (!selected) return;
+    const supported = Boolean(mediaTypes[selected.type]) && (!imageOnly || selected.type.startsWith("image/"));
+    if (!supported) {
+      const message = imageOnly ? "Choose a PNG, JPG, WebP, or GIF image." : "Choose a PNG, JPG, WebP, GIF, MP4, or WebM file.";
+      setValidation(message);
+      onValidation(message);
+      return;
+    }
+    if (selected.size > maxMediaSize) {
+      setValidation("Files must be 50 MB or smaller.");
+      onValidation("Files must be 50 MB or smaller.");
+      return;
+    }
+    setValidation("");
+    onValidation("");
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    const objectUrl = URL.createObjectURL(selected);
+    localPreviewRef.current = objectUrl;
+    setLocalPreview(objectUrl);
+    onFile(selected);
+  }
+
+  function onInputChange(event: ChangeEvent<HTMLInputElement>) {
+    selectFile(event.target.files?.[0]);
+    event.target.value = "";
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    selectFile(event.dataTransfer.files[0]);
+  }
+
+  const isVideo = file?.type.startsWith("video/") || (!file && /\.(mp4|webm)(?:$|\?)/i.test(value));
+  return (
+    <div className="media-picker">
+      <label>{label}</label>
+      <div
+        className={`media-drop-zone${dragging ? " is-dragging" : ""}`}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <input
+          ref={fileInput}
+          type="file"
+          hidden
+          accept={imageOnly ? "image/png,image/jpeg,image/webp,image/gif" : "image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"}
+          onChange={onInputChange}
+        />
+        {previewUrl ? <div className="media-preview">
+          {isVideo
+            ? <video src={previewUrl} controls preload="metadata" />
+            : <img src={previewUrl} alt={`${label} preview`} />}
+          <div className="media-preview-actions">
+            <button type="button" onClick={() => fileInput.current?.click()}>Replace file</button>
+            <button type="button" onClick={() => {
+              if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+              localPreviewRef.current = null;
+              setLocalPreview(null);
+              onFile(null);
+              onValue("");
+              onValidation("");
+            }}>Remove</button>
+          </div>
+        </div> : <button type="button" className="media-pick-button" onClick={() => fileInput.current?.click()}>
+          {imageOnly ? <ImagePlus size={20} /> : <Film size={20} />}
+          <span>Select or drop a file</span>
+          <small>{imageOnly ? "PNG, JPG, WebP, GIF · up to 50 MB" : "PNG, JPG, WebP, GIF, MP4, WebM · up to 50 MB"}</small>
+        </button>}
+      </div>
+      {validation && <p className="item-modal-error" role="alert">{validation}</p>}
+      {file && <p className="media-file-name">{file.name}</p>}
+    </div>
+  );
+}
+
+export function InlineScheduleDetails({
+  schedule,
+  returnTo,
+}: {
+  schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; status: "draft" | "published"; updated_at: string };
+  returnTo: string;
+}) {
+  return (
+    <details className="inline-owner-editor">
+      <summary>Manage schedule details</summary>
+      <form className="form-stack schedule-edit-form" action={updateSchedule} data-dirty-form>
+        <input type="hidden" name="return_to" value={returnTo} />
+        <input type="hidden" name="schedule_id" value={schedule.id} />
+        <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
+        <label htmlFor={`title-${schedule.id}`}>Title</label>
+        <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
+        <label htmlFor={`venue-${schedule.id}`}>Venue</label>
+        <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
+        <label htmlFor={`date-${schedule.id}`}>Date</label>
+        <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
+        <label htmlFor={`description-${schedule.id}`}>Description</label>
+        <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={3} maxLength={2000} />
+        <button className="button button-secondary">Save schedule</button>
+      </form>
+      <form className="schedule-actions" action={setScheduleStatus}>
+        <input type="hidden" name="schedule_id" value={schedule.id} />
+        <input type="hidden" name="status" value={schedule.status === "published" ? "draft" : "published"} />
+        <input type="hidden" name="return_to" value={returnTo} />
+        <ConfirmButton action={setScheduleStatus} message={schedule.status === "published" ? "Unpublish this service?" : "Publish this service for public viewing?"} className="button button-primary">
+          {schedule.status === "published" ? "Unpublish service" : "Publish service"}
+        </ConfirmButton>
+      </form>
     </details>
+  );
+}
+
+export function NewScheduleForm() {
+  return (
+    <form className="form-stack schedule-edit-form" action={createSchedule} data-dirty-form>
+      <input type="hidden" name="return_to" value="/schedule" />
+      <label htmlFor="new-service-title">Title</label><input id="new-service-title" name="title" required maxLength={200} />
+      <label htmlFor="new-service-venue">Venue</label><input id="new-service-venue" name="venue" maxLength={200} />
+      <label htmlFor="new-service-date">Date</label><input id="new-service-date" type="date" name="service_date" required />
+      <fieldset className="new-schedule-items">
+        <legend>Schedule items</legend>
+        <p className="muted">Save this schedule first. Its own item list will then be available below.</p>
+      </fieldset>
+      <label htmlFor="new-service-description">Description</label><textarea id="new-service-description" name="description" rows={3} maxLength={2000} />
+      <button className="button button-primary">Create schedule</button>
+    </form>
   );
 }

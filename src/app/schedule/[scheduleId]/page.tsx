@@ -31,7 +31,7 @@ async function ScheduleDetailContent({ params }: Props) {
   const { scheduleId } = await params;
   const { supabase, churchId } = await getPublicChurchContext();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, duration_minutes, public_content, song_id, song:songs(id, title))")
+    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title))")
     .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
   if (!schedule) notFound();
@@ -60,8 +60,21 @@ async function ScheduleDetailContent({ params }: Props) {
             const song = Array.isArray(item.song) ? item.song[0] : item.song;
             return <li className="programme-item" key={item.id}>
             <span className="programme-position">{String(index + 1).padStart(2, "0")}</span>
-            <div><h2>{song?.title ?? item.title}</h2><p>{item.item_type.replaceAll("_", " ")}{item.leader_name ? ` · Led by ${item.leader_name}` : ""}</p>{item.public_content && <p>{item.public_content}</p>}</div>
-            {item.duration_minutes != null && <span className="programme-duration">{item.duration_minutes} min</span>}
+            <div>
+              <h2>{item.title}</h2>
+              <p>{item.item_type.replaceAll("_", " ")}</p>
+              {song && <p>Song: <Link href={`/songbook/${song.id}`}>{song.title}</Link></p>}
+              {item.leader_name && <p>{item.item_type === "song" ? "Song leader" : "Responsible"}: {item.leader_name}</p>}
+              {item.duration_minutes != null && <p>{item.duration_minutes} min</p>}
+              {item.translator_name && <p>Translator: {item.translator_name}</p>}
+              {item.translation_language && <p>Translation in: {item.translation_language}</p>}
+              {item.public_content && <p>{item.public_content}</p>}
+              {item.link_url && <p><Link href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</Link></p>}
+              {item.background_image_url && <img className="schedule-item-background" src={item.background_image_url} alt={`${item.title} background`} />}
+              {item.media_url && (/\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
+                ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
+                : <img className="schedule-item-media" src={item.media_url} alt={`${item.title} media`} />)}
+            </div>
           </li>;
           })}
         </ol> : <div className="empty-state" style={{ marginTop: 22 }}>The programme has not been added yet.</div>}

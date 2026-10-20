@@ -29,7 +29,7 @@ async function SlidesContent({ params }: Props) {
   const { scheduleId } = await params;
   const supabase = await createClient();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
     .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load slide preview: ${error.message}`);
   if (!schedule) notFound();
