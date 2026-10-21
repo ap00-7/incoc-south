@@ -6,7 +6,7 @@ import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -35,14 +35,14 @@ async function ScheduleContent({ searchParams }: Props) {
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
-  const { supabase, churchId } = await getPublicChurchContext();
+  const supabase = await createClient();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const isOwner = membership?.role === "owner";
   let schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, updated_at", {
+    .select("id, title, service_date, venue, description, status, updated_at, church:churches!inner(id, slug)", {
       count: isOwner ? undefined : "exact",
     })
-    .eq("church_id", churchId);
+    .eq("church.slug", "incoc-south");
   if (!isOwner) schedulesQuery = schedulesQuery.eq("status", "published");
   const { data: schedules, error, count } = await schedulesQuery
     .order("service_date", { ascending: false })
@@ -52,6 +52,7 @@ async function ScheduleContent({ searchParams }: Props) {
   if (!isOwner && count === 1 && schedulesForPage[0]) {
     redirect(`/schedule/${schedulesForPage[0].id}`);
   }
+  const churchId = schedulesForPage[0]?.church.id ?? (await getPublicChurchContext()).churchId;
   const hasNextPage = schedulesForPage.length > PAGE_SIZE;
   const visibleSchedules = schedulesForPage.slice(0, PAGE_SIZE);
   return (

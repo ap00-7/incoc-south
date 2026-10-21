@@ -3,8 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Presentation } from "@/components/presentation";
 import { getMembership, hasSupabaseAuthCookie } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
 type Props = { params: Promise<{ scheduleId: string }> };
@@ -21,16 +20,13 @@ async function PresentationContent({ params }: Props) {
   await connection();
   if (!isSupabaseConfigured()) notFound();
   const { scheduleId } = await params;
-  const [{ supabase, churchId }, hasAuthCookie] = await Promise.all([
-    getPublicChurchContext(),
-    hasSupabaseAuthCookie(),
-  ]);
+  const [supabase, hasAuthCookie] = await Promise.all([createClient(), hasSupabaseAuthCookie()]);
   const membershipPromise = hasAuthCookie ? getMembership(supabase) : Promise.resolve(null);
   const [membership, { data: schedule, error }] = await Promise.all([
     membershipPromise,
     supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)))")
-    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle(),
+    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle(),
   ]);
   if (error) throw new Error(`Unable to load presentation: ${error.message}`);
   if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();

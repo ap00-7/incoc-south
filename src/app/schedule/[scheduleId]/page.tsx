@@ -6,8 +6,7 @@ import { connection } from "next/server";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" });
 
@@ -29,10 +28,10 @@ async function ScheduleDetailContent({ params }: Props) {
     return <div className="content-wrap"><div className="notice notice-warning">Service details require a configured Supabase project.</div></div>;
   }
   const { scheduleId } = await params;
-  const { supabase, churchId } = await getPublicChurchContext();
+  const supabase = await createClient();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title))")
-    .eq("id", scheduleId).eq("church_id", churchId).maybeSingle();
+    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title)), church:churches!inner(slug)")
+    .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
   if (!schedule) notFound();
   if (schedule.status !== "published" && (await getMembership(supabase))?.role !== "owner") notFound();

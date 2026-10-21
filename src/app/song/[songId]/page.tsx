@@ -6,8 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
-import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -31,12 +30,11 @@ async function SongContent({ params, searchParams }: Props) {
     return <div className="content-wrap"><div className="notice notice-warning">Songbook access requires a configured Supabase project.</div></div>;
   }
   const [{ songId }, routeParams] = await Promise.all([params, searchParams]);
-  const { supabase, churchId } = await getPublicChurchContext();
-  const hasAuthCookie = await hasSupabaseAuthCookie();
+  const [supabase, hasAuthCookie] = await Promise.all([createClient(), hasSupabaseAuthCookie()]);
   const [{ data: song, error }, membership] = await Promise.all([
     supabase.from("songs")
-      .select("id, title, language, author, source, has_translation, start_with_chorus, is_published, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
-      .eq("id", songId).eq("church_id", churchId).maybeSingle(),
+      .select("id, title, language, author, source, has_translation, start_with_chorus, is_published, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden), church:churches!inner(slug)")
+      .eq("id", songId).eq("church.slug", "incoc-south").maybeSingle(),
     hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
   ]);
   if (error) throw new Error(`Unable to load song: ${error.message}`);

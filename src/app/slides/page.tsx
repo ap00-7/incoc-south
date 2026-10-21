@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
@@ -34,17 +34,18 @@ async function SlidesIndexContent({ searchParams }: Props) {
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
-  const { supabase, churchId } = await getPublicChurchContext();
+  const supabase = await createClient();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const isOwner = membership?.role === "owner";
   let schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, updated_at")
-    .eq("church_id", churchId);
+    .select("id, title, service_date, venue, description, status, updated_at, church:churches!inner(id, slug)")
+    .eq("church.slug", "incoc-south");
   if (!isOwner) schedulesQuery = schedulesQuery.eq("status", "published");
   const { data: schedules, error } = await schedulesQuery
     .order("service_date", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (error) throw new Error(`Unable to load presentations: ${error.message}`);
   const schedulesForPage = schedules ?? [];
+  const churchId = schedulesForPage[0]?.church.id ?? (await getPublicChurchContext()).churchId;
   const hasNextPage = schedulesForPage.length > PAGE_SIZE;
   const visibleSchedules = schedulesForPage.slice(0, PAGE_SIZE);
   return (

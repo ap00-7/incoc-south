@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
-import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
@@ -35,16 +35,18 @@ async function SongbookContent({ searchParams }: Props) {
   const language = params.language?.trim() ?? "";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
-  const { supabase, churchId } = await getPublicChurchContext();
+  const supabase = await createClient();
   const hasAuthCookie = await hasSupabaseAuthCookie();
-  let songsQuery = supabase.from("songs").select("id, title, language, author, is_published, updated_at")
-    .eq("church_id", churchId).order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  let songsQuery = supabase.from("songs")
+    .select("id, title, language, author, is_published, updated_at, church:churches!inner(id, slug)")
+    .eq("church.slug", "incoc-south").order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
   const [membership, { data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
     hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
     songsQuery,
-    supabase.from("songs").select("language").eq("church_id", churchId).order("language").limit(1000),
+    supabase.from("songs").select("language, church:churches!inner(id, slug)")
+      .eq("church.slug", "incoc-south").order("language").limit(1000),
   ]);
   if (error) throw new Error(`Unable to load songs: ${error.message}`);
   if (languageError) throw new Error(`Unable to load song languages: ${languageError.message}`);
@@ -52,6 +54,7 @@ async function SongbookContent({ searchParams }: Props) {
     ...songLanguageValues,
     ...(languageRows ?? []).map((row) => row.language),
   ])].sort((first, second) => first.localeCompare(second));
+  const churchId = languageRows?.[0]?.church.id ?? (await getPublicChurchContext()).churchId;
   const songsForPage = songs ?? [];
   const hasNextPage = songsForPage.length > PAGE_SIZE;
   const filters = new URLSearchParams();
