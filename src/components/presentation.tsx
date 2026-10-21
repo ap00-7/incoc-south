@@ -110,6 +110,7 @@ export function Presentation({
   }, [currentIndex, goTo, navigate, scheduleId]);
 
   const current = slides[currentIndex];
+  const hasLyrics = Boolean(current?.lines.length || current?.translationLines?.length);
   const totalLyricLines = (current?.lines.length ?? 0) + (current?.translationLines?.length ?? 0);
   const lyricScale = current
     ? Math.min(current.fontScale, Math.min(1, 7 / Math.max(7, totalLyricLines)))
@@ -148,17 +149,16 @@ export function Presentation({
         onTouchCancel={() => { touchStartX.current = null; }}
       >
         {current ? <>
-            {current.backgroundImageUrl && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
+            {current.backgroundImageUrl && !hasLyrics && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
             <h1 className="slide-title">{current.itemTitle}</h1>
             <div className="slide-content">
-              {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
               {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
                 : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
-              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(18px, ${3 * lyricScale}vh, ${36 * lyricScale}px)` }}>{current.lines.join("\n")}</div>}
+              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * lyricScale}rem, ${3 * lyricScale}vw, ${2.5 * lyricScale}rem)` }}>{current.lines.join("\n")}</div>}
               {current.translationLines?.length ? <div className="slide-translation">
                 {current.translationLabel && <span>{current.translationLabel}</span>}
-                <p style={{ fontSize: `clamp(16px, ${2 * lyricScale}vh, ${28 * lyricScale}px)` }}>{current.translationLines.join("\n")}</p>
+                <p style={{ fontSize: `clamp(${1.125 * lyricScale}rem, ${2.25 * lyricScale}vw, ${1.75 * lyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
               </div> : null}
               {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
             </div>

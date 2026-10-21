@@ -184,6 +184,13 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await expect(viewerPage.locator(".presentation-toolbar")).toHaveCount(0);
   await expect(viewerPage.getByRole("button", { name: "Previous item" })).toBeDisabled();
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
+  await expect(viewerPage.locator(".slide-stage")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await expect(viewerPage.locator(".slide-section")).toHaveCount(0);
+  const presentationControls = viewerPage.locator(".presentation-bottom-controls");
+  await expect(viewerPage.getByRole("button", { name: "Next item" })).toHaveCSS("width", "40px");
+  await expect(presentationControls).toHaveCSS("opacity", "0.16");
+  await presentationControls.hover();
+  await expect(presentationControls).toHaveCSS("opacity", "1");
   await viewerPage.getByRole("button", { name: "Next item" }).click();
   await expect(viewerPage.locator(".slide-title")).toHaveText("Responsive reading");
   await viewerPage.getByRole("button", { name: "Previous item" }).click();
