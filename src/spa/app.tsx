@@ -69,7 +69,6 @@ function HomePage() {
   const options = [
     { href: "/song", icon: BookOpen, label: "Songs", text: "Browse worship songs and their lyric sections." },
     { href: "/schedule", icon: CalendarDays, label: "Sunday Schedule", text: "See services and their programmes." },
-    { href: "/slides", icon: MonitorPlay, label: "Slides", text: "Choose a service to open its presentation." },
   ];
   return <PageShell>
     <section className="home-main" aria-labelledby="home-title">
