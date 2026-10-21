@@ -45,6 +45,9 @@ from public.churches where slug = 'rls-test-tenant';
 insert into public.schedule_items (id, schedule_id, church_id, item_type, title, position, song_id)
 select '40000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', id, 'song', 'Visible song', 0, '20000000-0000-0000-0000-000000000001'
 from public.churches where slug = 'incoc-south';
+insert into public.schedule_items (id, schedule_id, church_id, item_type, title, position)
+select '40000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', id, 'other', 'Draft schedule item', 0
+from public.churches where slug = 'incoc-south';
 insert into public.schedule_item_notes (schedule_item_id, notes)
 values ('40000000-0000-0000-0000-000000000001', 'Confidential owner note');
 insert into public.presentation_sessions (schedule_id, current_item_id, updated_by)
@@ -55,9 +58,9 @@ select set_config('request.jwt.claim.role', 'anon', true);
 select is((select count(*) from public.churches), 1::bigint, 'anonymous readers can identify only the public church');
 select is((select count(*) from public.songs), 1::bigint, 'anonymous readers see songs only from INCOC South');
 select is((select translation from public.song_sections where id = '21000000-0000-0000-0000-000000000001'), 'தமிழ் பல்லவி', 'anonymous readers can read section translations');
-select is((select count(*) from public.schedules where status = 'published'), 1::bigint, 'anonymous readers can read published schedules');
-select is((select count(*) from public.schedules where status = 'draft'), 0::bigint, 'anonymous readers cannot read draft schedules');
-select is((select count(*) from public.schedule_items), 1::bigint, 'anonymous readers can read programme items only for published schedules');
+select is((select count(*) from public.schedules where status = 'published'), 1::bigint, 'anonymous readers can read saved INCOC South schedules');
+select is((select count(*) from public.schedules where status = 'draft'), 1::bigint, 'anonymous readers can read schedules regardless of legacy status');
+select is((select count(*) from public.schedule_items), 2::bigint, 'anonymous readers can read programme items in all INCOC South schedules');
 select throws_ok($$select * from public.church_members$$, '42501', 'anonymous readers cannot read church memberships');
 select throws_ok($$select * from public.schedule_item_notes$$, '42501', 'anonymous readers cannot read private service notes');
 select throws_ok($$select * from public.presentation_sessions$$, '42501', 'anonymous readers cannot inspect synchronized session controls');
@@ -85,8 +88,8 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select is((select count(*) from public.songs), 1::bigint, 'viewer reads only songs from their church');
-select is((select count(*) from public.schedules where status = 'published'), 1::bigint, 'viewer reads only published schedules from their church');
-select is((select count(*) from public.schedules where status = 'draft'), 0::bigint, 'viewer cannot read draft schedules');
+select is((select count(*) from public.schedules where status = 'published'), 1::bigint, 'viewer reads saved schedules from their church');
+select is((select count(*) from public.schedules where status = 'draft'), 1::bigint, 'viewer can read schedules regardless of legacy status');
 select is((select count(*) from public.schedule_item_notes), 0::bigint, 'viewer cannot read owner-only service notes');
 select is((select count(*) from public.church_members where user_id = '10000000-0000-0000-0000-000000000003'), 0::bigint, 'viewer cannot read another church membership');
 select throws_ok(

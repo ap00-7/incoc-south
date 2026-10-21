@@ -20,7 +20,7 @@ export default async function AdminMembersPage() {
 
   return <>
     <p className="eyebrow">ACCESS CONTROL</p><h1>Members</h1>
-    <p>Only invited church members can access the songbook and published services. Assign owner access only to trusted administrators.</p>
+    <p>Public songs and services are available without signing in. Assign owner access only to trusted administrators.</p>
     <div className="member-list">
       {members?.map((item) => {
         const profile = Array.isArray(item.profile) ? item.profile[0] : item.profile;

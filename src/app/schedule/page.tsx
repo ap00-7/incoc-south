@@ -30,7 +30,7 @@ export default function SchedulePage({ searchParams }: Props) {
 async function ScheduleContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <div className="content-wrap"><SectionHeading title="Sunday Schedule" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div>;
+    return <div className="content-wrap"><SectionHeading title="Sunday Schedule" /><div className="notice notice-warning">Service schedules will appear here after Supabase is configured.</div></div>;
   }
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
@@ -38,12 +38,11 @@ async function ScheduleContent({ searchParams }: Props) {
   const supabase = await createClient();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const isOwner = membership?.role === "owner";
-  let schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, updated_at, church:churches!inner(id, slug)", {
+  const schedulesQuery = supabase.from("schedules")
+    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", {
       count: isOwner ? undefined : "exact",
     })
     .eq("church.slug", "incoc-south");
-  if (!isOwner) schedulesQuery = schedulesQuery.eq("status", "published");
   const { data: schedules, error, count } = await schedulesQuery
     .order("service_date", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -69,11 +68,11 @@ async function ScheduleContent({ searchParams }: Props) {
           {visibleSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
             <Link className="result-card" href={`/schedule/${schedule.id}`}>
               <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
-              <span className="public-entry-meta">{schedule.status === "draft" ? "Draft" : ""}<ArrowRight size={17} aria-hidden="true" /></span>
+              <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
             </Link>
             {isOwner && <Link className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</Link>}
           </article>)}
-        </div> : <div className="empty-state">There are no {isOwner ? "services" : "published services"} to show yet.</div>}
+        </div> : <div className="empty-state">There are no services to show yet.</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">
           {page > 1 && <Link className="button button-secondary" href={`/schedule?page=${page - 1}`}>Newer services</Link>}
           {hasNextPage && <Link className="button button-secondary" href={`/schedule?page=${page + 1}`}>Older services</Link>}

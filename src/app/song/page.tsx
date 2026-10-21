@@ -3,16 +3,12 @@ import { Suspense } from "react";
 import { ArrowRight } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
-import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
-import { setSongPublication } from "@/app/admin/actions";
-import { ConfirmButton } from "@/components/confirm-button";
 import { SongCacheSeed } from "@/components/song-cache-seed";
-import { invalidateSongCache } from "@/lib/song-cache";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string; create?: string }> };
 const PAGE_SIZE = 50;
@@ -40,7 +36,7 @@ async function SongbookContent({ searchParams }: Props) {
   const supabase = await createClient();
   const hasAuthCookie = await hasSupabaseAuthCookie();
   let songsQuery = supabase.from("songs")
-    .select("id, title, language, author, is_published, updated_at, church:churches!inner(id, slug)")
+    .select("id, title, language, author, updated_at, church:churches!inner(id, slug)")
     .eq("church.slug", "incoc-south").order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
@@ -50,13 +46,27 @@ async function SongbookContent({ searchParams }: Props) {
     supabase.from("songs").select("language, church:churches!inner(id, slug)")
       .eq("church.slug", "incoc-south").order("language").limit(1000),
   ]);
-  if (error) throw new Error(`Unable to load songs: ${error.message}`);
-  if (languageError) throw new Error(`Unable to load song languages: ${languageError.message}`);
+  if (error || languageError) {
+    return <div className="content-wrap">
+      <SectionHeading title="Songbook" />
+      <div className="notice notice-warning" role="alert">The Songbook couldn’t load. Check your connection and try again. <Link href="/song">Retry</Link></div>
+    </div>;
+  }
   const languages = [...new Set([
     ...songLanguageValues,
     ...(languageRows ?? []).map((row) => row.language),
   ])].sort((first, second) => first.localeCompare(second));
-  const churchId = languageRows?.[0]?.church.id ?? (await getPublicChurchContext()).churchId;
+  let churchId = songs?.[0]?.church.id ?? languageRows?.[0]?.church.id;
+  if (!churchId) {
+    try {
+      churchId = (await getPublicChurchContext()).churchId;
+    } catch {
+      return <div className="content-wrap">
+        <SectionHeading title="Songbook" />
+        <div className="notice notice-warning" role="alert">The Songbook couldn’t connect to its content service. Check your connection and try again. <Link href="/song">Retry</Link></div>
+      </div>;
+    }
+  }
   const songsForPage = songs ?? [];
   const hasNextPage = songsForPage.length > PAGE_SIZE;
   const filters = new URLSearchParams();
@@ -70,10 +80,7 @@ async function SongbookContent({ searchParams }: Props) {
 
   return (
     <>
-      <RealtimeRefresh subscriptions={[
-        { table: "songs", column: "church_id", value: churchId },
-      ]} onChange={() => invalidateSongCache()} />
-      <SongCacheSeed songs={songsForPage.slice(0, PAGE_SIZE)} />
+      <SongCacheSeed songs={songsForPage.slice(0, PAGE_SIZE)} churchId={churchId} />
       <div className="content-wrap">
         <SectionHeading title="Songbook" />
         {membership?.role === "owner" && <details className="inline-owner-editor" open={params.create === "1"}>
@@ -95,26 +102,7 @@ async function SongbookContent({ searchParams }: Props) {
               <ArrowRight size={17} aria-hidden="true" />
             </Link>
             {membership?.role === "owner" && <div className="song-owner-actions">
-              <span className={`status-pill status-${song.is_published ? "published" : "draft"}`}>{song.is_published ? "Published" : "Draft"}</span>
               <Link className="text-link" href={`/song/${song.id}?edit=1#owner-edit`}>Edit</Link>
-              <form>
-                <input type="hidden" name="song_id" value={song.id} />
-                <input type="hidden" name="is_published" value={String(!song.is_published)} />
-                <input type="hidden" name="expected_updated_at" value={song.updated_at} />
-                <input type="hidden" name="return_to" value="/song" />
-                <ConfirmButton
-                  action={setSongPublication}
-                  message={song.is_published ? "Unpublish this song? It will no longer be visible to public visitors." : "Publish this song for public viewing?"}
-                  title={song.is_published ? "Unpublish song?" : "Publish song?"}
-                  confirmLabel={song.is_published ? "Unpublish" : "Publish"}
-                  pendingLabel={song.is_published ? "Unpublishing…" : "Publishing…"}
-                  confirmClassName="button button-primary"
-                  className="text-link"
-                  onActionSuccess={() => invalidateSongCache(song.id)}
-                >
-                  {song.is_published ? "Unpublish" : "Publish"}
-                </ConfirmButton>
-              </form>
             </div>}
           </div>)}
         </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}

@@ -33,7 +33,7 @@ export function SongPageContent({
     const cachedSong = getCachedSong(songId, updatedAt);
     if (cachedSong) return;
     let active = true;
-    void loadSong(songId, isOwner, updatedAt).then((result) => {
+    void loadSong(songId, updatedAt).then((result) => {
       if (active) setResult({ songId, updatedAt, song: result, error: "" });
     }).catch((loadError: unknown) => {
       if (active) setResult({
@@ -105,7 +105,6 @@ export function SongPageContent({
                 source: song.source,
                 has_translation: song.has_translation,
                 start_with_chorus: song.start_with_chorus,
-                is_published: song.is_published,
                 sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
                   id: section.id,
                   section_type: section.section_type,

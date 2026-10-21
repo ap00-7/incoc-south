@@ -5,7 +5,6 @@ import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
@@ -29,11 +28,10 @@ async function SlidesContent({ params }: Props) {
   const { scheduleId } = await params;
   const supabase = await createClient();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
     .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load slide preview: ${error.message}`);
   if (!schedule) notFound();
-  if (schedule.status !== "published" && (await getMembership(supabase))?.role !== "owner") notFound();
   const slides = generateSlides(normalizeProgrammeItems(schedule.schedule_items ?? []));
 
   return (

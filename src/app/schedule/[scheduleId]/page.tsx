@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" });
@@ -30,11 +29,10 @@ async function ScheduleDetailContent({ params }: Props) {
   const { scheduleId } = await params;
   const supabase = await createClient();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title)), church:churches!inner(slug)")
+    .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title)), church:churches!inner(slug)")
     .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
   if (!schedule) notFound();
-  if (schedule.status !== "published" && (await getMembership(supabase))?.role !== "owner") notFound();
   const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);
 
   return (

@@ -27,13 +27,12 @@ async function SongContent({ params, searchParams }: Props) {
   const [supabase, hasAuthCookie] = await Promise.all([createClient(), hasSupabaseAuthCookie()]);
   const [membership, { data: song, error }] = await Promise.all([
     hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
-    supabase.from("songs").select("is_published, updated_at, church:churches!inner(slug)")
+    supabase.from("songs").select("updated_at, church:churches!inner(slug)")
       .eq("id", songId).eq("church.slug", "incoc-south").maybeSingle(),
   ]);
   if (error) throw new Error(`Unable to load song: ${error.message}`);
   if (!song) notFound();
   const isOwner = membership?.role === "owner";
-  if (!song.is_published && !isOwner) notFound();
 
   return (
     <SongPageContent songId={songId} isOwner={isOwner} updatedAt={song.updated_at} editOpen={routeParams.edit === "1"} />

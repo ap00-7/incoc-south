@@ -25,11 +25,11 @@ async function PresentationContent({ params }: Props) {
   const [membership, { data: schedule, error }] = await Promise.all([
     membershipPromise,
     supabase.from("schedules")
-    .select("id, title, status, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
     .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle(),
   ]);
   if (error) throw new Error(`Unable to load presentation: ${error.message}`);
-  if (!schedule || (schedule.status !== "published" && membership?.role !== "owner")) notFound();
+  if (!schedule) notFound();
   const programmeItems = schedule.schedule_items ?? [];
   const slides = generateSlides(normalizeProgrammeItems(programmeItems));
   const songIds = programmeItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id));

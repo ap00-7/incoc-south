@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import {
   InlineScheduleDetails,
   InlineScheduleManager,
-  SchedulePublicationControls,
+  ScheduleActions,
 } from "@/components/admin/inline-schedule-manager";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/auth";
@@ -20,7 +20,7 @@ export default async function EditSchedulePage({ params }: { params: Promise<{ s
   const supabase = await createClient();
   const [{ data: schedule, error }, { data: songs, error: songsError }] = await Promise.all([
     supabase.from("schedules")
-      .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, updated_at, song:songs(id, title))")
+      .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, updated_at, song:songs(id, title))")
       .eq("id", scheduleId).eq("church_id", membership.churchId).maybeSingle(),
     supabase.from("songs").select("id, title, language")
       .eq("church_id", membership.churchId).order("title").limit(1000),
@@ -51,7 +51,7 @@ export default async function EditSchedulePage({ params }: { params: Promise<{ s
           churchId={membership.churchId}
         />
       </section>
-      <SchedulePublicationControls schedule={schedule} />
+      <ScheduleActions schedule={schedule} />
     </>
   );
 }

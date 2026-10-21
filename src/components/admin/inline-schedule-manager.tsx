@@ -24,7 +24,6 @@ import {
   duplicateScheduleItem,
   moveScheduleItem,
   saveScheduleItem,
-  setScheduleStatus,
   updateSchedule,
   type ScheduleItemInput,
 } from "@/app/admin/actions";
@@ -155,7 +154,6 @@ export function InlineScheduleManager({
     service_date: string;
     venue: string | null;
     description: string | null;
-    status: "draft" | "published";
     updated_at: string;
   };
   items: ScheduleItem[];
@@ -613,7 +611,7 @@ function MediaPicker({
 export function InlineScheduleDetails({
   schedule,
 }: {
-  schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; status: "draft" | "published"; updated_at: string };
+  schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; updated_at: string };
 }) {
   const { error, formAction } = useServerFormAction(updateSchedule);
   return (
@@ -638,29 +636,13 @@ export function InlineScheduleDetails({
   );
 }
 
-export function SchedulePublicationControls({
+export function ScheduleActions({
   schedule,
 }: {
-  schedule: { id: string; title: string; status: "draft" | "published" };
+  schedule: { id: string; title: string };
 }) {
   return (
     <div className="schedule-editor-actions">
-        <form>
-          <input type="hidden" name="schedule_id" value={schedule.id} />
-          <input type="hidden" name="status" value={schedule.status === "published" ? "draft" : "published"} />
-          <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
-          <ConfirmButton
-            action={setScheduleStatus}
-            message={schedule.status === "published" ? "This schedule will no longer be visible to the public." : "This schedule and its items will become visible to the public."}
-            title={schedule.status === "published" ? "Unpublish schedule?" : "Publish schedule?"}
-            confirmLabel={schedule.status === "published" ? "Unpublish" : "Publish"}
-            pendingLabel={schedule.status === "published" ? "Unpublishing…" : "Publishing…"}
-            confirmClassName="button button-primary"
-            className="button button-primary"
-          >
-            {schedule.status === "published" ? "Unpublish schedule" : "Publish schedule"}
-          </ConfirmButton>
-        </form>
         <form>
           <input type="hidden" name="schedule_id" value={schedule.id} />
           <input type="hidden" name="return_to" value="/admin/schedules" />

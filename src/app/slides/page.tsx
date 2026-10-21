@@ -29,7 +29,7 @@ export default function SlidesIndexPage({ searchParams }: Props) {
 async function SlidesIndexContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <div className="content-wrap"><SectionHeading title="Slides" /><div className="notice notice-warning">Published presentations will appear here after Supabase is configured.</div></div>;
+    return <div className="content-wrap"><SectionHeading title="Slides" /><div className="notice notice-warning">Presentations will appear here after Supabase is configured.</div></div>;
   }
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
@@ -37,10 +37,9 @@ async function SlidesIndexContent({ searchParams }: Props) {
   const supabase = await createClient();
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const isOwner = membership?.role === "owner";
-  let schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, updated_at, church:churches!inner(id, slug)")
+  const schedulesQuery = supabase.from("schedules")
+    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)")
     .eq("church.slug", "incoc-south");
-  if (!isOwner) schedulesQuery = schedulesQuery.eq("status", "published");
   const { data: schedules, error } = await schedulesQuery
     .order("service_date", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (error) throw new Error(`Unable to load presentations: ${error.message}`);
@@ -60,11 +59,11 @@ async function SlidesIndexContent({ searchParams }: Props) {
                 <h2>{schedule.title}</h2>
                 <p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p>
               </div>
-              <span className="public-entry-meta">{schedule.status === "draft" ? "Draft" : ""}<MonitorPlay size={15} /> Open slides <ArrowRight size={15} /></span>
+              <span className="public-entry-meta"><MonitorPlay size={15} /> Open slides <ArrowRight size={15} /></span>
             </Link>
             {isOwner && <Link className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</Link>}
           </article>)}
-        </div> : <div className="empty-state">There are no {isOwner ? "presentations" : "published presentations"} yet.</div>}
+        </div> : <div className="empty-state">There are no presentations yet.</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Slides pages">
           {page > 1 && <Link className="button button-secondary" href={`/slides?page=${page - 1}`}>Newer services</Link>}
           {hasNextPage && <Link className="button button-secondary" href={`/slides?page=${page + 1}`}>Older services</Link>}

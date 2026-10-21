@@ -28,7 +28,7 @@ export default async function LoginPage() {
             Sign-in is unavailable until Supabase is configured. Follow the setup guide in the project README.
           </div>
         )}
-        <p className="auth-footnote">Songs, published Sunday schedules, and slides are available without signing in.</p>
+        <p className="auth-footnote">Songs, Sunday schedules, and slides are available without signing in.</p>
       </section>
     </main>
   );
