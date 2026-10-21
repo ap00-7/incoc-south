@@ -10,12 +10,14 @@ export function CachedSongLink({
   updatedAt,
   className,
   href,
+  onClick,
 }: {
   songId: string;
   children: ReactNode;
   updatedAt: string;
   className?: string;
   href?: string;
+  onClick?: () => void;
 }) {
   const [intent, setIntent] = useState(false);
   const prefetchSong = () => {
@@ -33,6 +35,7 @@ export function CachedSongLink({
       onMouseEnter={prefetchSong}
       onFocus={prefetchSong}
       onTouchStart={prefetchSong}
+      onClick={onClick}
     >
       {children}
     </Link>

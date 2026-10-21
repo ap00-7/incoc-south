@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, CalendarDays, MonitorPlay, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarDays, ShieldCheck } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 import { BrandMark } from "@/components/brand-mark";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -16,7 +16,6 @@ export function SiteHeader({ owner = false }: { owner?: boolean }) {
         <nav className="primary-nav" aria-label="Main navigation">
           <Link href="/song"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
           <Link href="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
-          <Link href="/slides"><MonitorPlay size={15} aria-hidden="true" /> Slides</Link>
         </nav>
         <div className="header-actions">
           <ThemeToggle />

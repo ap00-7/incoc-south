@@ -16,7 +16,9 @@ export type ProgrammeItem = {
   position: number;
   public_content: string | null;
   background_image_url?: string | null;
+  media_url?: string | null;
   song?: {
+    id?: string;
     title: string;
     start_with_chorus?: boolean;
     has_translation?: boolean;
@@ -118,54 +120,77 @@ export type PresentationSlide = {
   itemHeader: string | null;
   itemSubtitle: string | null;
   backgroundImageUrl: string | null;
+  mediaUrl: string | null;
   sectionLabel: string | null;
   lines: string[];
+  translationLines: string[] | null;
+  translationLabel: string | null;
   fontScale: number;
 };
 
 const LINES_PER_SLIDE = 6;
 const TARGET_LINE_LENGTH = 52;
 
+const excludedPresentationTitles = new Set([
+  "preservicemeeting",
+  "welcomeprayer",
+  "welcomeandprayer",
+  "sermoncommunion",
+  "sermonandcommunion",
+  "closingprayer",
+]);
+
+export function filterPresentationItems(items: ProgrammeItem[]) {
+  return [...items]
+    .filter((item) => !excludedPresentationTitles.has(item.title.toLocaleLowerCase().replace(/[^a-z0-9]/g, "")))
+    .sort((a, b) => a.position - b.position);
+}
+
+function splitSlideLines(text: string) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const chunks: string[][] = [];
+  for (let start = 0; start < lines.length; start += LINES_PER_SLIDE) {
+    chunks.push(lines.slice(start, start + LINES_PER_SLIDE));
+  }
+  return chunks;
+}
+
 export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
   const slides: PresentationSlide[] = [];
-  for (const item of [...items].sort((a, b) => a.position - b.position)) {
+  for (const item of filterPresentationItems(items)) {
     if (item.song) {
       const songTitle = item.song.title;
       const sections = sequenceSongSections(
         item.song.song_sections,
         item.song.start_with_chorus,
       );
-      const showTranslations = item.song.has_translation !== false;
       const labeledSections = labelSongSections(sections);
-      const addTextSlides = (text: string, label: string) => {
-        const lines = text.replace(/\r\n/g, "\n").split("\n");
-        for (let start = 0; start < lines.length; start += LINES_PER_SLIDE) {
-          const chunk = lines.slice(start, start + LINES_PER_SLIDE);
-          const longest = Math.max(0, ...chunk.map((line) => [...line].length));
+      const addSectionSlides = (section: LyricSection, label: string) => {
+        const originalChunks = section.lyrics.trim() ? splitSlideLines(section.lyrics) : [];
+        const translation = item.song?.has_translation === false ? "" : section.translation?.trim() ?? "";
+        const translationChunks = translation ? splitSlideLines(translation) : [];
+        const slideCount = Math.max(originalChunks.length, translationChunks.length);
+        for (let index = 0; index < slideCount; index += 1) {
+          const lines = originalChunks[index] ?? [];
+          const translationLines = translationChunks[index] ?? [];
+          const longest = Math.max(0, ...[...lines, ...translationLines].map((line) => [...line].length));
           slides.push({
             itemId: item.id,
             itemTitle: songTitle,
             itemHeader: item.title && item.title !== songTitle ? item.title : null,
             itemSubtitle: null,
             backgroundImageUrl: item.background_image_url ?? null,
+            mediaUrl: item.media_url ?? null,
             sectionLabel: label,
-            lines: chunk,
+            lines,
+            translationLines: translationLines.length ? translationLines : null,
+            translationLabel: translationLines.length ? section.translation_language || "Translation" : null,
             fontScale: Math.max(0.58, Math.min(1, TARGET_LINE_LENGTH / longest || 1)),
           });
         }
       };
       for (const { section, label } of labeledSections) {
-        const sectionLabel = label;
-        if (section.lyrics.trim()) addTextSlides(section.lyrics, sectionLabel);
-      }
-      if (showTranslations) {
-        for (const { section, label } of labeledSections) {
-          if (!section.translation?.trim()) continue;
-          addTextSlides(
-            section.translation,
-            `${label} · ${section.translation_language ?? "Translation"}`,
-          );
-        }
+        addSectionSlides(section, label);
       }
     } else {
       const content = item.public_content?.trim();
@@ -175,8 +200,11 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
         itemHeader: null,
         itemSubtitle: null,
         backgroundImageUrl: item.background_image_url ?? null,
+        mediaUrl: item.media_url ?? null,
         sectionLabel: null,
         lines: content ? content.replace(/\r\n/g, "\n").split("\n") : [],
+        translationLines: null,
+        translationLabel: null,
         fontScale: 1,
       });
     }

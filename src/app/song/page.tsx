@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowRight } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell, SectionHeading } from "@/components/page-shell";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
-import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { SongCacheSeed } from "@/components/song-cache-seed";
 import { CachedSongLink } from "@/components/cached-song-link";
+import { SongbookSearch } from "@/components/songbook-search";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string; create?: string }> };
 const PAGE_SIZE = 50;
@@ -43,23 +42,17 @@ async function SongbookContent({ searchParams }: Props) {
     .eq("church.slug", "incoc-south").order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (query) songsQuery = songsQuery.ilike("title", `%${query}%`);
   if (language) songsQuery = songsQuery.eq("language", language);
-  const [membership, { data: songs, error }, { data: languageRows, error: languageError }] = await Promise.all([
+  const [membership, { data: songs, error }] = await Promise.all([
     hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
     songsQuery,
-    supabase.from("songs").select("language, church:churches!inner(id, slug)")
-      .eq("church.slug", "incoc-south").order("language").limit(1000),
   ]);
-  if (error || languageError) {
+  if (error) {
     return <div className="content-wrap">
       <SectionHeading title="Songbook" />
       <div className="notice notice-warning" role="alert">The Songbook couldn’t load. Check your connection and try again. <Link href="/song">Retry</Link></div>
     </div>;
   }
-  const languages = [...new Set([
-    ...songLanguageValues,
-    ...(languageRows ?? []).map((row) => row.language),
-  ])].sort((first, second) => first.localeCompare(second));
-  let churchId = songs?.[0]?.church.id ?? languageRows?.[0]?.church.id;
+  let churchId = songs?.[0]?.church.id;
   if (!churchId) {
     try {
       churchId = (await getPublicChurchContext()).churchId;
@@ -90,24 +83,9 @@ async function SongbookContent({ searchParams }: Props) {
           <summary>Add a song</summary>
           <SongEditorForm returnTo="/song" />
         </details>}
-        <form className="toolbar" action="/song">
-          <input className="search-input" name="q" defaultValue={query} placeholder="Search by song title" aria-label="Search songs by title" />
-          <select name="language" defaultValue={language} aria-label="Filter by language">
-            <option value="">All languages</option>
-            {languages.map((item) => <option key={item} value={item}>{item}</option>)}
-          </select>
-          <button className="button button-primary">Search</button>
-        </form>
+        <SongbookSearch songs={songsForPage.slice(0, PAGE_SIZE)} query={query} language={language} />
         {songsForPage.length ? <div className="results-list">
-          {songsForPage.slice(0, PAGE_SIZE).map((song) => <div className="result-card" key={song.id}>
-            <CachedSongLink className="result-card-main" songId={song.id} updatedAt={song.updated_at}>
-              <div><h2>{song.title}</h2><p>{song.author ? `${song.author} · ` : ""}{song.language}</p></div>
-              <ArrowRight size={17} aria-hidden="true" />
-            </CachedSongLink>
-            {membership?.role === "owner" && <div className="song-owner-actions">
-              <CachedSongLink className="text-link" songId={song.id} updatedAt={song.updated_at} href={`/song/${song.id}?edit=1#owner-edit`}>Edit</CachedSongLink>
-            </div>}
-          </div>)}
+          {songsForPage.slice(0, PAGE_SIZE).map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink>)}
         </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
           {page > 1 && <Link className="button button-secondary" href={pageHref(page - 1)}>Previous songs</Link>}

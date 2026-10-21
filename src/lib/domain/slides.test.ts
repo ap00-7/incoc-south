@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, generateSlides, getSectionDisplayLabel, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, filterPresentationItems, generateSlides, getSectionDisplayLabel, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
@@ -38,7 +38,7 @@ describe("generateSlides", () => {
     expect(slides.flatMap((slide) => slide.lines)).toEqual(lines);
   });
 
-  it("adds each section translation as separately labeled slides", () => {
+  it("shows each section translation on the same slide as its original lyrics", () => {
     const slides = generateSlides([songItem("Multilingual", 0, [
       {
         id: "s",
@@ -50,11 +50,14 @@ describe("generateSlides", () => {
         translation_language: "Tamil",
       },
     ])]);
-    expect(slides.map((slide) => slide.sectionLabel)).toEqual(["Chorus", "Chorus · Tamil"]);
-    expect(slides.map((slide) => slide.lines[0])).toEqual(["Original chorus", "தமிழ் மொழிபெயர்ப்பு"]);
+    expect(slides).toHaveLength(1);
+    expect(slides[0].sectionLabel).toBe("Chorus");
+    expect(slides[0].lines).toEqual(["Original chorus"]);
+    expect(slides[0].translationLines).toEqual(["தமிழ் மொழிபெயர்ப்பு"]);
+    expect(slides[0].translationLabel).toBe("Tamil");
   });
 
-  it("repeats the stored chorus after verses and keeps all translations after originals", () => {
+  it("repeats the stored chorus after verses and pairs each translation with its original", () => {
     const sections: LyricSection[] = [
       { id: "v1", section_type: "verse", label: "Verse 1", position: 0, lyrics: "Verse one", translation: "Translation one" },
       { id: "p", section_type: "pre_chorus", label: null, position: 1, lyrics: "Lift" },
@@ -65,7 +68,9 @@ describe("generateSlides", () => {
     const slides = generateSlides([songItem("Sequence", 0, sections)]);
     expect(slides.map((slide) => slide.lines[0])).toEqual([
       "Verse one", "Lift", "Refrain", "Verse two", "Lift", "Refrain",
-      "Translation one", "Translated refrain", "Translated refrain",
+    ]);
+    expect(slides.map((slide) => slide.translationLines?.[0] ?? null)).toEqual([
+      "Translation one", null, "Translated refrain", null, null, "Translated refrain",
     ]);
   });
 
@@ -151,6 +156,28 @@ describe("generateSlides", () => {
       { id: "c-alt", section_type: "chorus", label: "Alternate", position: 3, lyrics: "Different refrain" },
     ]);
     expect(sequence.map((section) => section.id)).toEqual(["v", "c", "c-alt"]);
+  });
+
+  it("filters excluded schedule titles independent of punctuation or spacing", () => {
+    const titles = [
+      "Pre-service meeting",
+      "Welcome & Prayer",
+      "Welcome and Prayer",
+      "Sermon & Communion",
+      "Sermon and Communion",
+      "Closing Prayer",
+      "Welcome",
+      "Opening",
+      "Worship",
+    ];
+    const items = titles.map((title, position) => ({
+      id: `item-${position}`,
+      item_type: "other",
+      title,
+      position,
+      public_content: title,
+    }));
+    expect(filterPresentationItems(items).map(({ title }) => title)).toEqual(["Welcome", "Opening", "Worship"]);
   });
 
   it("repeats one stored pre-chorus and removes copied pre-chorus rows", () => {

@@ -1,9 +1,8 @@
 "use client";
 
-import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Maximize, Pause, Play } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Home, Maximize, Pause, Play } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 import { clampSlideIndex, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -11,6 +10,7 @@ import { RealtimeRefresh } from "@/components/realtime-refresh";
 export function Presentation({
   scheduleId,
   scheduleTitle,
+  initialSlide,
   slides,
   isOwner,
   canReadSession,
@@ -19,15 +19,20 @@ export function Presentation({
 }: {
   scheduleId: string;
   scheduleTitle: string;
+  initialSlide: number;
   slides: PresentationSlide[];
   isOwner: boolean;
   canReadSession: boolean;
   userId: string | null;
   songIds: string[];
 }) {
-  const [index, setIndex] = useState(0);
+  const router = useRouter();
+  const [index, setIndex] = useState(() =>
+    clampSlideIndex(initialSlide, slides.length),
+  );
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
+  const touchStartX = useRef<number | null>(null);
   const currentIndex = clampSlideIndex(index, slides.length);
 
   useEffect(() => {
@@ -95,11 +100,14 @@ export function Presentation({
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
         void goTo(currentIndex - 1);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        router.push(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentIndex, goTo]);
+  }, [currentIndex, goTo, router, scheduleId]);
 
   async function toggleSync() {
     if (!isOwner) return;
@@ -153,33 +161,61 @@ export function Presentation({
       ]} />
       <div className="presentation-toolbar">
         <div className="presentation-status">
-          <IntentPrefetchLink href={`/schedule/${scheduleId}`}><ArrowLeft size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Return to service</IntentPrefetchLink>
-          <span style={{ marginLeft: 16 }}>{scheduleTitle}</span>
-          <span style={{ marginLeft: 14, color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
+          <strong>{scheduleTitle}</strong>
+          <span style={{ color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
         </div>
         <div className="presentation-controls" aria-label="Presentation controls">
-          <ThemeToggle />
           {isOwner && <button type="button" onClick={() => void toggleSync()} aria-label={syncActive ? "Stop synchronized presentation" : "Start synchronized presentation"}>{syncActive ? <Pause size={15} /> : <Play size={15} />}</button>}
           <button type="button" onClick={() => moveItem(-1)} disabled={currentItemPosition <= 0 || (syncActive && !isOwner)} aria-label="Previous programme item">|‹</button>
-          <button type="button" onClick={() => void goTo(currentIndex - 1)} disabled={currentIndex <= 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={17} /></button>
-          <span aria-live="polite">{slides.length ? `Item ${currentItemPosition + 1} / ${itemStarts.length} · Slide ${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
-          <button type="button" onClick={() => void goTo(currentIndex + 1)} disabled={currentIndex >= slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={17} /></button>
           <button type="button" onClick={() => moveItem(1)} disabled={currentItemPosition >= itemStarts.length - 1 || (syncActive && !isOwner)} aria-label="Next programme item">›|</button>
           <button type="button" onClick={() => void toggleFullscreen()} aria-label="Toggle fullscreen"><Maximize size={15} /></button>
         </div>
       </div>
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
-      <section className="slide-stage" aria-live="polite">
+      <section
+        className="slide-stage"
+        aria-live="polite"
+        onTouchStart={(event) => {
+          const target = event.target;
+          if (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]")) return;
+          touchStartX.current = event.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(event) => {
+          const startX = touchStartX.current;
+          touchStartX.current = null;
+          const target = event.target;
+          const endX = event.changedTouches[0]?.clientX;
+          if (startX === null || endX === undefined || (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]"))) return;
+          const difference = endX - startX;
+          if (difference < -50) void goTo(currentIndex + 1);
+          else if (difference > 50) void goTo(currentIndex - 1);
+        }}
+        onTouchCancel={() => { touchStartX.current = null; }}
+      >
         {current ? <>
             {current.backgroundImageUrl && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
-            <div className="slide-content">
-            {current.itemHeader && <p className="slide-item-header">{current.itemHeader}</p>}
-            {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
-            <h1 className="slide-title">{current.itemTitle}</h1>
-            {current.lines.length ? <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * current.fontScale}vw, ${70 * current.fontScale}px)` }}>{current.lines.join("\n")}</div> : <p className="slide-empty">No display content was added for this programme item.</p>}
-            </div>
+             <div className="slide-content">
+             {current.itemHeader && <p className="slide-item-header">{current.itemHeader}</p>}
+             {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
+             <h1 className="slide-title">{current.itemTitle}</h1>
+             {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
+               ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
+               : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
+             {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * current.fontScale}vw, ${70 * current.fontScale}px)` }}>{current.lines.join("\n")}</div>}
+             {current.translationLines?.length ? <div className="slide-translation">
+               {current.translationLabel && <span>{current.translationLabel}</span>}
+               <p>{current.translationLines.join("\n")}</p>
+             </div> : null}
+             {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
+             </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
+      <nav className="presentation-bottom-controls" aria-label="Slide navigation">
+        <button type="button" onClick={() => void goTo(currentIndex - 1)} disabled={currentIndex <= 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={21} /></button>
+        <button type="button" onClick={() => router.push(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
+        <button type="button" onClick={() => void goTo(currentIndex + 1)} disabled={currentIndex >= slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={21} /></button>
+        <span aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
+      </nav>
     </main>
   );
 }
