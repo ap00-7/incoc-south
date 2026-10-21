@@ -137,6 +137,10 @@ export function Presentation({
   }
 
   const current = slides[currentIndex];
+  const totalLyricLines = (current?.lines.length ?? 0) + (current?.translationLines?.length ?? 0);
+  const lyricScale = current
+    ? Math.min(current.fontScale, Math.min(1, 7 / Math.max(7, totalLyricLines)))
+    : 1;
   const itemStarts = slides.reduce<number[]>((starts, slide, slideIndex) => {
     if (slideIndex === 0 || slide.itemId !== slides[slideIndex - 1].itemId) starts.push(slideIndex);
     return starts;
@@ -160,9 +164,9 @@ export function Presentation({
         ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
       ]} />
       <div className="presentation-toolbar">
-        <div className="presentation-status">
-          <strong>{scheduleTitle}</strong>
-          <span style={{ color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
+        <div className="presentation-status" aria-live="polite">
+          <span className="sr-only">{scheduleTitle}</span>
+          <span>{syncActive ? "Synchronized" : "Local mode"}</span>
         </div>
         <div className="presentation-controls" aria-label="Presentation controls">
           {isOwner && <button type="button" onClick={() => void toggleSync()} aria-label={syncActive ? "Stop synchronized presentation" : "Start synchronized presentation"}>{syncActive ? <Pause size={15} /> : <Play size={15} />}</button>}
@@ -194,28 +198,27 @@ export function Presentation({
       >
         {current ? <>
             {current.backgroundImageUrl && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
-             <div className="slide-content">
-             {current.itemHeader && <p className="slide-item-header">{current.itemHeader}</p>}
-             {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
-             <h1 className="slide-title">{current.itemTitle}</h1>
-             {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
-               ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
-               : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
-             {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * current.fontScale}vw, ${70 * current.fontScale}px)` }}>{current.lines.join("\n")}</div>}
-             {current.translationLines?.length ? <div className="slide-translation">
-               {current.translationLabel && <span>{current.translationLabel}</span>}
-               <p>{current.translationLines.join("\n")}</p>
-             </div> : null}
-             {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
-             </div>
+            <h1 className="slide-title">{current.itemTitle}</h1>
+            <div className="slide-content">
+              {current.sectionLabel && <p className="slide-section">{current.sectionLabel}</p>}
+              {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
+                ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
+                : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
+              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(30px, ${5 * lyricScale}vw, ${70 * lyricScale}px)` }}>{current.lines.join("\n")}</div>}
+              {current.translationLines?.length ? <div className="slide-translation">
+                {current.translationLabel && <span>{current.translationLabel}</span>}
+                <p style={{ fontSize: `clamp(18px, ${2.6 * lyricScale}vw, ${38 * lyricScale}px)` }}>{current.translationLines.join("\n")}</p>
+              </div> : null}
+              {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
+            </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
       <nav className="presentation-bottom-controls" aria-label="Slide navigation">
         <button type="button" onClick={() => void goTo(currentIndex - 1)} disabled={currentIndex <= 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={21} /></button>
         <button type="button" onClick={() => router.push(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
         <button type="button" onClick={() => void goTo(currentIndex + 1)} disabled={currentIndex >= slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={21} /></button>
-        <span aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
       </nav>
+      <span className="presentation-slide-counter" aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
     </main>
   );
 }

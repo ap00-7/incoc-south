@@ -128,6 +128,31 @@ export type PresentationSlide = {
   fontScale: number;
 };
 
+export type PresentationSlideGroup = {
+  itemId: string;
+  itemTitle: string;
+  firstSlideIndex: number;
+  slides: PresentationSlide[];
+};
+
+export function groupPresentationSlides(slides: PresentationSlide[]): PresentationSlideGroup[] {
+  const groups = new Map<string, PresentationSlideGroup>();
+  slides.forEach((slide, index) => {
+    const group = groups.get(slide.itemId);
+    if (group) {
+      group.slides.push(slide);
+    } else {
+      groups.set(slide.itemId, {
+        itemId: slide.itemId,
+        itemTitle: slide.itemTitle,
+        firstSlideIndex: index,
+        slides: [slide],
+      });
+    }
+  });
+  return [...groups.values()];
+}
+
 const LINES_PER_SLIDE = 6;
 const TARGET_LINE_LENGTH = 52;
 

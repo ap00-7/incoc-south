@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, filterPresentationItems, generateSlides, getSectionDisplayLabel, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, filterPresentationItems, generateSlides, getSectionDisplayLabel, groupPresentationSlides, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
@@ -178,6 +178,26 @@ describe("generateSlides", () => {
       public_content: title,
     }));
     expect(filterPresentationItems(items).map(({ title }) => title)).toEqual(["Welcome", "Opening", "Worship"]);
+  });
+
+  it("groups each song into one overview card while preserving song order and first slide index", () => {
+    const slides = generateSlides([
+      songItem("First song", 0, [
+        { id: "v1", section_type: "verse", label: null, position: 0, lyrics: "Verse one" },
+        { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Chorus" },
+        { id: "v2", section_type: "verse", label: null, position: 2, lyrics: "Verse two" },
+      ]),
+      songItem("Second song", 1, [
+        { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Second verse" },
+      ]),
+    ]);
+    const groups = groupPresentationSlides(slides);
+    expect(groups.map((group) => group.itemTitle)).toEqual(["First song", "Second song"]);
+    expect(groups.map((group) => group.slides.length)).toEqual([4, 1]);
+    expect(groups.map((group) => group.firstSlideIndex)).toEqual([0, 4]);
+    expect(groups[0].slides.map((slide) => slide.lines[0])).toEqual([
+      "Verse one", "Chorus", "Verse two", "Chorus",
+    ]);
   });
 
   it("repeats one stored pre-chorus and removes copied pre-chorus rows", () => {

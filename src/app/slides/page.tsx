@@ -9,7 +9,7 @@ import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
-import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "long",
@@ -49,6 +49,7 @@ async function SlidesIndexContent({ searchParams }: Props) {
     if (!schedule) notFound();
     const items = normalizeProgrammeItems(schedule.schedule_items ?? []);
     const slides = generateSlides(items);
+    const slideGroups = groupPresentationSlides(slides);
     return (
       <>
         <RealtimeRefresh subscriptions={[
@@ -67,26 +68,26 @@ async function SlidesIndexContent({ searchParams }: Props) {
             {dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}
             {schedule.venue && <span>{schedule.venue}</span>}
           </p>
-          {slides.length ? <div className="slides-preview-grid">
-            {slides.map((slide, index) => {
+          {slideGroups.length ? <div className="slides-preview-grid">
+            {slideGroups.map((group) => {
+              const slide = group.slides[0];
               const thumbnail = slide.mediaUrl || slide.backgroundImageUrl;
-              const preview = [
-                slide.lines.join(" "),
-                slide.translationLines?.join(" "),
-              ].filter(Boolean).join(" · ");
+              const preview = group.slides.flatMap((part) => [
+                ...part.lines,
+                ...(part.translationLines ?? []),
+              ]).join(" ");
               return (
-                <Link className="slides-preview-card" href={`/present/${schedule.id}?slide=${index}`} key={`${slide.itemId}-${index}`}>
+                <Link className="slides-preview-card" href={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
                   <div className="slides-preview-media">
                     {thumbnail
                       ? (/\.(mp4|webm)(?:$|\?)/i.test(thumbnail)
                         ? <video src={thumbnail} muted preload="metadata" aria-hidden="true" />
                         : <img src={thumbnail} alt="" loading="lazy" />)
                       : <span><ImageIcon size={22} aria-hidden="true" /></span>}
-                    <small>{index + 1} / {slides.length}</small>
+                    <small>{group.slides.length} {group.slides.length === 1 ? "slide" : "slides"}</small>
                   </div>
                   <div className="slides-preview-copy">
-                    <h2>{slide.itemHeader || slide.itemTitle}</h2>
-                    {slide.sectionLabel && <span>{slide.sectionLabel}</span>}
+                    <h2>{group.itemTitle}</h2>
                     <p>{preview || "Media or display content"}</p>
                   </div>
                 </Link>
