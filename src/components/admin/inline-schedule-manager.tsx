@@ -56,17 +56,21 @@ type ScheduleItem = {
 };
 
 const itemTitles = [
-  ["Opening", "welcome"],
+  ["Opening", "song"],
   ["Pre-service meeting", "other"],
   ["Welcome and Prayer", "welcome"],
   ["Announcements", "announcement"],
-  ["Worship", "worship"],
+  ["Worship", "song"],
   ["Sermon and Communion", "sermon"],
   ["Communion Song", "song"],
   ["Contribution Song", "song"],
   ["Closing Prayer", "closing"],
   ["Closing Song", "song"],
 ] as const;
+function itemTypeForTitle(title: string, fallback: string) {
+  return itemTitles.find(([option]) => option === title)?.[1] ?? fallback;
+}
+
 const mediaTypes: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
@@ -120,7 +124,7 @@ function draftFromItem(item: ScheduleItem): Draft {
     id: item.id,
     tempId: item.id,
     expectedUpdatedAt: item.updated_at,
-    item_type: item.item_type,
+    item_type: itemTypeForTitle(item.title, item.item_type),
     title: item.title,
     song_id: item.song_id ?? "",
     duration_minutes: item.duration_minutes?.toString() ?? "",
@@ -366,7 +370,7 @@ export function InlineScheduleManager({
               required
               onChange={(event) => {
                 const title = event.target.value;
-                const itemType = itemTitles.find(([option]) => option === title)?.[1] ?? draft.item_type;
+                const itemType = itemTypeForTitle(title, draft.item_type);
                 setDraft({ ...draft, title, item_type: itemType });
               }}
               autoFocus
