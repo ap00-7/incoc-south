@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, filterPresentationItems, generateSlides, getSectionDisplayLabel, groupPresentationSlides, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, filterPresentationItems, generateSlides, getAdjacentItemSlideIndex, getSectionDisplayLabel, groupPresentationSlides, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
@@ -198,6 +198,24 @@ describe("generateSlides", () => {
     expect(groups[0].slides.map((slide) => slide.lines[0])).toEqual([
       "Verse one", "Chorus", "Verse two", "Chorus",
     ]);
+  });
+
+  it("moves between items at their first slide, skipping the current item's remaining slides", () => {
+    const slides = generateSlides([
+      songItem("First song", 0, [
+        { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Verse" },
+        { id: "c", section_type: "chorus", label: null, position: 1, lyrics: "Chorus" },
+      ]),
+      songItem("Second song", 1, [
+        { id: "v", section_type: "verse", label: null, position: 0, lyrics: "Second verse" },
+      ]),
+    ]);
+
+    expect(getAdjacentItemSlideIndex(slides, 0, 1)).toBe(2);
+    expect(getAdjacentItemSlideIndex(slides, 1, 1)).toBe(2);
+    expect(getAdjacentItemSlideIndex(slides, 2, -1)).toBe(0);
+    expect(getAdjacentItemSlideIndex(slides, 0, -1)).toBeNull();
+    expect(getAdjacentItemSlideIndex(slides, 2, 1)).toBeNull();
   });
 
   it("repeats one stored pre-chorus and removes copied pre-chorus rows", () => {

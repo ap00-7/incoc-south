@@ -153,6 +153,27 @@ export function groupPresentationSlides(slides: PresentationSlide[]): Presentati
   return [...groups.values()];
 }
 
+export function getAdjacentItemSlideIndex(
+  slides: PresentationSlide[],
+  currentIndex: number,
+  direction: -1 | 1,
+) {
+  const currentItemId = slides[currentIndex]?.itemId;
+  if (!currentItemId) return null;
+
+  let targetIndex = currentIndex + direction;
+  while (targetIndex >= 0 && targetIndex < slides.length && slides[targetIndex].itemId === currentItemId) {
+    targetIndex += direction;
+  }
+  if (targetIndex < 0 || targetIndex >= slides.length) return null;
+
+  const targetItemId = slides[targetIndex].itemId;
+  while (direction < 0 && targetIndex > 0 && slides[targetIndex - 1].itemId === targetItemId) {
+    targetIndex -= 1;
+  }
+  return targetIndex;
+}
+
 const LINES_PER_SLIDE = 6;
 const TARGET_LINE_LENGTH = 52;
 

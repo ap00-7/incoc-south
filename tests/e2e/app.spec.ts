@@ -5,17 +5,15 @@ const disposablePublicContentDatabase = process.env.E2E_TEST_DATABASE === "dispo
   && Boolean(supabaseUrl)
   && !supabaseUrl?.includes("ckgnhsnqeabowkctvdqj");
 
-test("home presents exactly three clear destinations", async ({ page }) => {
+test("home presents exactly two clear destinations", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Worship together." })).toBeVisible();
   const options = page.locator(".home-options > a");
-  await expect(options).toHaveCount(3);
+  await expect(options).toHaveCount(2);
   await expect(options.nth(0)).toContainText("Songs");
   await expect(options.nth(0)).toHaveAttribute("href", "/song");
   await expect(options.nth(1)).toContainText("Sunday Schedule");
   await expect(options.nth(1)).toHaveAttribute("href", "/schedule");
-  await expect(options.nth(2)).toContainText("Slides");
-  await expect(options.nth(2)).toHaveAttribute("href", "/slides");
   const primaryNavigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(primaryNavigation.getByRole("link")).toHaveCount(2);
   await expect(primaryNavigation.getByRole("link", { name: "Songbook" })).toHaveAttribute("href", "/song");
@@ -28,7 +26,7 @@ test("homepage layout fits mobile, tablet, and laptop widths", async ({ page }) 
   for (const width of [360, 768, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-    await expect(page.locator(".home-options > a")).toHaveCount(3);
+    await expect(page.locator(".home-options > a")).toHaveCount(2);
     const hasHorizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );

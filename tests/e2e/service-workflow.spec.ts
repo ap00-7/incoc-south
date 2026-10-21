@@ -181,9 +181,18 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await viewerPage.getByRole("link", { name: new RegExp(songTitle) }).click();
 
   const presentationCounter = viewerPage.locator(".presentation-slide-counter");
+  await expect(viewerPage.locator(".presentation-toolbar")).toHaveCount(0);
+  await expect(viewerPage.getByRole("button", { name: "Previous item" })).toBeDisabled();
+  await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
+  await viewerPage.getByRole("button", { name: "Next item" }).click();
+  await expect(viewerPage.locator(".slide-title")).toHaveText("Responsive reading");
+  await viewerPage.getByRole("button", { name: "Previous item" }).click();
+  await expect(viewerPage.locator(".slide-title")).toHaveText(songTitle);
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
   await viewerPage.keyboard.press("ArrowRight");
   await expect(presentationCounter).toContainText(/^2 \/ \d+$/);
+  await viewerPage.getByRole("button", { name: "Home: return to slide overview" }).click();
+  await expect(viewerPage).toHaveURL(new RegExp(`/slides\\?scheduleId=${scheduleId}`));
 
   await viewerContext.close();
   await ownerContext.close();
