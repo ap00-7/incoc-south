@@ -66,20 +66,33 @@ function ResourceMessage({ error, retry, children }: { error: string; retry?: ()
 }
 
 function HomePage() {
-  const options = [
-    { href: "/song", icon: BookOpen, label: "Songs", text: "Browse worship songs and their lyric sections." },
-    { href: "/schedule", icon: CalendarDays, label: "Sunday Schedule", text: "See services and their programmes." },
+  const features = [
+    { icon: BookOpen, title: "Worship Songbook", text: "Browse worship songs, lyrics, and available translations." },
+    { icon: CalendarDays, title: "Sunday Schedule", text: "Organize Sunday service schedules and programme details." },
+    { icon: MonitorPlay, title: "Presentation Slides", text: "Present song lyrics and service content during worship." },
   ];
   return <PageShell>
-    <section className="home-main" aria-labelledby="home-title">
-      <h1 id="home-title">Worship together.</h1>
-      <nav className="home-options" aria-label="Explore INCOC South">
-        {options.map(({ href, icon: Icon, label, text }) => <IntentPrefetchLink href={href} className="home-option" key={label}>
-          <span className="home-option-icon"><Icon size={21} aria-hidden="true" /></span>
-          <span className="home-option-copy"><strong>{label}</strong><span>{text}</span></span>
-        </IntentPrefetchLink>)}
-      </nav>
-    </section>
+    <div className="content-wrap about-page">
+      <section className="about-intro" aria-labelledby="about-title">
+        <p className="eyebrow">INDIAN CHURCH OF CHRIST · SOUTH SECTOR</p>
+        <h1 className="detail-title" id="about-title">About INCOC South</h1>
+        <p className="about-lead">INCOC South is a digital platform for the Indian Church of Christ – South Sector, bringing worship songs and lyrics, Sunday service schedules, and presentation content together to support service preparation.</p>
+      </section>
+      <section className="about-features" aria-labelledby="about-features-title">
+        <div className="section-intro">
+          <p className="eyebrow">CORE FEATURES</p>
+          <h2 id="about-features-title">Resources for Sunday worship</h2>
+        </div>
+        <div className="experience-grid">
+          {features.map(({ icon: Icon, title, text }) => <article className="experience-card about-feature-card" key={title}>
+            <span className="experience-icon"><Icon size={19} aria-hidden="true" /></span>
+            <h3>{title}</h3>
+            <p>{text}</p>
+          </article>)}
+        </div>
+      </section>
+      <p className="about-closing">INCOC South supports organized worship and Sunday service preparation.</p>
+    </div>
   </PageShell>;
 }
 

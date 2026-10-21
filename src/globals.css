@@ -642,6 +642,15 @@ body { color: var(--ink); background: var(--paper); font-family: var(--font-body
 .home-option-icon { color: var(--gold); background: var(--surface-soft); border-radius: 10px; }
 .home-option-copy strong { color: var(--navy); font-size: 14px; }
 .home-option-copy > span { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.about-page { padding-top: clamp(30px, 6vh, 60px); }
+.about-intro { max-width: 780px; margin-bottom: 38px; }
+.about-intro h1 { margin: 0; }
+.about-lead { max-width: 690px; margin: 16px 0 0; color: var(--muted); font-size: 16px; line-height: 1.75; overflow-wrap: anywhere; }
+.about-features { margin-bottom: 34px; }
+.about-feature-card { min-width: 0; min-height: 175px; }
+.about-feature-card .experience-icon { color: var(--action-text); background: var(--gold); }
+.about-feature-card h3, .about-feature-card p { overflow-wrap: anywhere; }
+.about-closing { max-width: 720px; margin: 0; padding-top: 20px; color: var(--gold); border-top: 1px solid var(--border); font-size: 14px; font-weight: 600; line-height: 1.7; }
 
 .button { min-height: 42px; border-radius: 9px; font-weight: 650; transition: background .16s ease, border-color .16s ease, color .16s ease, transform .16s ease; }
 .button-primary { color: var(--action-text); background: var(--action); }
