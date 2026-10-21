@@ -11,6 +11,8 @@ import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { setSongPublication } from "@/app/admin/actions";
 import { ConfirmButton } from "@/components/confirm-button";
+import { SongCacheSeed } from "@/components/song-cache-seed";
+import { invalidateSongCache } from "@/lib/song-cache";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string; create?: string }> };
 const PAGE_SIZE = 50;
@@ -70,7 +72,8 @@ async function SongbookContent({ searchParams }: Props) {
     <>
       <RealtimeRefresh subscriptions={[
         { table: "songs", column: "church_id", value: churchId },
-      ]} />
+      ]} onChange={() => invalidateSongCache()} />
+      <SongCacheSeed songs={songsForPage.slice(0, PAGE_SIZE)} />
       <div className="content-wrap">
         <SectionHeading title="Songbook" />
         {membership?.role === "owner" && <details className="inline-owner-editor" open={params.create === "1"}>
@@ -107,6 +110,7 @@ async function SongbookContent({ searchParams }: Props) {
                   pendingLabel={song.is_published ? "Unpublishing…" : "Publishing…"}
                   confirmClassName="button button-primary"
                   className="text-link"
+                  onActionSuccess={() => invalidateSongCache(song.id)}
                 >
                   {song.is_published ? "Unpublish" : "Publish"}
                 </ConfirmButton>

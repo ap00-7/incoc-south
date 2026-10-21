@@ -81,6 +81,7 @@ export function ConfirmButton({
   confirmClassName,
   title = "Delete item?",
   confirmLabel = "Delete",
+  onActionSuccess,
 }: {
   action: ServerAction;
   message: string;
@@ -90,6 +91,7 @@ export function ConfirmButton({
   confirmClassName?: string;
   title?: string;
   confirmLabel?: string;
+  onActionSuccess?: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -112,6 +114,7 @@ export function ConfirmButton({
     startTransition(async () => {
       try {
         const result = await action(formData);
+        onActionSuccess?.();
         setOpen(false);
         if (result && "redirectTo" in result && result.redirectTo) router.push(result.redirectTo);
         else router.refresh();

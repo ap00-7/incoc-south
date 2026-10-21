@@ -10,7 +10,7 @@ export type RealtimeFilter = {
   value: string;
 };
 
-export function RealtimeRefresh({ subscriptions }: { subscriptions: RealtimeFilter[] }) {
+export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: RealtimeFilter[]; onChange?: () => void }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const serialized = useMemo(() => JSON.stringify(subscriptions), [subscriptions]);
@@ -22,6 +22,7 @@ export function RealtimeRefresh({ subscriptions }: { subscriptions: RealtimeFilt
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let alive = true;
     const refresh = () => {
+      onChange?.();
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         if (alive) router.refresh();
@@ -46,7 +47,7 @@ export function RealtimeRefresh({ subscriptions }: { subscriptions: RealtimeFilt
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [router, serialized]);
+  }, [onChange, router, serialized]);
 
   return error ? <p className="realtime-notice" role="status">{error}</p> : null;
 }
