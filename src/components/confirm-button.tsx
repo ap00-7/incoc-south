@@ -1,8 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
+import { notifyDataChanged } from "@/spa/data-events";
 
 type ServerAction = (formData: FormData) => void | { redirectTo?: string } | Promise<void | { redirectTo?: string }>;
 
@@ -93,7 +94,7 @@ export function ConfirmButton({
   confirmLabel?: string;
   onActionSuccess?: () => void;
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -115,9 +116,9 @@ export function ConfirmButton({
       try {
         const result = await action(formData);
         onActionSuccess?.();
+        notifyDataChanged();
         setOpen(false);
-        if (result && "redirectTo" in result && result.redirectTo) router.push(result.redirectTo);
-        else router.refresh();
+        if (result && "redirectTo" in result && result.redirectTo) navigate(result.redirectTo);
       } catch (actionError) {
         setError(actionError instanceof Error ? actionError.message : "The action could not be completed. Please try again.");
       }

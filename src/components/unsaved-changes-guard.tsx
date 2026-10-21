@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { ConfirmationDialog } from "@/components/confirm-button";
 
 export function UnsavedChangesGuard() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const dirtyForms = useRef(new Set<HTMLFormElement>());
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
@@ -40,7 +40,7 @@ export function UnsavedChangesGuard() {
       document.removeEventListener("submit", clearOnSubmit, true);
       document.removeEventListener("click", confirmNavigation, true);
     };
-  }, []);
+  }, [navigate]);
 
   return pendingHref ? <ConfirmationDialog
     title="Discard unsaved changes?"
@@ -52,7 +52,7 @@ export function UnsavedChangesGuard() {
       dirtyForms.current.clear();
       const destination = new URL(pendingHref);
       setPendingHref(null);
-      if (destination.origin === window.location.origin) router.push(`${destination.pathname}${destination.search}${destination.hash}`);
+      if (destination.origin === window.location.origin) navigate(`${destination.pathname}${destination.search}${destination.hash}`);
       else window.location.assign(pendingHref);
     }}
     onCancel={() => setPendingHref(null)}

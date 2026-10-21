@@ -1,9 +1,5 @@
-"use server";
-
-import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireMember } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/browser";
 
 const passwordSchema = z.object({
   password: z.string().min(12, "Use at least 12 characters."),
@@ -13,16 +9,14 @@ const passwordSchema = z.object({
   message: "Passwords do not match.",
 });
 
-export async function setInitialPassword(
-  _previousState: string | null,
-  formData: FormData,
-): Promise<string | null> {
-  const member = await requireMember();
+export async function setInitialPassword(formData: FormData) {
   const parsed = passwordSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return parsed.error.issues[0]?.message ?? "Check the password fields.";
-  if (!member.user.email_confirmed_at) return "Open the invitation link from your email before setting a password.";
-  const supabase = await createClient();
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Check the password fields.");
+  const supabase = createClient();
+  const { data: userData, error: userError } = await supabase.auth.getUser();
+  if (userError || !userData.user) throw new Error("Sign in through your invitation link before setting a password.");
+  if (!userData.user.email_confirmed_at) throw new Error("Open the invitation link from your email before setting a password.");
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
-  if (error) return `Unable to set password: ${error.message}`;
-  redirect("/song");
+  if (error) throw new Error(`Unable to set password: ${error.message}`);
+  return { redirectTo: "/song" };
 }

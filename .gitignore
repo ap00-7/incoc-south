@@ -16,14 +16,11 @@
 /playwright-report/
 /playwright/.cache/
 
-# next.js
-/.next/
-/.next-playwright/
-/out/
-
 # production
 /build
 /dist
+/.next
+/.next-playwright
 
 # misc
 .DS_Store

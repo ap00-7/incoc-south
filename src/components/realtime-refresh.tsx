@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { notifyDataChanged } from "@/spa/data-events";
 
 export type RealtimeFilter = {
   table: "songs" | "song_sections" | "schedules" | "schedule_items" | "church_members";
@@ -11,7 +11,6 @@ export type RealtimeFilter = {
 };
 
 export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: RealtimeFilter[]; onChange?: () => void }) {
-  const router = useRouter();
   const [error, setError] = useState("");
   const serialized = useMemo(() => JSON.stringify(subscriptions), [subscriptions]);
 
@@ -22,10 +21,11 @@ export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: Re
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let alive = true;
     const refresh = () => {
-      onChange?.();
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
-        if (alive) router.refresh();
+        if (!alive) return;
+        onChange?.();
+        notifyDataChanged();
       }, 80);
     };
     let channel = supabase.channel(`content-updates:${filters.map((filter) => `${filter.table}-${filter.value}`).join(":")}`);
@@ -47,7 +47,7 @@ export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: Re
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [onChange, router, serialized]);
+  }, [onChange, serialized]);
 
   return error ? <p className="realtime-notice" role="status">{error}</p> : null;
 }

@@ -1,23 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type ComponentProps } from "react";
+import { Link, type LinkProps } from "react-router-dom";
 
-type Props = Omit<ComponentProps<typeof Link>, "prefetch">;
+type Props = Omit<LinkProps, "to"> & { href: string };
 
 export function IntentPrefetchLink({ children, ...props }: Props) {
-  const [intent, setIntent] = useState(false);
-  const prefetchOnIntent = () => setIntent(true);
-
-  return (
-    <Link
-      {...props}
-      prefetch={intent ? true : undefined}
-      onMouseEnter={prefetchOnIntent}
-      onFocus={prefetchOnIntent}
-      onTouchStart={prefetchOnIntent}
-    >
-      {children}
-    </Link>
-  );
+  const { href, ...linkProps } = props;
+  return <Link {...linkProps} to={href} prefetch="intent">{children}</Link>;
 }

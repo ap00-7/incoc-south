@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import {
   ArrowDown,
@@ -31,6 +30,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useServerFormAction } from "@/components/use-server-form-action";
 import { createClient } from "@/lib/supabase/browser";
+import { notifyDataChanged } from "@/spa/data-events";
 
 type SongOption = { id: string; title: string; language: string };
 type TranslationLanguage = ScheduleItemInput["translation_language"];
@@ -161,7 +161,6 @@ export function InlineScheduleManager({
   returnTo: string;
   churchId: string;
 }) {
-  const router = useRouter();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
   const [selectedBackground, setSelectedBackground] = useState<File | null>(null);
@@ -273,7 +272,7 @@ export function InlineScheduleManager({
       setDraft(null);
       setSelectedMedia(null);
       setSelectedBackground(null);
-      router.refresh();
+      notifyDataChanged();
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "The item could not be saved.");
     } finally {
@@ -293,7 +292,7 @@ export function InlineScheduleManager({
         return;
       }
       setFeedback(result.message);
-      router.refresh();
+      notifyDataChanged();
     } catch (duplicateError) {
       setFeedback(duplicateError instanceof Error ? duplicateError.message : "Unable to duplicate this item.");
     } finally {
@@ -324,18 +323,8 @@ export function InlineScheduleManager({
               <div className="mini-actions">
                 <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)}>Edit</button>
                 <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
-                <form action={moveScheduleItem}>
-                  <input type="hidden" name="item_id" value={item.id} />
-                  <input type="hidden" name="direction" value="-1" />
-                  <input type="hidden" name="return_to" value={returnTo} />
-                  <PendingSubmitButton className="icon-button" ariaLabel="Move item up" pendingLabel="Moving…" disabled={index === 0}><ArrowUp size={15} /></PendingSubmitButton>
-                </form>
-                <form action={moveScheduleItem}>
-                  <input type="hidden" name="item_id" value={item.id} />
-                  <input type="hidden" name="direction" value="1" />
-                  <input type="hidden" name="return_to" value={returnTo} />
-                  <PendingSubmitButton className="icon-button" ariaLabel="Move item down" pendingLabel="Moving…" disabled={index === items.length - 1}><ArrowDown size={15} /></PendingSubmitButton>
-                </form>
+                <MoveScheduleItemForm itemId={item.id} direction={-1} returnTo={returnTo} disabled={index === 0} />
+                <MoveScheduleItemForm itemId={item.id} direction={1} returnTo={returnTo} disabled={index === items.length - 1} />
                 <form>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="return_to" value={returnTo} />
@@ -483,7 +472,7 @@ function SongPicker({
             <button type="button" disabled={!selected} onClick={() => { onChange(""); setMenuOpen(false); }}>Clear</button>
             <button type="button" onClick={() => { setOpen(true); setMenuOpen(false); }}>Replace</button>
             {selected
-              ? <Link href={`/song/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
+              ? <Link to={`/song/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
               : <button type="button" onClick={() => { onCreate(); setMenuOpen(false); }}>Create in Songbook</button>}
           </div>}
         </div>
@@ -620,7 +609,6 @@ export function InlineScheduleDetails({
         <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
         <input type="hidden" name="schedule_id" value={schedule.id} />
         <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
-        <input type="hidden" name="description" value={schedule.description ?? ""} />
         <label htmlFor={`title-${schedule.id}`}>Title</label>
         <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
         <label htmlFor={`venue-${schedule.id}`}>Venue</label>
@@ -634,6 +622,30 @@ export function InlineScheduleDetails({
       </form>
     </section>
   );
+}
+
+function MoveScheduleItemForm({
+  itemId,
+  direction,
+  returnTo,
+  disabled,
+}: {
+  itemId: string;
+  direction: -1 | 1;
+  returnTo: string;
+  disabled: boolean;
+}) {
+  const { error, formAction } = useServerFormAction(moveScheduleItem);
+  const label = direction < 0 ? "Move item up" : "Move item down";
+  return <form action={formAction}>
+    <input type="hidden" name="item_id" value={itemId} />
+    <input type="hidden" name="direction" value={direction} />
+    <input type="hidden" name="return_to" value={returnTo} />
+    <PendingSubmitButton className="icon-button" ariaLabel={label} pendingLabel="Moving…" disabled={disabled}>
+      {direction < 0 ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
+    </PendingSubmitButton>
+    {error && <p className="form-error" role="alert">{error}</p>}
+  </form>;
 }
 
 export function ScheduleActions({

@@ -1,13 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
 import { signIn } from "@/app/actions/auth";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
+import { useServerFormAction } from "@/components/use-server-form-action";
 
 export function LoginForm() {
-  const [error, action] = useActionState(signIn, null);
+  const { error, formAction } = useServerFormAction(signIn);
   return (
-    <form className="form-stack" action={action}>
+    <form className="form-stack" action={formAction}>
       <label htmlFor="email">Email address</label>
       <input id="email" name="email" type="email" autoComplete="email" required />
       <label htmlFor="password">Password</label>

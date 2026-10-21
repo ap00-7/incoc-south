@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CachedSongLink } from "@/components/cached-song-link";
 
@@ -23,9 +23,7 @@ export function SongbookSearch({
   query: string;
   language: string;
 }) {
-  const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const languageRef = useRef<HTMLSelectElement>(null);
+  const navigate = useNavigate();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const appliedFiltersRef = useRef(`${query.trim()}|${language}`);
@@ -40,9 +38,8 @@ export function SongbookSearch({
     if (nextLanguage) params.set("language", nextLanguage);
     const href = params.size ? `/song?${params.toString()}` : "/song";
     appliedFiltersRef.current = `${nextTitle.trim()}|${nextLanguage}`;
-    if (replace) router.replace(href, { scroll: false });
-    else router.push(href);
-  }, [router]);
+    navigate(href, { replace });
+  }, [navigate]);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -52,21 +49,6 @@ export function SongbookSearch({
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [navigateToFilters, selectedLanguage, title]);
-
-  useEffect(() => {
-    const syncFromHistory = () => {
-      const params = new URLSearchParams(window.location.search);
-      const nextTitle = params.get("q") ?? "";
-      const nextLanguage = params.get("language") ?? "";
-      appliedFiltersRef.current = `${nextTitle.trim()}|${nextLanguage}`;
-      setTitle(nextTitle);
-      setSelectedLanguage(nextLanguage);
-      if (inputRef.current) inputRef.current.value = nextTitle;
-      if (languageRef.current) languageRef.current.value = nextLanguage;
-    };
-    window.addEventListener("popstate", syncFromHistory);
-    return () => window.removeEventListener("popstate", syncFromHistory);
-  }, []);
 
   const suggestions = useMemo(() => {
     const normalized = title.trim().toLocaleLowerCase();
@@ -95,7 +77,7 @@ export function SongbookSearch({
     } else if (event.key === "Enter" && open && suggestions.length) {
       event.preventDefault();
       const song = suggestions[activeIndex >= 0 ? activeIndex : 0];
-      router.push(`/song/${song.id}`);
+      navigate(`/song/${song.id}`);
       setOpen(false);
     } else if (event.key === "Escape") {
       setOpen(false);
@@ -107,13 +89,12 @@ export function SongbookSearch({
     <div className="songbook-search">
       <label className="sr-only" htmlFor="song-title-search">Search song titles</label>
       <input
-        ref={inputRef}
         id="song-title-search"
         className="search-input"
         type="search"
         name="q"
         autoComplete="off"
-        defaultValue={query}
+        value={title}
         placeholder="Search by song title"
         aria-autocomplete="list"
         aria-controls="song-title-suggestions"
@@ -128,9 +109,8 @@ export function SongbookSearch({
       />
       <label className="sr-only" htmlFor="song-language-filter">Filter by language</label>
       <select
-        ref={languageRef}
         id="song-language-filter"
-        defaultValue={language}
+        value={selectedLanguage}
         aria-label="Filter by language"
         onChange={(event) => {
           const value = event.currentTarget.value;

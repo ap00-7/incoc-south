@@ -4,9 +4,10 @@ const ownerEmail = process.env.E2E_OWNER_EMAIL;
 const ownerPassword = process.env.E2E_OWNER_PASSWORD;
 const viewerEmail = process.env.E2E_VIEWER_EMAIL;
 const viewerPassword = process.env.E2E_VIEWER_PASSWORD;
+const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const isDisposableTestDatabase = process.env.E2E_TEST_DATABASE === "disposable"
-  && Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL)
-  && !process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("ckgnhsnqeabowkctvdqj");
+  && Boolean(supabaseUrl)
+  && !supabaseUrl?.includes("ckgnhsnqeabowkctvdqj");
 
 test.skip(
   !isDisposableTestDatabase || !ownerEmail || !ownerPassword || !viewerEmail || !viewerPassword,
@@ -24,17 +25,16 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
-  await expect(ownerPage).toHaveURL(/\/admin\/songs$/);
+  await expect(ownerPage).toHaveURL(/\/song$/);
   await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
   await ownerPage.goto("/login");
-  await expect(ownerPage).toHaveURL(/\/admin\/songs$/);
+  await expect(ownerPage).toHaveURL(/\/song$/);
   await ownerPage.reload();
   await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
 
   for (const path of ["/", "/songbook", "/schedule", "/slides"]) {
     await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
-    await expect(ownerPage.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
-    await expect(ownerPage.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
+    await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
   }
   await ownerPage.setViewportSize({ width: 360, height: 800 });
   const hasHeaderOverflow = await ownerPage.evaluate(
@@ -177,13 +177,13 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await expect(viewerPage.getByRole("heading", { name: scheduleTitle })).toBeVisible();
   await expect(viewerPage.getByRole("heading", { name: songTitle })).toBeVisible();
   await expect(viewerPage.getByRole("heading", { name: "Responsive reading" })).toBeVisible();
-  await viewerPage.getByRole("link", { name: "Open slides" }).click();
-  await viewerPage.getByRole("link", { name: "Present service" }).click();
+  await viewerPage.goto(`/slides?scheduleId=${scheduleId}`);
+  await viewerPage.getByRole("link", { name: new RegExp(songTitle) }).click();
 
-  const presentationControls = viewerPage.locator(".presentation-controls");
-  await expect(presentationControls).toContainText("Slide 1 /");
+  const presentationCounter = viewerPage.locator(".presentation-slide-counter");
+  await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
   await viewerPage.keyboard.press("ArrowRight");
-  await expect(presentationControls).toContainText("Slide 2 /");
+  await expect(presentationCounter).toContainText(/^2 \/ \d+$/);
 
   await viewerContext.close();
   await ownerContext.close();

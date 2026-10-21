@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home, Maximize, Pause, Play } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
@@ -26,7 +26,7 @@ export function Presentation({
   userId: string | null;
   songIds: string[];
 }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [index, setIndex] = useState(() =>
     clampSlideIndex(initialSlide, slides.length),
   );
@@ -102,12 +102,12 @@ export function Presentation({
         void goTo(currentIndex - 1);
       } else if (event.key === "Home") {
         event.preventDefault();
-        router.push(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`);
+        navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [currentIndex, goTo, router, scheduleId]);
+  }, [currentIndex, goTo, navigate, scheduleId]);
 
   async function toggleSync() {
     if (!isOwner) return;
@@ -215,7 +215,7 @@ export function Presentation({
       </section>
       <nav className="presentation-bottom-controls" aria-label="Slide navigation">
         <button type="button" onClick={() => void goTo(currentIndex - 1)} disabled={currentIndex <= 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={21} /></button>
-        <button type="button" onClick={() => router.push(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
+        <button type="button" onClick={() => navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
         <button type="button" onClick={() => void goTo(currentIndex + 1)} disabled={currentIndex >= slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={21} /></button>
       </nav>
       <span className="presentation-slide-counter" aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>

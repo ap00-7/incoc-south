@@ -1,12 +1,14 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
-import { requireOwner } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { requireOwner } from "@/lib/auth-client";
+import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
 import { songEditorLanguageValues, songLanguageValues, songSectionValues } from "@/lib/domain/songs";
+import { invalidateSongCache } from "@/lib/song-cache";
+import { notifyDataChanged } from "@/spa/data-events";
+
+function revalidatePath(path: string) {
+  notifyDataChanged(path);
+}
 
 const songMetadataSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -436,7 +438,7 @@ export async function createSong(formData: FormData) {
   }
   revalidatePath("/song");
   revalidatePath("/admin/songs");
-  redirect(`/admin/songs/${song.id}`);
+  return { redirectTo: `/admin/songs/${song.id}` };
 }
 
 export async function updateSong(formData: FormData) {
@@ -463,7 +465,7 @@ export async function updateSong(formData: FormData) {
   revalidatePath("/song");
   revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
-  redirect(`/admin/songs/${songId}`);
+  return { redirectTo: `/admin/songs/${songId}` };
 }
 
 export async function updateSongSection(formData: FormData) {
@@ -498,7 +500,7 @@ export async function updateSongSection(formData: FormData) {
   if (!data) throw new Error("This lyric section was changed by another owner. Reload and review the latest version.");
   revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
-  redirect(`/admin/songs/${songId}`);
+  return { redirectTo: `/admin/songs/${songId}` };
 }
 
 export async function addSongSection(formData: FormData) {
@@ -528,7 +530,7 @@ export async function addSongSection(formData: FormData) {
   if (error) throw new Error(`Unable to add lyric section: ${error.message}`);
   revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
-  redirect(`/admin/songs/${songId}`);
+  return { redirectTo: `/admin/songs/${songId}` };
 }
 
 export async function moveSongSection(formData: FormData) {
@@ -542,7 +544,7 @@ export async function moveSongSection(formData: FormData) {
   if (error) throw new Error(`Unable to reorder lyric section: ${error.message}`);
   revalidatePath(`/song/${section.song_id}`);
   revalidatePath(`/admin/songs/${section.song_id}`);
-  redirect(`/admin/songs/${section.song_id}`);
+  return { redirectTo: `/admin/songs/${section.song_id}` };
 }
 
 export async function deleteSongSection(formData: FormData) {
@@ -555,7 +557,7 @@ export async function deleteSongSection(formData: FormData) {
   if (error) throw new Error(`Unable to delete lyric section: ${error.message}`);
   revalidatePath(`/song/${section.song_id}`);
   revalidatePath(`/admin/songs/${section.song_id}`);
-  redirect(`/admin/songs/${section.song_id}`);
+  return { redirectTo: `/admin/songs/${section.song_id}` };
 }
 
 export async function deleteSong(formData: FormData) {
@@ -567,6 +569,7 @@ export async function deleteSong(formData: FormData) {
     if (error.code === "23503") throw new Error("This song is used by a service schedule and cannot be deleted.");
     throw new Error(`Unable to delete song: ${error.message}`);
   }
+  invalidateSongCache(songId);
   revalidatePath("/admin/songs");
   revalidatePath("/song");
   const returnTo = getReturnPath(formData, "/admin/songs");
@@ -675,7 +678,7 @@ export async function addScheduleItem(formData: FormData) {
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath(`/schedule/${scheduleId}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
 export async function moveScheduleItem(formData: FormData) {
@@ -690,7 +693,6 @@ export async function moveScheduleItem(formData: FormData) {
   revalidatePath(`/admin/schedules/${item.schedule_id}`);
   revalidatePath(`/schedule/${item.schedule_id}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${item.schedule_id}`));
 }
 
 export async function updateScheduleItem(formData: FormData) {
@@ -748,7 +750,7 @@ export async function updateScheduleItem(formData: FormData) {
   revalidatePath(`/admin/schedules/${scheduleId}`);
   revalidatePath(`/schedule/${scheduleId}`);
   revalidatePath("/slides");
-  redirect(getReturnPath(formData, `/admin/schedules/${scheduleId}`));
+  return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
 export async function deleteScheduleItem(formData: FormData) {

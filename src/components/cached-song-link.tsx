@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { type ReactNode } from "react";
 import { loadSong } from "@/lib/song-cache";
 
 export function CachedSongLink({
@@ -19,9 +19,7 @@ export function CachedSongLink({
   href?: string;
   onClick?: () => void;
 }) {
-  const [intent, setIntent] = useState(false);
   const prefetchSong = () => {
-    setIntent(true);
     void loadSong(songId, updatedAt).catch(() => {
       // The destination reports the error if the user follows the link.
     });
@@ -30,8 +28,7 @@ export function CachedSongLink({
   return (
     <Link
       className={className}
-      href={href ?? `/song/${songId}`}
-      prefetch={intent ? true : undefined}
+      to={href ?? `/song/${songId}`}
       onMouseEnter={prefetchSong}
       onFocus={prefetchSong}
       onTouchStart={prefetchSong}

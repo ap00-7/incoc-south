@@ -1,32 +1,53 @@
-import Link from "next/link";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, CalendarDays, ShieldCheck } from "lucide-react";
-import { signOut } from "@/app/actions/auth";
 import { BrandMark } from "@/components/brand-mark";
-import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/spa/auth-provider";
 
 export function SiteHeader({ owner = false }: { owner?: boolean }) {
+  const auth = useAuth();
+  const navigate = useNavigate();
+  const [signingOut, setSigningOut] = useState(false);
+  const [error, setError] = useState("");
+  const showOwner = owner || auth.membership?.role === "owner";
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setError("");
+    try {
+      await auth.signOut();
+      navigate("/login", { replace: true });
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : "Unable to sign out.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   return (
     <header className="site-header">
       <div className="header-inner">
-        <Link className="app-brand" href="/" aria-label="INCOC South home">
+        <Link className="app-brand" to="/" aria-label="INCOC South home">
           <BrandMark />
           <span><strong>INCOC South</strong><small>Church in South Sector</small></span>
         </Link>
         <nav className="primary-nav" aria-label="Main navigation">
-          <Link href="/song"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
-          <Link href="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
+          <Link to="/song"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
+          <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
         </nav>
         <div className="header-actions">
           <ThemeToggle />
-          {owner && <>
-            <Link className="owner-session-label" href="/admin/songs"><ShieldCheck size={15} /> Owner</Link>
-            <form action={signOut}>
-              <PendingSubmitButton className="header-session-action" pendingLabel="Signing out…">Sign out</PendingSubmitButton>
-            </form>
+          {showOwner && <>
+            <Link className="owner-session-label" to="/admin/songs"><ShieldCheck size={15} /> Owner</Link>
+            <button className="header-session-action" type="button" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
           </>}
         </div>
       </div>
+      {(error || auth.error) && <p className="realtime-notice" role="alert">{error || auth.error}</p>}
     </header>
   );
 }
