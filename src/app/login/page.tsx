@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { LoginForm } from "@/app/login/login-form";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getOwnerSessionStatus, hasSupabaseAuthCookie } from "@/lib/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const instant = false;
 
@@ -19,6 +20,7 @@ export default async function LoginPage() {
   return (
     <main className="auth-page">
       <section className="auth-card">
+        <div className="auth-theme-toggle"><ThemeToggle /></div>
         <Link className="auth-brand" href="/"><BrandMark /> INCOC South</Link>
         <p className="eyebrow">INDIAN CHURCH OF CHRIST</p>
         <h1>Welcome back</h1>

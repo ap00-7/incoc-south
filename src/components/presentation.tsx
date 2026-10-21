@@ -1,6 +1,7 @@
 "use client";
 
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Maximize, Pause, Play } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
@@ -157,6 +158,7 @@ export function Presentation({
           <span style={{ marginLeft: 14, color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
         </div>
         <div className="presentation-controls" aria-label="Presentation controls">
+          <ThemeToggle />
           {isOwner && <button type="button" onClick={() => void toggleSync()} aria-label={syncActive ? "Stop synchronized presentation" : "Start synchronized presentation"}>{syncActive ? <Pause size={15} /> : <Play size={15} />}</button>}
           <button type="button" onClick={() => moveItem(-1)} disabled={currentItemPosition <= 0 || (syncActive && !isOwner)} aria-label="Previous programme item">|‹</button>
           <button type="button" onClick={() => void goTo(currentIndex - 1)} disabled={currentIndex <= 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={17} /></button>

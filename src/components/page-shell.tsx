@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 
-export function PageShell({ children }: { children: ReactNode }) {
+export function PageShell({ children, owner = false }: { children: ReactNode; owner?: boolean }) {
   return (
     <>
+      <SiteHeader owner={owner} />
       <main className="page-main">{children}</main>
       <SiteFooter />
     </>
