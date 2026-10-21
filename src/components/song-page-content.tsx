@@ -1,12 +1,10 @@
-"use client";
-
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
-import { deleteSong } from "@/app/admin/actions";
+import { deleteSong } from "@/lib/actions/content";
 import { getCachedSong, getCachedSongSummary, invalidateSongCache, loadSong, type CachedSong } from "@/lib/song-cache";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 

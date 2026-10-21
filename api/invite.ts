@@ -10,12 +10,17 @@ type ApiResponse = ServerResponse & {
 };
 
 const inviteSchema = z.object({
-  email: z.string().trim().email(),
+  email: z.string().trim().email().max(320),
   display_name: z.string().trim().min(1).max(100),
   role: z.enum(["owner", "viewer"]),
-});
+}).strict();
+
+const inviteLimits = new Map<string, { startedAt: number; count: number }>();
+const inviteWindowMs = 10 * 60 * 1000;
+const inviteLimit = 5;
 
 export default async function inviteMember(req: ApiRequest, res: ApiResponse) {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "Method not allowed." });
@@ -24,15 +29,24 @@ export default async function inviteMember(req: ApiRequest, res: ApiResponse) {
   const parsed = inviteSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Enter a valid email, display name, and role." });
 
+  const siteOrigin = getSiteOrigin(req);
+  if (!siteOrigin) return res.status(500).json({ error: "The invitation callback URL is not configured correctly." });
+  const requestOrigin = req.headers.origin;
+  if (!requestOrigin) return res.status(403).json({ error: "Invitation requests must come from this site." });
+  try {
+    if (new URL(requestOrigin).origin !== siteOrigin) {
+      return res.status(403).json({ error: "Invitation requests must come from this site." });
+    }
+  } catch {
+    return res.status(403).json({ error: "Invitation requests must come from this site." });
+  }
+
   const authorization = req.headers.authorization;
   const accessToken = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
   if (!accessToken) return res.status(401).json({ error: "Sign in as an owner to invite members." });
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const publicKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY
-    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-    || process.env.VITE_SUPABASE_ANON_KEY
-    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const publicKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !publicKey || !serviceRoleKey) {
     return res.status(503).json({ error: "Member invitations are not configured on the server." });
@@ -51,11 +65,14 @@ export default async function inviteMember(req: ApiRequest, res: ApiResponse) {
     .eq("user_id", userResult.user.id)
     .eq("church.slug", "incoc-south")
     .maybeSingle();
-  if (membershipError) return res.status(500).json({ error: `Unable to verify owner access: ${membershipError.message}` });
+  if (membershipError) return res.status(500).json({ error: "Unable to verify owner access." });
   if (membership?.role !== "owner") return res.status(403).json({ error: "Only church owners can invite members." });
 
-  const siteOrigin = getSiteOrigin(req);
-  if (!siteOrigin) return res.status(500).json({ error: "The invitation callback URL is not configured correctly." });
+  if (isInviteRateLimited(userResult.user.id)) {
+    res.setHeader("Retry-After", String(Math.ceil(inviteWindowMs / 1000)));
+    return res.status(429).json({ error: "Too many invitations. Try again later." });
+  }
+
   const admin = createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -63,8 +80,8 @@ export default async function inviteMember(req: ApiRequest, res: ApiResponse) {
     data: { display_name: parsed.data.display_name },
     redirectTo: `${siteOrigin}/auth/callback?next=/account/setup`,
   });
-  if (inviteError) return res.status(400).json({ error: `Unable to invite member: ${inviteError.message}` });
-  if (!invite.user) return res.status(500).json({ error: "The invitation was sent without a user record. Check Supabase Auth logs." });
+  if (inviteError) return res.status(400).json({ error: "Unable to send this invitation. Check the email address and try again." });
+  if (!invite.user) return res.status(500).json({ error: "The invitation could not be completed. Contact an administrator." });
 
   const { error: insertError } = await admin.from("church_members").insert({
     church_id: membership.church_id,
@@ -72,15 +89,13 @@ export default async function inviteMember(req: ApiRequest, res: ApiResponse) {
     role: parsed.data.role,
   });
   if (insertError) {
-    return res.status(500).json({
-      error: `The invitation was sent, but membership could not be assigned: ${insertError.message}`,
-    });
+    return res.status(500).json({ error: "The invitation was sent, but membership could not be assigned. Contact an administrator." });
   }
   return res.status(200).json({ success: true });
 }
 
 function getSiteOrigin(req: ApiRequest) {
-  const configuredOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+  const configuredOrigin = process.env.SITE_URL;
   const vercelOrigin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
   const localHost = req.headers.host;
   const originValue = configuredOrigin
@@ -94,4 +109,15 @@ function getSiteOrigin(req: ApiRequest) {
     return null;
   }
   return null;
+}
+
+function isInviteRateLimited(userId: string) {
+  const now = Date.now();
+  const current = inviteLimits.get(userId);
+  if (!current || now - current.startedAt >= inviteWindowMs) {
+    inviteLimits.set(userId, { startedAt: now, count: 1 });
+    return false;
+  }
+  current.count += 1;
+  return current.count > inviteLimit;
 }

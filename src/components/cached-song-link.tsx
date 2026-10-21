@@ -1,5 +1,3 @@
-"use client";
-
 import { Link } from "react-router-dom";
 import { type ReactNode } from "react";
 import { loadSong } from "@/lib/song-cache";

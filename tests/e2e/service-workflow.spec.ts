@@ -4,7 +4,7 @@ const ownerEmail = process.env.E2E_OWNER_EMAIL;
 const ownerPassword = process.env.E2E_OWNER_PASSWORD;
 const viewerEmail = process.env.E2E_VIEWER_EMAIL;
 const viewerPassword = process.env.E2E_VIEWER_PASSWORD;
-const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const isDisposableTestDatabase = process.env.E2E_TEST_DATABASE === "disposable"
   && Boolean(supabaseUrl)
   && !supabaseUrl?.includes("ckgnhsnqeabowkctvdqj");

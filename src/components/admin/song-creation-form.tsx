@@ -1,13 +1,11 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
-import { saveSong } from "@/app/admin/actions";
+import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
 import { ConfirmationDialog } from "@/components/confirm-button";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { useServerFormAction } from "@/components/use-server-form-action";
+import { useFormAction } from "@/components/use-form-action";
 import { invalidateSongCache } from "@/lib/song-cache";
 
 type SectionInput = {
@@ -67,7 +65,7 @@ function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
 }
 
 export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id}` : "/admin/songs" }: SongEditorFormProps) {
-  const { error, formAction } = useServerFormAction(saveSong, () => invalidateSongCache(song?.id));
+  const { error, formAction } = useFormAction(saveSong, () => invalidateSongCache(song?.id));
   const [sections, setSections] = useState<SectionDraft[]>(() => {
     let keyIndex = 0;
     const initial: SectionDraft[] = song?.sections.map((section) => ({ ...section, key: `section-${keyIndex++}` })) ?? [];

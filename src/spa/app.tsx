@@ -22,10 +22,10 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark } from "@/components/brand-mark";
-import { LoginForm } from "@/app/login/login-form";
-import { SetupForm } from "@/app/account/setup/setup-form";
-import { deleteSong } from "@/app/admin/actions";
-import { removeMember } from "@/app/admin/members/actions";
+import { LoginForm } from "@/components/auth/login-form";
+import { SetupForm } from "@/components/auth/setup-form";
+import { deleteSong } from "@/lib/actions/content";
+import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
@@ -581,7 +581,7 @@ function AdminMembersPage() {
     <h2 className="admin-section-title">Invite a member</h2>
     <p className="muted">Supabase sends a sign-in invitation. New members set their password after opening the email link.</p>
     <InviteMemberForm />
-    {!import.meta.env.VITE_SUPABASE_URL && !import.meta.env.NEXT_PUBLIC_SUPABASE_URL ? null
+    {!import.meta.env.VITE_SUPABASE_URL ? null
       : <p className="notice">Member invitations require the server-only SUPABASE_SERVICE_ROLE_KEY on Vercel. Never expose it to the browser.</p>}
   </>;
 }

@@ -1,5 +1,3 @@
-"use client";
-
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";

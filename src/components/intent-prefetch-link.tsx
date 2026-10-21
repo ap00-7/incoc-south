@@ -1,5 +1,3 @@
-"use client";
-
 import { Link, type LinkProps } from "react-router-dom";
 
 type Props = Omit<LinkProps, "to"> & { href: string };

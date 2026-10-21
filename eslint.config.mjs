@@ -5,5 +5,5 @@ import tseslint from "typescript-eslint";
 export default defineConfig([
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
-  globalIgnores([".next/**", ".next-playwright/**", "out/**", "build/**", "dist/**", "next-env.d.ts"]),
+  globalIgnores(["out/**", "build/**", "dist/**"]),
 ]);

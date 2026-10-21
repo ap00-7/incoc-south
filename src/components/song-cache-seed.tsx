@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect } from "react";
 import { invalidateSongCache, seedSongSummaries } from "@/lib/song-cache";
 import { RealtimeRefresh } from "@/components/realtime-refresh";

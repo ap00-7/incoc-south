@@ -37,7 +37,7 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-The home and sign-in pages load without Supabase configuration. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` to enable authenticated data features. A public anon key can be used instead. The previous `NEXT_PUBLIC_SUPABASE_*` names remain supported for existing setups. Do not use another application's Supabase project.
+The home and sign-in pages load without Supabase configuration. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` in `.env.local` to enable authenticated data features. A public anon key can be used instead. Do not use another application's Supabase project.
 
 `npm run dev` starts the Vite SPA but does not emulate the invitation API function. To test owner invitations locally, run the project through Vercel's local development server (`npx vercel dev`) with the same environment variables; invitations also require the server-only service-role key.
 
@@ -57,14 +57,13 @@ The migration files in `supabase/migrations/` preserve the database's historical
 
 ### Environment variables
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | Yes for data features | Public Supabase project URL. `NEXT_PUBLIC_SUPABASE_URL` remains a supported legacy alias. |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Yes for data features | Preferred public key; RLS must remain enabled. |
-| `VITE_SUPABASE_ANON_KEY` | Alternative | Public anon key when no publishable key is configured. |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Legacy aliases | Accepted by the browser app and invitation function. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional | Server-only key for member invitations. Never prefix it with `VITE_` or `NEXT_PUBLIC_`, or send it to the browser. |
-| `NEXT_PUBLIC_SITE_URL` | Optional | Invitation callback origin; set it to the deployed HTTPS URL in production. |
+| Variable                        | Required              | Purpose                                                                                         |
+| ------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------- |
+| `VITE_SUPABASE_URL`             | Yes for data features | Public Supabase project URL.                                                                    |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Yes for data features | Preferred public key; RLS must remain enabled.                                                  |
+| `VITE_SUPABASE_ANON_KEY`        | Alternative           | Public anon key when no publishable key is configured.                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Optional              | Server-only key for member invitations. Never prefix it with `VITE_` or send it to the browser. |
+| `SITE_URL`                      | Optional              | Invitation callback origin; set it to the deployed HTTPS URL in production.                     |
 
 The `.env.example` file contains placeholders only. `.env.local` is ignored by Git. Never store credentials or real user tokens in source control.
 
@@ -83,7 +82,7 @@ where slug = 'incoc-south';
 ```
 
 5. Set the application's public Supabase URL and publishable key, then sign in at `/login`.
-6. For owner-managed invitations, configure `SUPABASE_SERVICE_ROLE_KEY` only in the server environment and set the Supabase Auth redirect allow-list for `${NEXT_PUBLIC_SITE_URL}/auth/callback`.
+6. For owner-managed invitations, configure `SUPABASE_SERVICE_ROLE_KEY` only in the server environment and set the Supabase Auth redirect allow-list for `${SITE_URL}/auth/callback`.
 
 The bootstrap is a deliberate SQL operation so the first owner is never granted automatically by registration. Supabase invitation email delivery also needs an SMTP provider for production.
 
@@ -166,7 +165,7 @@ The test exercises sign-in as owner, song and lyric-section creation, a dated Su
 
 1. Create a separate Vercel project for this repository.
 2. Use Vite as the framework preset and the default `dist` output directory. The `vercel.json` rewrite serves the SPA entry point for direct route access; Vercel deploys `api/invite.ts` as a serverless function.
-3. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `NEXT_PUBLIC_SITE_URL` in the Vercel project environment.
+3. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `SITE_URL` in the Vercel project environment.
 4. Add `SUPABASE_SERVICE_ROLE_KEY` only if member invitations are enabled; keep it server-only.
 5. Add the production callback URL to the Supabase Auth redirect allow-list.
 6. Apply reviewed SQL manually in the dedicated Supabase project's SQL Editor; do not push migrations automatically.

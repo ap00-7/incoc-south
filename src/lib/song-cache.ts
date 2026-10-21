@@ -1,5 +1,3 @@
-"use client";
-
 import { createClient } from "@/lib/supabase/browser";
 
 type SongSummary = {

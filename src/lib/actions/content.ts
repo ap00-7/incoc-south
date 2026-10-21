@@ -6,7 +6,7 @@ import { songEditorLanguageValues, songLanguageValues, songSectionValues } from 
 import { invalidateSongCache } from "@/lib/song-cache";
 import { notifyDataChanged } from "@/spa/data-events";
 
-function revalidatePath(path: string) {
+function invalidateRouteData(path: string) {
   notifyDataChanged(path);
 }
 
@@ -185,10 +185,10 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     if (error) return { ok: false, message: `The item was saved, but its private note could not be cleared: ${error.message}` };
   }
 
-  revalidatePath("/schedule");
-  revalidatePath("/slides");
-  revalidatePath(`/schedule/${schedule.id}`);
-  revalidatePath(`/schedule/${schedule.id}/slides`);
+  invalidateRouteData("/schedule");
+  invalidateRouteData("/slides");
+  invalidateRouteData(`/schedule/${schedule.id}`);
+  invalidateRouteData(`/schedule/${schedule.id}/slides`);
   return { ok: true, message: parsed.data.item_id ? "Schedule item saved." : "Schedule item added." };
 }
 
@@ -233,9 +233,9 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
       .insert({ schedule_item_id: copy.id, notes: notes.notes });
     if (noteError) return { ok: false, message: `The item was duplicated, but its private note could not be copied: ${noteError.message}` };
   }
-  revalidatePath("/schedule");
-  revalidatePath("/slides");
-  revalidatePath(`/schedule/${source.schedule_id}`);
+  invalidateRouteData("/schedule");
+  invalidateRouteData("/slides");
+  invalidateRouteData(`/schedule/${source.schedule_id}`);
   return { ok: true, message: "Schedule item duplicated." };
 }
 
@@ -332,8 +332,8 @@ export async function saveSong(formData: FormData) {
       if (cleanupError) throw new Error(`Song sections could not be saved (${sectionError.message}), and cleanup failed (${cleanupError.message}). Review the new song before retrying.`);
       throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
     }
-    revalidatePath("/song");
-    revalidatePath("/admin/songs");
+    invalidateRouteData("/song");
+    invalidateRouteData("/admin/songs");
     return { redirectTo: getReturnPath(formData, `/admin/songs/${song.id}`) };
   }
 
@@ -389,9 +389,9 @@ export async function saveSong(formData: FormData) {
   }));
   const { error: saveSectionsError } = await supabase.from("song_sections").upsert(rows, { onConflict: "id" });
   if (saveSectionsError) throw new Error(`Unable to save lyric sections: ${saveSectionsError.message}`);
-  revalidatePath("/song");
-  revalidatePath(`/song/${songId}`);
-  revalidatePath(`/admin/songs/${songId}`);
+  invalidateRouteData("/song");
+  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: getReturnPath(formData, `/admin/songs/${songId}`) };
 }
 
@@ -436,8 +436,8 @@ export async function createSong(formData: FormData) {
     }
     throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
   }
-  revalidatePath("/song");
-  revalidatePath("/admin/songs");
+  invalidateRouteData("/song");
+  invalidateRouteData("/admin/songs");
   return { redirectTo: `/admin/songs/${song.id}` };
 }
 
@@ -462,9 +462,9 @@ export async function updateSong(formData: FormData) {
   }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
   if (error) throw new Error(`Unable to update song: ${error.message}`);
   if (!data) throw new Error("This song was changed by another owner. Reload the page and review the latest version before saving.");
-  revalidatePath("/song");
-  revalidatePath(`/song/${songId}`);
-  revalidatePath(`/admin/songs/${songId}`);
+  invalidateRouteData("/song");
+  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
 
@@ -498,8 +498,8 @@ export async function updateSongSection(formData: FormData) {
     .select("id").maybeSingle();
   if (error) throw new Error(`Unable to update lyric section: ${error.message}`);
   if (!data) throw new Error("This lyric section was changed by another owner. Reload and review the latest version.");
-  revalidatePath(`/song/${songId}`);
-  revalidatePath(`/admin/songs/${songId}`);
+  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
 
@@ -528,8 +528,8 @@ export async function addSongSection(formData: FormData) {
     position: (sections?.[0]?.position ?? -1) + 1,
   });
   if (error) throw new Error(`Unable to add lyric section: ${error.message}`);
-  revalidatePath(`/song/${songId}`);
-  revalidatePath(`/admin/songs/${songId}`);
+  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
 
@@ -542,8 +542,8 @@ export async function moveSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.rpc("move_song_section", { target_section: sectionId, direction });
   if (error) throw new Error(`Unable to reorder lyric section: ${error.message}`);
-  revalidatePath(`/song/${section.song_id}`);
-  revalidatePath(`/admin/songs/${section.song_id}`);
+  invalidateRouteData(`/song/${section.song_id}`);
+  invalidateRouteData(`/admin/songs/${section.song_id}`);
   return { redirectTo: `/admin/songs/${section.song_id}` };
 }
 
@@ -555,8 +555,8 @@ export async function deleteSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.from("song_sections").delete().eq("id", sectionId);
   if (error) throw new Error(`Unable to delete lyric section: ${error.message}`);
-  revalidatePath(`/song/${section.song_id}`);
-  revalidatePath(`/admin/songs/${section.song_id}`);
+  invalidateRouteData(`/song/${section.song_id}`);
+  invalidateRouteData(`/admin/songs/${section.song_id}`);
   return { redirectTo: `/admin/songs/${section.song_id}` };
 }
 
@@ -570,8 +570,8 @@ export async function deleteSong(formData: FormData) {
     throw new Error(`Unable to delete song: ${error.message}`);
   }
   invalidateSongCache(songId);
-  revalidatePath("/admin/songs");
-  revalidatePath("/song");
+  invalidateRouteData("/admin/songs");
+  invalidateRouteData("/song");
   const returnTo = getReturnPath(formData, "/admin/songs");
   return { redirectTo: returnTo === "/admin/songs" ? "/song" : returnTo };
 }
@@ -592,9 +592,9 @@ export async function createSchedule(formData: FormData) {
     published_at: new Date().toISOString(),
   }).select("id").single();
   if (error) throw new Error(`Unable to create service: ${error.message}`);
-  revalidatePath("/admin/schedules");
-  revalidatePath("/schedule");
-  revalidatePath("/slides");
+  invalidateRouteData("/admin/schedules");
+  invalidateRouteData("/schedule");
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${schedule.id}`) };
 }
 
@@ -621,10 +621,10 @@ export async function updateSchedule(formData: FormData) {
     .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
   if (error) throw new Error(`Unable to update service: ${error.message}`);
   if (!data) throw new Error("This service was changed by another owner. Reload and review the latest version before saving.");
-  revalidatePath("/schedule");
-  revalidatePath(`/schedule/${scheduleId}`);
-  revalidatePath(`/admin/schedules/${scheduleId}`);
-  revalidatePath("/slides");
+  invalidateRouteData("/schedule");
+  invalidateRouteData(`/schedule/${scheduleId}`);
+  invalidateRouteData(`/admin/schedules/${scheduleId}`);
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
@@ -675,9 +675,9 @@ export async function addScheduleItem(formData: FormData) {
     });
     if (noteError) throw new Error(`Programme item was added, but its private note could not be saved: ${noteError.message}`);
   }
-  revalidatePath(`/admin/schedules/${scheduleId}`);
-  revalidatePath(`/schedule/${scheduleId}`);
-  revalidatePath("/slides");
+  invalidateRouteData(`/admin/schedules/${scheduleId}`);
+  invalidateRouteData(`/schedule/${scheduleId}`);
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
@@ -690,9 +690,9 @@ export async function moveScheduleItem(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find programme item: ${lookupError.message}`);
   const { error } = await supabase.rpc("move_schedule_item", { target_item: itemId, direction });
   if (error) throw new Error(`Unable to reorder programme item: ${error.message}`);
-  revalidatePath(`/admin/schedules/${item.schedule_id}`);
-  revalidatePath(`/schedule/${item.schedule_id}`);
-  revalidatePath("/slides");
+  invalidateRouteData(`/admin/schedules/${item.schedule_id}`);
+  invalidateRouteData(`/schedule/${item.schedule_id}`);
+  invalidateRouteData("/slides");
 }
 
 export async function updateScheduleItem(formData: FormData) {
@@ -747,9 +747,9 @@ export async function updateScheduleItem(formData: FormData) {
     const { error: notesError } = await supabase.from("schedule_item_notes").delete().eq("schedule_item_id", itemId);
     if (notesError) throw new Error(`Programme item was updated, but its private note could not be removed: ${notesError.message}`);
   }
-  revalidatePath(`/admin/schedules/${scheduleId}`);
-  revalidatePath(`/schedule/${scheduleId}`);
-  revalidatePath("/slides");
+  invalidateRouteData(`/admin/schedules/${scheduleId}`);
+  invalidateRouteData(`/schedule/${scheduleId}`);
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
 }
 
@@ -761,9 +761,9 @@ export async function deleteScheduleItem(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find programme item: ${lookupError.message}`);
   const { error } = await supabase.from("schedule_items").delete().eq("id", itemId);
   if (error) throw new Error(`Unable to remove programme item: ${error.message}`);
-  revalidatePath(`/admin/schedules/${item.schedule_id}`);
-  revalidatePath(`/schedule/${item.schedule_id}`);
-  revalidatePath("/slides");
+  invalidateRouteData(`/admin/schedules/${item.schedule_id}`);
+  invalidateRouteData(`/schedule/${item.schedule_id}`);
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${item.schedule_id}`) };
 }
 
@@ -774,8 +774,8 @@ export async function deleteSchedule(formData: FormData) {
   const { error } = await supabase.from("schedules").delete()
     .eq("id", scheduleId).eq("church_id", member.churchId);
   if (error) throw new Error(`Unable to delete schedule: ${error.message}`);
-  revalidatePath("/admin/schedules");
-  revalidatePath("/schedule");
-  revalidatePath("/slides");
+  invalidateRouteData("/admin/schedules");
+  invalidateRouteData("/schedule");
+  invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, "/admin/schedules") };
 }

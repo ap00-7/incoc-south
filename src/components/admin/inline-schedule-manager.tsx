@@ -1,5 +1,3 @@
-"use client";
-
 import { Link } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import {
@@ -25,10 +23,10 @@ import {
   saveScheduleItem,
   updateSchedule,
   type ScheduleItemInput,
-} from "@/app/admin/actions";
+} from "@/lib/actions/content";
 import { ConfirmButton } from "@/components/confirm-button";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { useServerFormAction } from "@/components/use-server-form-action";
+import { useFormAction } from "@/components/use-form-action";
 import { createClient } from "@/lib/supabase/browser";
 import { notifyDataChanged } from "@/spa/data-events";
 
@@ -602,7 +600,7 @@ export function InlineScheduleDetails({
 }: {
   schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; updated_at: string };
 }) {
-  const { error, formAction } = useServerFormAction(updateSchedule);
+  const { error, formAction } = useFormAction(updateSchedule);
   return (
     <section className="schedule-editor-details">
       <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
@@ -635,7 +633,7 @@ function MoveScheduleItemForm({
   returnTo: string;
   disabled: boolean;
 }) {
-  const { error, formAction } = useServerFormAction(moveScheduleItem);
+  const { error, formAction } = useFormAction(moveScheduleItem);
   const label = direction < 0 ? "Move item up" : "Move item down";
   return <form action={formAction}>
     <input type="hidden" name="item_id" value={itemId} />
@@ -673,7 +671,7 @@ export function ScheduleActions({
 }
 
 export function NewScheduleForm() {
-  const { error, formAction } = useServerFormAction(createSchedule);
+  const { error, formAction } = useFormAction(createSchedule);
   return (
     <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
       <label htmlFor="new-service-title">Title</label><input id="new-service-title" name="title" required maxLength={200} />

@@ -1,13 +1,11 @@
-"use client";
-
 import { useNavigate } from "react-router-dom";
 import { useActionState } from "react";
 import { notifyDataChanged } from "@/spa/data-events";
 
 type ActionResult = void | { redirectTo?: string };
-type ServerFormAction = (formData: FormData) => Promise<ActionResult>;
+type FormAction = (formData: FormData) => Promise<ActionResult>;
 
-export function useServerFormAction(action: ServerFormAction, onSuccess?: () => void) {
+export function useFormAction(action: FormAction, onSuccess?: () => void) {
   const navigate = useNavigate();
   const [error, formAction] = useActionState(async (_previousError: string | null, formData: FormData) => {
     try {

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const disposablePublicContentDatabase = process.env.E2E_TEST_DATABASE === "disposable"
   && Boolean(supabaseUrl)
   && !supabaseUrl?.includes("ckgnhsnqeabowkctvdqj");
@@ -44,6 +44,26 @@ test("public content routes remain reachable without authentication controls", a
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
     await expect(page.locator(".page-main")).toBeVisible();
   }
+});
+
+test("nested routes load directly and browser history follows navigation", async ({ page }) => {
+  const nestedRoute = "/schedule/00000000-0000-0000-0000-000000000001";
+  const response = await page.goto(nestedRoute);
+  expect(response?.ok()).toBe(true);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await page.reload();
+  await expect(page).toHaveURL(new RegExp(`${nestedRoute}$`));
+
+  await page.goto("/");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await navigation.getByRole("link", { name: "Songbook" }).click();
+  await expect(page).toHaveURL(/\/song$/);
+  await navigation.getByRole("link", { name: "Schedule" }).click();
+  await expect(page).toHaveURL(/\/schedule$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/song$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/schedule$/);
 });
 
 test("the custom cross icon is served", async ({ request }) => {

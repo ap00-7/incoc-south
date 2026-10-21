@@ -1,11 +1,9 @@
-"use client";
-
-import { signIn } from "@/app/actions/auth";
+import { signIn } from "@/lib/actions/auth";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { useServerFormAction } from "@/components/use-server-form-action";
+import { useFormAction } from "@/components/use-form-action";
 
 export function LoginForm() {
-  const { error, formAction } = useServerFormAction(signIn);
+  const { error, formAction } = useFormAction(signIn);
   return (
     <form className="form-stack" action={formAction}>
       <label htmlFor="email">Email address</label>

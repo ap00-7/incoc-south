@@ -1,8 +1,6 @@
-"use client";
-
-import { inviteMember, updateMemberRole } from "@/app/admin/members/actions";
+import { inviteMember, updateMemberRole } from "@/lib/actions/members";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
-import { useServerFormAction } from "@/components/use-server-form-action";
+import { useFormAction } from "@/components/use-form-action";
 
 export function MemberRoleForm({
   userId,
@@ -15,7 +13,7 @@ export function MemberRoleForm({
   role: "owner" | "viewer";
   disabled: boolean;
 }) {
-  const { error, formAction } = useServerFormAction(updateMemberRole);
+  const { error, formAction } = useFormAction(updateMemberRole);
   return (
     <form action={formAction}>
       <input type="hidden" name="user_id" value={userId} />
@@ -30,7 +28,7 @@ export function MemberRoleForm({
 }
 
 export function InviteMemberForm() {
-  const { error, formAction } = useServerFormAction(inviteMember);
+  const { error, formAction } = useFormAction(inviteMember);
   return (
     <form className="form-stack admin-form" action={formAction}>
       <label htmlFor="display_name">Name</label>
