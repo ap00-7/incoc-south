@@ -35,9 +35,9 @@ export function seedSongSummaries(items: SongSummary[]) {
   }
 }
 
-export function getCachedSong(songId: string, updatedAt: string) {
+export function getCachedSong(songId: string, updatedAt?: string) {
   const song = songs.get(songId);
-  return song?.updated_at === updatedAt ? song : null;
+  return song && (!updatedAt || song.updated_at === updatedAt) ? song : null;
 }
 
 export function getCachedSongSummary(songId: string, updatedAt: string) {
@@ -45,17 +45,17 @@ export function getCachedSongSummary(songId: string, updatedAt: string) {
   return summary?.updated_at === updatedAt ? summary : null;
 }
 
-export async function loadSong(songId: string, updatedAt: string) {
+export async function loadSong(songId: string, updatedAt?: string) {
   const cached = getCachedSong(songId, updatedAt);
   if (cached) return cached;
 
-  const key = `${songId}:${updatedAt}`;
+  const key = `${songId}:${updatedAt ?? "latest"}`;
   const existing = pending.get(key);
   if (existing) return existing;
 
   const version = cacheVersion;
   const request = fetchSong(songId).then((song) => {
-    if (song && song.updated_at !== updatedAt) {
+    if (song && updatedAt && song.updated_at !== updatedAt) {
       throw new Error("This song changed while it was loading. Please refresh and try again.");
     }
     if (song && version === cacheVersion) songs.set(songId, song);

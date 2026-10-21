@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { deleteSong } from "@/app/admin/actions";
@@ -18,10 +18,10 @@ export function SongPageContent({
 }: {
   songId: string;
   isOwner: boolean;
-  updatedAt: string;
+  updatedAt?: string;
   editOpen: boolean;
 }) {
-  const [result, setResult] = useState<{ songId: string; updatedAt: string; song: CachedSong | null; error: string } | null>(null);
+  const [result, setResult] = useState<{ songId: string; updatedAt?: string; song: CachedSong | null; error: string } | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const refreshSong = useCallback(() => {
     invalidateSongCache(songId);
@@ -52,10 +52,10 @@ export function SongPageContent({
   const error = currentResult?.error ?? "";
   if (error) return <article className="content-wrap"><p className="notice notice-warning" role="alert">{error}</p></article>;
   if (currentResult && !currentResult.song) return <article className="content-wrap">
-    <p className="empty-state" role="status">This song is no longer available. <Link href="/song">Return to the Songbook</Link></p>
+    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href="/song">Return to the Songbook</IntentPrefetchLink></p>
   </article>;
-  if (!song || song.updated_at !== updatedAt) {
-    const summary = getCachedSongSummary(songId, updatedAt);
+  if (!song || (updatedAt && song.updated_at !== updatedAt)) {
+    const summary = updatedAt ? getCachedSongSummary(songId, updatedAt) : null;
     return <article className="content-wrap" role="status" aria-busy="true">
       <p className="muted">Loading song…</p>
       {summary && <h1 className="detail-title">{summary.title}</h1>}
@@ -74,7 +74,7 @@ export function SongPageContent({
         onChange={refreshSong}
       />
       <article className="content-wrap song-reading">
-        <Link href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</Link>
+        <IntentPrefetchLink href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
         <h1 className="detail-title">{song.title}</h1>
         <hr className="song-reading-divider" />
         {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (

@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "long", timeZone: "Asia/Kolkata" });
 
@@ -21,8 +22,8 @@ export default async function AdminSchedulesPage() {
     <p className="eyebrow">SERVICE PLANNING</p>
     <div className="admin-title-row"><h1>Schedules</h1><Link className="button button-primary" href="/admin/schedules/new"><Plus size={16} /> Create schedule</Link></div>
     <p>Each schedule is a dated gathering.</p>
-    {schedules?.length ? <div className="results-list admin-results">{schedules.map((schedule) => <Link className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
+    {schedules?.length ? <div className="results-list admin-results">{schedules.map((schedule) => <IntentPrefetchLink className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
       <div><h2>{schedule.title}</h2><p>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div><span className="muted">Edit</span>
-    </Link>)}</div> : <div className="empty-state">No service schedules yet. Create one to start planning.</div>}
+    </IntentPrefetchLink>)}</div> : <div className="empty-state">No service schedules yet. Create one to start planning.</div>}
   </>;
 }

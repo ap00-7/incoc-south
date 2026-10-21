@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Trash2 } from "lucide-react";
@@ -8,6 +7,7 @@ import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 
 export default async function EditSongPage({ params }: { params: Promise<{ songId: string }> }) {
   await connection();
@@ -24,7 +24,7 @@ export default async function EditSongPage({ params }: { params: Promise<{ songI
   const sections = [...(song.song_sections ?? [])].sort((a, b) => a.position - b.position);
 
   return <>
-    <Link href="/admin/songs" className="back-link"><ArrowLeft size={15} /> Back to songs</Link>
+    <IntentPrefetchLink href="/admin/songs" className="back-link"><ArrowLeft size={15} /> Back to songs</IntentPrefetchLink>
     <p className="eyebrow">EDIT SONG</p><h1>{song.title}</h1>
     <SongEditorForm song={{
       id: song.id,

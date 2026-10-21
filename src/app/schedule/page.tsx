@@ -8,6 +8,7 @@ import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { hasSupabaseAuthCookie, getMembership } from "@/lib/auth";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPublicChurchContext } from "@/lib/supabase/public-content";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "long",
@@ -35,17 +36,15 @@ async function ScheduleContent({ searchParams }: Props) {
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
-  const supabase = await createClient();
-  const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
-  const isOwner = membership?.role === "owner";
+  const [supabase, hasAuthCookie] = await Promise.all([createClient(), hasSupabaseAuthCookie()]);
   const schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", {
-      count: isOwner ? undefined : "exact",
-    })
+    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
     .eq("church.slug", "incoc-south");
-  const { data: schedules, error, count } = await schedulesQuery
-    .order("service_date", { ascending: false })
-    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const [membership, { data: schedules, error, count }] = await Promise.all([
+    hasAuthCookie ? getMembership(supabase) : Promise.resolve(null),
+    schedulesQuery.order("service_date", { ascending: false }).range((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+  ]);
+  const isOwner = membership?.role === "owner";
   if (error) throw new Error(`Unable to load services: ${error.message}`);
   const schedulesForPage = schedules ?? [];
   if (!isOwner && count === 1 && schedulesForPage[0]) {
@@ -66,11 +65,11 @@ async function ScheduleContent({ searchParams }: Props) {
         </div>
         {visibleSchedules.length ? <div className="results-list">
           {visibleSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
-            <Link className="result-card" href={`/schedule/${schedule.id}`}>
+            <IntentPrefetchLink className="result-card" href={`/schedule/${schedule.id}`}>
               <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
               <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
-            </Link>
-            {isOwner && <Link className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</Link>}
+            </IntentPrefetchLink>
+            {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
           </article>)}
         </div> : <div className="empty-state">There are no services to show yet.</div>}
         {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MonitorPlay } from "lucide-react";
@@ -7,6 +6,7 @@ import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 import { generateSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 
 type Props = { params: Promise<{ scheduleId: string }> };
 
@@ -45,7 +45,7 @@ async function SlidesContent({ params }: Props) {
         }) ?? [],
       ]} />
       <div className="content-wrap">
-        <Link href={`/schedule/${scheduleId}`} className="back-link"><ArrowLeft size={15} /> Back to service</Link>
+        <IntentPrefetchLink href={`/schedule/${scheduleId}`} className="back-link"><ArrowLeft size={15} /> Back to service</IntentPrefetchLink>
         <h1 className="detail-title">{schedule.title}</h1>
         {slides.length ? <div className="admin-card-grid">
           {slides.map((slide, index) => <article className="preview-card" key={`${slide.itemId}-${index}`}>
@@ -53,7 +53,7 @@ async function SlidesContent({ params }: Props) {
             <h2>{slide.lines.join(" ") || "No display text"}</h2>
           </article>)}
         </div> : <div className="empty-state" style={{ marginTop: 24 }}>Add lyric sections or public content to programme items to generate slides.</div>}
-        <div className="schedule-actions"><Link className="button button-primary" href={`/present/${schedule.id}`}><MonitorPlay size={16} /> Present service</Link></div>
+        <div className="schedule-actions"><IntentPrefetchLink className="button button-primary" href={`/present/${schedule.id}`}><MonitorPlay size={16} /> Present service</IntentPrefetchLink></div>
       </div>
     </>
   );

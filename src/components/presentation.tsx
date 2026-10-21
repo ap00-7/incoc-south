@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Maximize, Pause, Play } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
@@ -152,7 +152,7 @@ export function Presentation({
       ]} />
       <div className="presentation-toolbar">
         <div className="presentation-status">
-          <Link href={`/schedule/${scheduleId}`}><ArrowLeft size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Return to service</Link>
+          <IntentPrefetchLink href={`/schedule/${scheduleId}`}><ArrowLeft size={15} style={{ verticalAlign: "middle", marginRight: 6 }} />Return to service</IntentPrefetchLink>
           <span style={{ marginLeft: 16 }}>{scheduleTitle}</span>
           <span style={{ marginLeft: 14, color: syncActive ? "#d7b875" : "#aaa" }}>{syncActive ? "Synchronized" : "Local mode"}</span>
         </div>

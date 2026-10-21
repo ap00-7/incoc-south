@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -10,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getMembership } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/server";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 
 export default async function EditSchedulePage({ params }: { params: Promise<{ scheduleId: string }> }) {
   await connection();
@@ -38,7 +38,7 @@ export default async function EditSchedulePage({ params }: { params: Promise<{ s
 
   return (
     <>
-      <Link href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</Link>
+      <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
       <h1 className="detail-title">{schedule.title}</h1>
       <InlineScheduleDetails schedule={schedule} />
       <section className="schedule-items-editor" aria-label="Schedule items">

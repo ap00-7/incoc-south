@@ -9,6 +9,7 @@ import { getPublicChurchContext } from "@/lib/supabase/public-content";
 import { songLanguageValues } from "@/lib/domain/songs";
 import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { SongCacheSeed } from "@/components/song-cache-seed";
+import { CachedSongLink } from "@/components/cached-song-link";
 
 type Props = { searchParams: Promise<{ q?: string; language?: string; page?: string; create?: string }> };
 const PAGE_SIZE = 50;
@@ -28,13 +29,15 @@ async function SongbookContent({ searchParams }: Props) {
   if (!isSupabaseConfigured()) {
     return <div className="content-wrap"><SectionHeading title="Songbook" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div>;
   }
-  const params = await searchParams;
+  const [params, supabase, hasAuthCookie] = await Promise.all([
+    searchParams,
+    createClient(),
+    hasSupabaseAuthCookie(),
+  ]);
   const query = params.q?.trim() ?? "";
   const language = params.language?.trim() ?? "";
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
   const page = Number.isFinite(requestedPage) ? Math.min(Math.max(requestedPage, 1), 10_000) : 1;
-  const supabase = await createClient();
-  const hasAuthCookie = await hasSupabaseAuthCookie();
   let songsQuery = supabase.from("songs")
     .select("id, title, language, author, updated_at, church:churches!inner(id, slug)")
     .eq("church.slug", "incoc-south").order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -97,12 +100,12 @@ async function SongbookContent({ searchParams }: Props) {
         </form>
         {songsForPage.length ? <div className="results-list">
           {songsForPage.slice(0, PAGE_SIZE).map((song) => <div className="result-card" key={song.id}>
-            <Link className="result-card-main" href={`/song/${song.id}`}>
+            <CachedSongLink className="result-card-main" songId={song.id} updatedAt={song.updated_at}>
               <div><h2>{song.title}</h2><p>{song.author ? `${song.author} · ` : ""}{song.language}</p></div>
               <ArrowRight size={17} aria-hidden="true" />
-            </Link>
+            </CachedSongLink>
             {membership?.role === "owner" && <div className="song-owner-actions">
-              <Link className="text-link" href={`/song/${song.id}?edit=1#owner-edit`}>Edit</Link>
+              <CachedSongLink className="text-link" songId={song.id} updatedAt={song.updated_at} href={`/song/${song.id}?edit=1#owner-edit`}>Edit</CachedSongLink>
             </div>}
           </div>)}
         </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}

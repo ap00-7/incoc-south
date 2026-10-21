@@ -5,6 +5,8 @@ import { ArrowLeft } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
+import { CachedSongLink } from "@/components/cached-song-link";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/server";
 
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "full", timeZone: "Asia/Kolkata" });
@@ -29,7 +31,7 @@ async function ScheduleDetailContent({ params }: Props) {
   const { scheduleId } = await params;
   const supabase = await createClient();
   const { data: schedule, error } = await supabase.from("schedules")
-    .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title)), church:churches!inner(slug)")
+    .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(slug)")
     .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
   if (error) throw new Error(`Unable to load service: ${error.message}`);
   if (!schedule) notFound();
@@ -46,7 +48,7 @@ async function ScheduleDetailContent({ params }: Props) {
         ] : []),
       ]} />
       <article className="content-wrap">
-        <Link href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</Link>
+        <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>
         <h1 className="detail-title">{schedule.title}</h1>
         <div className="detail-meta">{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>· {schedule.venue}</span>}</div>
         {schedule.description && <p className="section-description">{schedule.description}</p>}
@@ -54,7 +56,7 @@ async function ScheduleDetailContent({ params }: Props) {
           {items.map((item) => {
             const song = Array.isArray(item.song) ? item.song[0] : item.song;
             const primary = song
-              ? <><span>Song: </span><Link className="song-title-link" href={`/song/${song.id}`}>{song.title}</Link></>
+              ? <><span>Song: </span><CachedSongLink className="song-title-link" songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink></>
               : item.leader_name && item.public_content
                 ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
               : item.leader_name
