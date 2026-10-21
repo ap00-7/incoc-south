@@ -21,7 +21,7 @@ async function signIn(page: import("@playwright/test").Page, email: string, pass
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
-test("owner publishes a Sunday programme that a viewer can present", async ({ browser }) => {
+test("owner controls Slides visibility while a viewer still sees the full Sunday programme", async ({ browser }) => {
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
@@ -135,29 +135,71 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   const serviceDate = sunday.toISOString().slice(0, 10);
   const scheduleTitle = `E2E Sunday Service ${uniqueSuffix}`;
   await ownerPage.goto("/admin/schedules/new");
-  await ownerPage.getByLabel("Service title").fill(scheduleTitle);
+  await ownerPage.getByLabel("Title").fill(scheduleTitle);
   await ownerPage.getByLabel("Date").fill(serviceDate);
-  await ownerPage.getByRole("button", { name: "Create draft" }).click();
+  await ownerPage.getByRole("button", { name: "Create schedule" }).click();
   await expect(ownerPage.getByRole("heading", { name: scheduleTitle })).toBeVisible();
   const scheduleId = ownerPage.url().match(/\/admin\/schedules\/([0-9a-f-]{36})$/i)?.[1];
   expect(scheduleId).toBeTruthy();
 
-  const addItemForm = ownerPage.locator("form").last();
-  await addItemForm.getByLabel("Type").selectOption("song");
-  await addItemForm.getByLabel(/choose for a song item/).selectOption({ label: `${songTitle} · Kannada` });
-  await addItemForm.getByRole("button", { name: "Add programme item" }).click();
-  await expect(ownerPage.getByRole("heading", { name: songTitle })).toBeVisible();
+  await ownerPage.getByRole("button", { name: "Add Song" }).click();
+  let itemDialog = ownerPage.getByRole("dialog", { name: "Add item" });
+  await itemDialog.getByRole("button", { name: "Select a Songbook song" }).click();
+  await itemDialog.getByPlaceholder("Search songs").fill(songTitle);
+  await itemDialog.getByRole("button", { name: new RegExp(songTitle) }).click();
+  let songSlidesToggle = itemDialog.getByRole("checkbox", { name: "Display in Slides" });
+  await expect(songSlidesToggle).not.toBeChecked();
+  await songSlidesToggle.check();
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
 
-  const addPrayerForm = ownerPage.locator("form").last();
-  await addPrayerForm.getByLabel("Type").selectOption("prayer");
-  await addPrayerForm.getByLabel(/Programme title/).fill("Responsive reading");
-  await addPrayerForm.getByLabel(/Display or public content/).fill("Read the selected passage together.");
-  await addPrayerForm.getByRole("button", { name: "Add programme item" }).click();
-  await expect(ownerPage.getByRole("heading", { name: "Responsive reading" })).toBeVisible();
+  await ownerPage.reload();
+  await ownerPage.getByRole("button", { name: "Edit item" }).first().click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  songSlidesToggle = itemDialog.getByRole("checkbox", { name: "Display in Slides" });
+  await expect(songSlidesToggle).toBeChecked();
+  await songSlidesToggle.uncheck();
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
 
-  ownerPage.once("dialog", (dialog) => dialog.accept());
-  await ownerPage.getByRole("button", { name: "Publish service" }).click();
-  await expect(ownerPage.getByRole("button", { name: "Unpublish" })).toBeVisible();
+  await ownerPage.reload();
+  await ownerPage.getByRole("button", { name: "Edit item" }).first().click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  songSlidesToggle = itemDialog.getByRole("checkbox", { name: "Display in Slides" });
+  await expect(songSlidesToggle).not.toBeChecked();
+  await songSlidesToggle.check();
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
+
+  await ownerPage.reload();
+  await ownerPage.getByRole("button", { name: "Edit item" }).first().click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
+  await itemDialog.getByRole("button", { name: "Cancel" }).click();
+
+  async function addAnnouncement(content: string, displayInSlides: boolean) {
+    await ownerPage.getByRole("button", { name: "Add Item" }).click();
+    const dialog = ownerPage.getByRole("dialog", { name: "Add item" });
+    await dialog.locator("#schedule-item-title").selectOption("Announcements");
+    await dialog.locator("#schedule-item-content").fill(content);
+    const toggle = dialog.getByRole("checkbox", { name: "Display in Slides" });
+    await expect(toggle).not.toBeChecked();
+    if (displayInSlides) await toggle.check();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+  }
+
+  await addAnnouncement("Schedule-only notice", false);
+  await addAnnouncement("Projected announcement", true);
+  await ownerPage.reload();
+  for (const [index, visible] of [[1, false], [2, true]] as const) {
+    await ownerPage.getByRole("button", { name: "Edit item" }).nth(index).click();
+    itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+    const toggle = itemDialog.getByRole("checkbox", { name: "Display in Slides" });
+    if (visible) await expect(toggle).toBeChecked();
+    else await expect(toggle).not.toBeChecked();
+    await itemDialog.getByRole("button", { name: "Cancel" }).click();
+  }
 
   await ownerPage.getByRole("button", { name: "Sign out" }).click();
   await expect(ownerPage).toHaveURL(/\/login$/);
@@ -176,8 +218,23 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await viewerPage.getByRole("link", { name: new RegExp(scheduleTitle) }).click();
   await expect(viewerPage.getByRole("heading", { name: scheduleTitle })).toBeVisible();
   await expect(viewerPage.getByRole("heading", { name: songTitle })).toBeVisible();
-  await expect(viewerPage.getByRole("heading", { name: "Responsive reading" })).toBeVisible();
+  await expect(viewerPage.getByText("Schedule-only notice")).toBeVisible();
+  await expect(viewerPage.getByText("Projected announcement")).toBeVisible();
   await viewerPage.goto(`/slides?scheduleId=${scheduleId}`);
+  const slideCards = viewerPage.locator(".slides-preview-card");
+  await expect(slideCards).toHaveCount(2);
+  await expect(viewerPage.getByText("Schedule-only notice")).toHaveCount(0);
+  await expect(viewerPage.getByText("Projected announcement")).toBeVisible();
+  await expect(slideCards.first()).toHaveCSS("background-color", "rgb(8, 8, 8)");
+  await expect(slideCards.first()).toHaveCSS("border-top-width", "1px");
+  await expect(slideCards.first()).toHaveCSS("border-radius", "9px");
+  await expect(slideCards.first().locator(".slides-preview-title")).toHaveCSS("text-align", "center");
+  await expect(slideCards.nth(0).locator(".slides-preview-title")).toHaveText("Communion Song");
+  await expect(slideCards.nth(0).locator(".slides-preview-subtitle")).toHaveText(songTitle);
+  await expect(slideCards.nth(0).locator(".slides-preview-content, .slides-preview-image, small")).toHaveCount(0);
+  await expect(slideCards.nth(1).locator(".slides-preview-title")).toHaveText("Announcements");
+  await expect(slideCards.nth(1).locator(".slides-preview-content")).toHaveText("Projected announcement");
+  await expect(slideCards.locator("small")).toHaveCount(0);
   await viewerPage.getByRole("link", { name: new RegExp(songTitle) }).click();
 
   const presentationCounter = viewerPage.locator(".presentation-slide-counter");
@@ -186,18 +243,33 @@ test("owner publishes a Sunday programme that a viewer can present", async ({ br
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
   await expect(viewerPage.locator(".slide-stage")).toHaveCSS("background-color", "rgb(0, 0, 0)");
   await expect(viewerPage.locator(".slide-section")).toHaveCount(0);
+  const lyricsSize = viewerPage.getByLabel("Lyrics size");
+  const songTitleSize = await viewerPage.locator(".slide-title").evaluate((element) => getComputedStyle(element).fontSize);
+  const counterSize = await presentationCounter.evaluate((element) => getComputedStyle(element).fontSize);
+  const previousButtonWidth = await viewerPage.getByRole("button", { name: "Previous item" }).evaluate((element) => getComputedStyle(element).width);
+  const firstLyricsSize = await viewerPage.locator(".slide-lyrics").evaluate((element) => getComputedStyle(element).fontSize);
+  await lyricsSize.focus();
+  await viewerPage.keyboard.press("ArrowRight");
+  await expect(lyricsSize).toHaveValue("105");
+  await expect(viewerPage.locator(".slide-title")).toHaveCSS("font-size", songTitleSize);
+  await expect(presentationCounter).toHaveCSS("font-size", counterSize);
+  await expect(viewerPage.getByRole("button", { name: "Previous item" })).toHaveCSS("width", previousButtonWidth);
+  await expect.poll(() => viewerPage.locator(".slide-lyrics").evaluate((element) => getComputedStyle(element).fontSize)).not.toBe(firstLyricsSize);
   const presentationControls = viewerPage.locator(".presentation-bottom-controls");
   await expect(viewerPage.getByRole("button", { name: "Next item" })).toHaveCSS("width", "40px");
   await expect(presentationControls).toHaveCSS("opacity", "0.16");
   await presentationControls.hover();
   await expect(presentationControls).toHaveCSS("opacity", "1");
   await viewerPage.getByRole("button", { name: "Next item" }).click();
-  await expect(viewerPage.locator(".slide-title")).toHaveText("Responsive reading");
+  await expect(viewerPage.locator(".slide-title")).toHaveText("Announcements");
   await viewerPage.getByRole("button", { name: "Previous item" }).click();
   await expect(viewerPage.locator(".slide-title")).toHaveText(songTitle);
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
+  await viewerPage.locator(".slide-title").click();
   await viewerPage.keyboard.press("ArrowRight");
-  await expect(presentationCounter).toContainText(/^2 \/ \d+$/);
+  await expect(viewerPage.locator(".slide-title")).toHaveText("Announcements");
+  await viewerPage.keyboard.press("ArrowLeft");
+  await expect(viewerPage.locator(".slide-title")).toHaveText(songTitle);
   await viewerPage.getByRole("button", { name: "Home: return to slide overview" }).click();
   await expect(viewerPage).toHaveURL(new RegExp(`/slides\\?scheduleId=${scheduleId}`));
 

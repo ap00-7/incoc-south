@@ -46,6 +46,7 @@ type ScheduleItem = {
   link_url: string | null;
   media_url: string | null;
   background_image_url: string | null;
+  show_in_slides: boolean;
   song_id: string | null;
   updated_at: string;
   song: { title: string } | { title: string }[] | null;
@@ -95,6 +96,7 @@ type Draft = {
   notes: string;
   media_url: string;
   background_image_url: string;
+  show_in_slides: boolean;
 };
 
 function emptyDraft(itemType: string): Draft {
@@ -113,6 +115,7 @@ function emptyDraft(itemType: string): Draft {
     notes: "",
     media_url: "",
     background_image_url: "",
+    show_in_slides: false,
   };
 }
 
@@ -136,6 +139,7 @@ function draftFromItem(item: ScheduleItem): Draft {
     notes: item.notes ?? "",
     media_url: item.media_url ?? "",
     background_image_url: item.background_image_url ?? "",
+    show_in_slides: item.show_in_slides,
   };
 }
 
@@ -261,6 +265,7 @@ export function InlineScheduleManager({
         notes: draft.notes,
         media_url: mediaUrl,
         background_image_url: backgroundImageUrl,
+        show_in_slides: draft.show_in_slides,
       });
       if (!result.ok) {
         setError(result.message);
@@ -425,6 +430,10 @@ export function InlineScheduleManager({
               <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
               <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
             </>}
+            <label className="check-row">
+              <input type="checkbox" checked={draft.show_in_slides} onChange={(event) => setDraft({ ...draft, show_in_slides: event.target.checked })} />
+              Display in Slides
+            </label>
             <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
             <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
 

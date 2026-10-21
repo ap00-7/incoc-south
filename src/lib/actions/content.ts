@@ -79,6 +79,7 @@ const scheduleItemInputSchema = z.object({
   notes: z.string().trim().max(2000),
   media_url: z.string().trim().max(2048),
   background_image_url: z.string().trim().max(2048),
+  show_in_slides: z.boolean(),
 }).superRefine((item, context) => {
   if (Boolean(item.item_id) !== Boolean(item.expected_updated_at)) {
     context.addIssue({ code: "custom", message: "Reload this schedule item and try again." });
@@ -148,6 +149,7 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     link_url: parsed.data.link_url || null,
     media_url: parsed.data.media_url || null,
     background_image_url: parsed.data.background_image_url || null,
+    show_in_slides: parsed.data.show_in_slides,
   };
 
   let itemId = parsed.data.item_id;
@@ -198,7 +200,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
   if (!parsed.success) return { ok: false, message: "The item could not be duplicated." };
   const supabase = await createClient();
   const { data: source, error: sourceError } = await supabase.from("schedule_items")
-    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url")
+    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides")
     .eq("id", parsed.data.item_id).eq("schedule_id", parsed.data.schedule_id)
     .eq("church_id", member.churchId).maybeSingle();
   if (sourceError) return { ok: false, message: `Unable to load item to duplicate: ${sourceError.message}` };
@@ -225,6 +227,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     link_url: source.link_url,
     media_url: source.media_url,
     background_image_url: source.background_image_url,
+    show_in_slides: source.show_in_slides,
     position: (lastItems?.[0]?.position ?? -1) + 1,
   }).select("id").single();
   if (error) return { ok: false, message: `Unable to duplicate item: ${error.message}` };

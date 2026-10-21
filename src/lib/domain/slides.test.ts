@@ -176,7 +176,9 @@ describe("generateSlides", () => {
       title,
       position,
       public_content: title,
+      show_in_slides: true,
     }));
+    items.push({ id: "hidden", item_type: "other", title: "Hidden item", position: 9, public_content: "Hidden", show_in_slides: false });
     expect(filterPresentationItems(items).map(({ title }) => title)).toEqual(["Welcome", "Opening", "Worship"]);
   });
 
@@ -195,9 +197,62 @@ describe("generateSlides", () => {
     expect(groups.map((group) => group.itemTitle)).toEqual(["First song", "Second song"]);
     expect(groups.map((group) => group.slides.length)).toEqual([4, 1]);
     expect(groups.map((group) => group.firstSlideIndex)).toEqual([0, 4]);
+    expect(groups[0].itemType).toBe("song");
+    expect(groups[0].itemSubtitle).toBeNull();
+    expect(groups[0].content).toBeNull();
     expect(groups[0].slides.map((slide) => slide.lines[0])).toEqual([
       "Verse one", "Chorus", "Verse two", "Chorus",
     ]);
+  });
+
+  it("groups uploaded media and configured text for overview cards", () => {
+    const groups = groupPresentationSlides(generateSlides([
+      {
+        id: "image",
+        item_type: "other",
+        title: "Welcome image",
+        position: 0,
+        public_content: "Welcome text",
+        media_url: "https://example.com/welcome.gif",
+      },
+      {
+        id: "text",
+        item_type: "announcement",
+        title: "Announcements",
+        position: 1,
+        public_content: "Please join the fellowship after service.",
+      },
+    ]));
+
+    expect(groups[0]).toMatchObject({
+      itemType: "other",
+      itemTitle: "Welcome image",
+      content: "Welcome text",
+      mediaUrl: "https://example.com/welcome.gif",
+    });
+    expect(groups[1]).toMatchObject({
+      itemType: "announcement",
+      itemTitle: "Announcements",
+      content: "Please join the fellowship after service.",
+      mediaUrl: null,
+    });
+  });
+
+  it("uses a distinct song title as the subtitle under the schedule item title", () => {
+    const [group] = groupPresentationSlides(generateSlides([{
+      id: "song-item",
+      item_type: "song",
+      title: "Opening Song",
+      position: 0,
+      public_content: null,
+      song: {
+        title: "Amazing Grace",
+        song_sections: [{ id: "verse", section_type: "verse", label: null, position: 0, lyrics: "Verse" }],
+      },
+    }]));
+
+    expect(group.itemTitle).toBe("Opening Song");
+    expect(group.itemSubtitle).toBe("Amazing Grace");
   });
 
   it("moves between items at their first slide, skipping the current item's remaining slides", () => {

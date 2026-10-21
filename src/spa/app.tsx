@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Image as ImageIcon, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -28,7 +28,7 @@ import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
-import { generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { filterPresentationItems, generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 import { useAuth } from "@/spa/auth-provider";
 import { useAsyncResource } from "@/spa/use-async-resource";
 
@@ -285,7 +285,7 @@ function SlidesPage() {
     const supabase = createClient();
     if (scheduleId) {
       const { data, error } = await supabase.from("schedules")
-        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
         .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
       if (error) throw new Error(`Unable to load slide previews: ${error.message}`);
       if (!data) throw new Error("This service is not available.");
@@ -324,18 +324,15 @@ function SlidesPage() {
             <p className="slides-overview-meta"><CalendarDays size={15} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>{schedule.venue}</span>}</p>
             {resource.data.groups.length ? <div className="slides-preview-grid">
               {resource.data.groups.map((group) => {
-                const slide = group.slides[0];
-                const thumbnail = slide.mediaUrl || slide.backgroundImageUrl;
-                const preview = group.slides.flatMap((part) => [...part.lines, ...(part.translationLines ?? [])]).join(" ");
+                  const media = group.itemType === "song" ? null : group.mediaUrl || group.backgroundImageUrl;
                 return <Link className="slides-preview-card" to={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
-                  <div className="slides-preview-media">
-                    {thumbnail ? (/\.(mp4|webm)(?:$|\?)/i.test(thumbnail)
-                      ? <video src={thumbnail} muted preload="metadata" aria-hidden="true" />
-                      : <img src={thumbnail} alt="" loading="lazy" />)
-                      : <span><ImageIcon size={22} aria-hidden="true" /></span>}
-                    <small>{group.slides.length} {group.slides.length === 1 ? "slide" : "slides"}</small>
-                  </div>
-                  <div className="slides-preview-copy"><h2>{group.itemTitle}</h2><p>{preview || "Media or display content"}</p></div>
+                  <h2 className="slides-preview-title">{group.itemTitle}</h2>
+                  {group.itemSubtitle && <p className="slides-preview-subtitle">{group.itemSubtitle}</p>}
+                  {media
+                    ? /\.(mp4|webm)(?:$|\?)/i.test(media)
+                      ? <video className="slides-preview-image" src={media} muted autoPlay loop playsInline />
+                      : <img className="slides-preview-image" src={media} alt="" loading="lazy" />
+                    : group.content && <p className="slides-preview-content">{group.content}</p>}
                 </Link>;
               })}
             </div> : <div className="empty-state">There are no presentation slides for this service.</div>}
@@ -372,15 +369,16 @@ function PresentationPage() {
   const initialSlide = Number.isFinite(requested) ? requested : 0;
   const loadPresentation = useCallback(async () => {
     const { data, error } = await createClient().from("schedules")
-      .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+    .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
       .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
     if (error) throw new Error(`Unable to load presentation: ${error.message}`);
     if (!data) throw new Error("This presentation is not available.");
     const items = data.schedule_items ?? [];
+    const presentationItems = filterPresentationItems(normalizeProgrammeItems(items));
     return {
       schedule: data,
-      slides: generateSlides(normalizeProgrammeItems(items)),
-      songIds: items.map((item) => item.song?.id).filter((id): id is string => Boolean(id)),
+      slides: generateSlides(presentationItems),
+      songIds: presentationItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id)),
     };
   }, [scheduleId]);
   const resource = useAsyncResource(`presentation:${scheduleId}`, loadPresentation);
@@ -525,7 +523,7 @@ function AdminScheduleEditPage() {
     const supabase = createClient();
     const [{ data: schedule, error }, { data: songs, error: songsError }] = await Promise.all([
       supabase.from("schedules")
-        .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, updated_at, song:songs(id, title))")
+        .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, show_in_slides, updated_at, song:songs(id, title))")
         .eq("id", scheduleId).eq("church_id", membership?.churchId ?? "").maybeSingle(),
       supabase.from("songs").select("id, title, language")
         .eq("church_id", membership?.churchId ?? "").order("title").limit(1000),

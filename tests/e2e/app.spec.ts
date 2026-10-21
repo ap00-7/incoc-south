@@ -22,7 +22,7 @@ test("About page explains the app and keeps header navigation focused", async ({
 
 test("About page and feature grid fit mobile, tablet, and laptop widths", async ({ page }) => {
   await page.goto("/");
-  for (const width of [320, 360, 768, 1280]) {
+  for (const width of [320, 375, 430, 768, 1024, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
     await expect(page.locator(".about-feature-card")).toHaveCount(3);
@@ -30,6 +30,32 @@ test("About page and feature grid fit mobile, tablet, and laptop widths", async 
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
     expect(hasHorizontalOverflow, `horizontal overflow at ${width}px`).toBe(false);
+  }
+});
+
+test("public and owner route shells avoid horizontal overflow across viewport sizes", async ({ page }) => {
+  test.setTimeout(90_000);
+  const routes = [
+    "/",
+    "/song",
+    "/song/00000000-0000-0000-0000-000000000001",
+    "/schedule",
+    "/schedule/00000000-0000-0000-0000-000000000001",
+    "/slides",
+    "/present/00000000-0000-0000-0000-000000000001",
+    "/login",
+    "/admin/schedules/new",
+  ];
+  for (const route of routes) {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    for (const width of [320, 375, 430, 768, 1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const dimensions = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(dimensions.scrollWidth, `${route} overflow at ${width}px`).toBeLessThanOrEqual(dimensions.clientWidth);
+    }
   }
 });
 

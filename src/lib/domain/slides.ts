@@ -15,6 +15,7 @@ export type ProgrammeItem = {
   title: string;
   position: number;
   public_content: string | null;
+  show_in_slides?: boolean;
   background_image_url?: string | null;
   media_url?: string | null;
   song?: {
@@ -116,6 +117,7 @@ export function normalizeProgrammeItems(
 
 export type PresentationSlide = {
   itemId: string;
+  itemType: string;
   itemTitle: string;
   itemHeader: string | null;
   itemSubtitle: string | null;
@@ -130,7 +132,12 @@ export type PresentationSlide = {
 
 export type PresentationSlideGroup = {
   itemId: string;
+  itemType: string;
   itemTitle: string;
+  itemSubtitle: string | null;
+  content: string | null;
+  mediaUrl: string | null;
+  backgroundImageUrl: string | null;
   firstSlideIndex: number;
   slides: PresentationSlide[];
 };
@@ -144,7 +151,12 @@ export function groupPresentationSlides(slides: PresentationSlide[]): Presentati
     } else {
       groups.set(slide.itemId, {
         itemId: slide.itemId,
-        itemTitle: slide.itemTitle,
+        itemType: slide.itemType,
+        itemTitle: slide.itemHeader ?? slide.itemTitle,
+        itemSubtitle: slide.itemType === "song" && slide.itemHeader ? slide.itemTitle : null,
+        content: slide.itemType === "song" ? null : slide.lines.join("\n"),
+        mediaUrl: slide.mediaUrl,
+        backgroundImageUrl: slide.backgroundImageUrl,
         firstSlideIndex: index,
         slides: [slide],
       });
@@ -188,7 +200,7 @@ const excludedPresentationTitles = new Set([
 
 export function filterPresentationItems(items: ProgrammeItem[]) {
   return [...items]
-    .filter((item) => !excludedPresentationTitles.has(item.title.toLocaleLowerCase().replace(/[^a-z0-9]/g, "")))
+    .filter((item) => item.show_in_slides !== false && !excludedPresentationTitles.has(item.title.toLocaleLowerCase().replace(/[^a-z0-9]/g, "")))
     .sort((a, b) => a.position - b.position);
 }
 
@@ -222,6 +234,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
           const longest = Math.max(0, ...[...lines, ...translationLines].map((line) => [...line].length));
           slides.push({
             itemId: item.id,
+            itemType: item.item_type,
             itemTitle: songTitle,
             itemHeader: item.title && item.title !== songTitle ? item.title : null,
             itemSubtitle: null,
@@ -242,6 +255,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
       const content = item.public_content?.trim();
       slides.push({
         itemId: item.id,
+        itemType: item.item_type,
         itemTitle: item.title,
         itemHeader: null,
         itemSubtitle: null,
