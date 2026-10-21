@@ -56,9 +56,11 @@ type ScheduleItem = {
 };
 
 const itemTitles = [
+  ["Opening", "welcome"],
   ["Pre-service meeting", "other"],
   ["Welcome and Prayer", "welcome"],
   ["Announcements", "announcement"],
+  ["Worship", "worship"],
   ["Sermon and Communion", "sermon"],
   ["Communion Song", "song"],
   ["Contribution Song", "song"],
@@ -378,7 +380,7 @@ export function InlineScheduleManager({
               songs={songs}
               value={draft.song_id}
               onChange={(songId) => setDraft({ ...draft, song_id: songId })}
-              onCreate={() => window.open("/songbook?create=1", "_blank", "noopener,noreferrer")}
+              onCreate={() => window.open("/song?create=1", "_blank", "noopener,noreferrer")}
             />}
 
             {draft.item_type !== "song" && <>
@@ -479,7 +481,7 @@ function SongPicker({
             <button type="button" disabled={!selected} onClick={() => { onChange(""); setMenuOpen(false); }}>Clear</button>
             <button type="button" onClick={() => { setOpen(true); setMenuOpen(false); }}>Replace</button>
             {selected
-              ? <Link href={`/songbook/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
+              ? <Link href={`/song/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
               : <button type="button" onClick={() => { onCreate(); setMenuOpen(false); }}>Create in Songbook</button>}
           </div>}
         </div>

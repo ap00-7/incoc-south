@@ -332,7 +332,7 @@ export async function saveSong(formData: FormData) {
       if (cleanupError) throw new Error(`Song sections could not be saved (${sectionError.message}), and cleanup failed (${cleanupError.message}). Review the new song before retrying.`);
       throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
     }
-    revalidatePath("/songbook");
+    revalidatePath("/song");
     revalidatePath("/admin/songs");
     return { redirectTo: getReturnPath(formData, `/admin/songs/${song.id}`) };
   }
@@ -389,8 +389,8 @@ export async function saveSong(formData: FormData) {
   }));
   const { error: saveSectionsError } = await supabase.from("song_sections").upsert(rows, { onConflict: "id" });
   if (saveSectionsError) throw new Error(`Unable to save lyric sections: ${saveSectionsError.message}`);
-  revalidatePath("/songbook");
-  revalidatePath(`/songbook/${songId}`);
+  revalidatePath("/song");
+  revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
   return { redirectTo: getReturnPath(formData, `/admin/songs/${songId}`) };
 }
@@ -406,9 +406,9 @@ export async function setSongPublication(formData: FormData) {
     .select("id").maybeSingle();
   if (error) throw new Error(`Unable to ${isPublished ? "publish" : "unpublish"} song: ${error.message}`);
   if (!data) throw new Error("This song was changed by another owner. Reload and review the latest version before changing publication.");
-  revalidatePath("/songbook");
-  revalidatePath(`/songbook/${songId}`);
-  return { redirectTo: getReturnPath(formData, "/songbook") };
+  revalidatePath("/song");
+  revalidatePath(`/song/${songId}`);
+  return { redirectTo: getReturnPath(formData, "/song") };
 }
 
 export async function createSong(formData: FormData) {
@@ -451,7 +451,7 @@ export async function createSong(formData: FormData) {
     }
     throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
   }
-  revalidatePath("/songbook");
+  revalidatePath("/song");
   revalidatePath("/admin/songs");
   redirect(`/admin/songs/${song.id}`);
 }
@@ -476,8 +476,8 @@ export async function updateSong(formData: FormData) {
   }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
   if (error) throw new Error(`Unable to update song: ${error.message}`);
   if (!data) throw new Error("This song was changed by another owner. Reload the page and review the latest version before saving.");
-  revalidatePath("/songbook");
-  revalidatePath(`/songbook/${songId}`);
+  revalidatePath("/song");
+  revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
   redirect(`/admin/songs/${songId}`);
 }
@@ -512,7 +512,7 @@ export async function updateSongSection(formData: FormData) {
     .select("id").maybeSingle();
   if (error) throw new Error(`Unable to update lyric section: ${error.message}`);
   if (!data) throw new Error("This lyric section was changed by another owner. Reload and review the latest version.");
-  revalidatePath(`/songbook/${songId}`);
+  revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
   redirect(`/admin/songs/${songId}`);
 }
@@ -542,7 +542,7 @@ export async function addSongSection(formData: FormData) {
     position: (sections?.[0]?.position ?? -1) + 1,
   });
   if (error) throw new Error(`Unable to add lyric section: ${error.message}`);
-  revalidatePath(`/songbook/${songId}`);
+  revalidatePath(`/song/${songId}`);
   revalidatePath(`/admin/songs/${songId}`);
   redirect(`/admin/songs/${songId}`);
 }
@@ -556,7 +556,7 @@ export async function moveSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.rpc("move_song_section", { target_section: sectionId, direction });
   if (error) throw new Error(`Unable to reorder lyric section: ${error.message}`);
-  revalidatePath(`/songbook/${section.song_id}`);
+  revalidatePath(`/song/${section.song_id}`);
   revalidatePath(`/admin/songs/${section.song_id}`);
   redirect(`/admin/songs/${section.song_id}`);
 }
@@ -569,7 +569,7 @@ export async function deleteSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.from("song_sections").delete().eq("id", sectionId);
   if (error) throw new Error(`Unable to delete lyric section: ${error.message}`);
-  revalidatePath(`/songbook/${section.song_id}`);
+  revalidatePath(`/song/${section.song_id}`);
   revalidatePath(`/admin/songs/${section.song_id}`);
   redirect(`/admin/songs/${section.song_id}`);
 }
@@ -584,9 +584,9 @@ export async function deleteSong(formData: FormData) {
     throw new Error(`Unable to delete song: ${error.message}`);
   }
   revalidatePath("/admin/songs");
-  revalidatePath("/songbook");
+  revalidatePath("/song");
   const returnTo = getReturnPath(formData, "/admin/songs");
-  return { redirectTo: returnTo === "/admin/songs" ? "/songbook" : returnTo };
+  return { redirectTo: returnTo === "/admin/songs" ? "/song" : returnTo };
 }
 
 export async function createSchedule(formData: FormData) {

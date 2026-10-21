@@ -24,5 +24,5 @@ export async function setInitialPassword(
   const supabase = await createClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return `Unable to set password: ${error.message}`;
-  redirect("/songbook");
+  redirect("/song");
 }

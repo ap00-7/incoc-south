@@ -57,7 +57,7 @@ async function ScheduleDetailContent({ params }: Props) {
           {items.map((item) => {
             const song = Array.isArray(item.song) ? item.song[0] : item.song;
             const primary = song
-              ? <><span>Song: </span><Link className="song-title-link" href={`/songbook/${song.id}`}>{song.title}</Link></>
+              ? <><span>Song: </span><Link className="song-title-link" href={`/song/${song.id}`}>{song.title}</Link></>
               : item.leader_name && item.public_content
                 ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
               : item.leader_name
