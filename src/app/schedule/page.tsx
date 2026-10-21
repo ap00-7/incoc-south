@@ -29,7 +29,7 @@ export default function SchedulePage({ searchParams }: Props) {
 async function ScheduleContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <div className="content-wrap"><SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div>;
+    return <div className="content-wrap"><SectionHeading title="Sunday Schedule" /><div className="notice notice-warning">Published service schedules will appear here after Supabase is configured.</div></div>;
   }
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
@@ -55,7 +55,7 @@ async function ScheduleContent({ searchParams }: Props) {
       ]} />
       <div className="content-wrap">
         <div className="schedule-list-heading">
-          <SectionHeading eyebrow="SUNDAY SERVICES" title="Gather together" description="Find the published service plans shared with your church." />
+          <SectionHeading title="Sunday Schedule" />
           {isOwner && <Link href="/admin/schedules/new" className="button button-primary"><Plus size={15} /> Create schedule</Link>}
         </div>
         {visibleSchedules.length ? <div className="results-list">

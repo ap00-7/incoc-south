@@ -29,7 +29,7 @@ export default function SlidesIndexPage({ searchParams }: Props) {
 async function SlidesIndexContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <div className="content-wrap"><SectionHeading eyebrow="SLIDES" title="Choose a presentation" /><div className="notice notice-warning">Published presentations will appear here after Supabase is configured.</div></div>;
+    return <div className="content-wrap"><SectionHeading title="Slides" /><div className="notice notice-warning">Published presentations will appear here after Supabase is configured.</div></div>;
   }
   const params = await searchParams;
   const requestedPage = Number.parseInt(params.page ?? "1", 10);
@@ -51,7 +51,7 @@ async function SlidesIndexContent({ searchParams }: Props) {
     <>
       <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: churchId }]} />
       <div className="content-wrap">
-        <SectionHeading eyebrow="SLIDES" title="Choose a presentation" description="Open the slides for a published Sunday service." />
+        <SectionHeading title="Slides" />
         {visibleSchedules.length ? <div className="results-list">
           {visibleSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
             <Link className="result-card" href={`/schedule/${schedule.id}/slides`}>

@@ -48,9 +48,7 @@ async function SlidesContent({ params }: Props) {
       ]} />
       <div className="content-wrap">
         <Link href={`/schedule/${scheduleId}`} className="back-link"><ArrowLeft size={15} /> Back to service</Link>
-        <p className="eyebrow">PRESENTATION PREVIEW</p>
         <h1 className="detail-title">{schedule.title}</h1>
-        <p className="section-description">Preview uses the same deterministic slide layout as projector mode. {slides.length} slide{slides.length === 1 ? "" : "s"}.</p>
         {slides.length ? <div className="admin-card-grid">
           {slides.map((slide, index) => <article className="preview-card" key={`${slide.itemId}-${index}`}>
             <p>{slide.sectionLabel ?? slide.itemTitle} · {index + 1}</p>

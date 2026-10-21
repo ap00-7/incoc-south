@@ -12,9 +12,7 @@ export default function Home() {
   return (
     <PageShell>
       <section className="home-main" aria-labelledby="home-title">
-        <p className="eyebrow">INDIAN CHURCH OF CHRIST · SOUTH SECTOR</p>
         <h1 id="home-title">Worship together.</h1>
-        <p className="home-description">Choose where you would like to begin.</p>
         <nav className="home-options" aria-label="Explore INCOC South">
           {options.map(({ href, icon: Icon, label, text }) => (
             <Link href={href} className="home-option" key={label}>

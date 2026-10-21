@@ -5,7 +5,6 @@ import { ArrowLeft } from "lucide-react";
 import {
   InlineScheduleDetails,
   InlineScheduleManager,
-  ScheduleDescriptionForm,
   SchedulePublicationControls,
 } from "@/components/admin/inline-schedule-manager";
 import { createClient } from "@/lib/supabase/server";
@@ -40,10 +39,9 @@ export default async function EditSchedulePage({ params }: { params: Promise<{ s
   return (
     <>
       <Link href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</Link>
-      <p className="eyebrow">SUNDAY SCHEDULE · {schedule.status === "draft" ? "DRAFT" : "PUBLISHED"}</p>
       <h1 className="detail-title">{schedule.title}</h1>
       <InlineScheduleDetails schedule={schedule} />
-      <section className="schedule-items-editor">
+      <section className="schedule-items-editor" aria-label="Schedule items">
         <h2>Schedule Items</h2>
         <InlineScheduleManager
           schedule={schedule}
@@ -53,7 +51,6 @@ export default async function EditSchedulePage({ params }: { params: Promise<{ s
           churchId={membership.churchId}
         />
       </section>
-      <ScheduleDescriptionForm schedule={schedule} />
       <SchedulePublicationControls schedule={schedule} />
     </>
   );

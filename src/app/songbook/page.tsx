@@ -28,7 +28,7 @@ export default function SongbookPage({ searchParams }: Props) {
 async function SongbookContent({ searchParams }: Props) {
   await connection();
   if (!isSupabaseConfigured()) {
-    return <div className="content-wrap"><SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div>;
+    return <div className="content-wrap"><SectionHeading title="Songbook" /><div className="notice notice-warning">Songbook access is not configured yet. Connect a Supabase project and apply the migration to enable the library.</div></div>;
   }
   const params = await searchParams;
   const query = params.q?.trim() ?? "";
@@ -69,7 +69,7 @@ async function SongbookContent({ searchParams }: Props) {
         { table: "songs", column: "church_id", value: churchId },
       ]} />
       <div className="content-wrap">
-        <SectionHeading eyebrow="THE SONGBOOK" title="Songs for worship" description="Browse the songs shared by your church. Select a song to read its lyrics and sections." />
+        <SectionHeading title="Songbook" />
         {membership?.role === "owner" && <details className="inline-owner-editor" open={params.create === "1"}>
           <summary>Add a song</summary>
           <SongEditorForm returnTo="/songbook" />

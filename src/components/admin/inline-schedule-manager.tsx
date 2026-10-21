@@ -55,15 +55,15 @@ type ScheduleItem = {
   notes?: string;
 };
 
-const itemTypes = [
-  ["welcome", "Welcome"],
-  ["other", "Other"],
-  ["worship", "Worship"],
-  ["sermon", "Sermon"],
-  ["announcement", "Announcement"],
-  ["communion", "Communion"],
-  ["offering", "Offering"],
-  ["closing", "Closing"],
+const itemTitles = [
+  ["Pre-service meeting", "other"],
+  ["Welcome and Prayer", "welcome"],
+  ["Announcements", "announcement"],
+  ["Sermon and Communion", "sermon"],
+  ["Communion Song", "song"],
+  ["Contribution Song", "song"],
+  ["Closing Prayer", "closing"],
+  ["Closing Song", "song"],
 ] as const;
 const mediaTypes: Record<string, string> = {
   "image/png": "png",
@@ -98,7 +98,7 @@ function emptyDraft(itemType: string): Draft {
   return {
     tempId: crypto.randomUUID(),
     item_type: itemType,
-    title: "",
+    title: itemType === "song" ? "Communion Song" : "",
     song_id: "",
     duration_minutes: "",
     leader_name: "",
@@ -357,16 +357,22 @@ export function InlineScheduleManager({
             <button type="button" className="icon-button" aria-label="Close" onClick={closeModal}><X size={19} /></button>
           </header>
           <form className="item-modal-form" onSubmit={(event) => void saveItem(event)}>
-            <label htmlFor="schedule-item-title">{draft.item_type === "song" ? "Header" : "Title"} <span aria-hidden="true">*</span></label>
-            <input id="schedule-item-title" value={draft.title} required maxLength={200} onChange={(event) => setDraft({ ...draft, title: event.target.value })} autoFocus />
-
-            {draft.item_type !== "song" && <>
-              <label htmlFor="schedule-item-type">Item type</label>
-              <select id="schedule-item-type" value={draft.item_type === "prayer" || draft.item_type === "scripture_reading" ? "" : draft.item_type} onChange={(event) => setDraft({ ...draft, item_type: event.target.value })}>
-              {(draft.item_type === "prayer" || draft.item_type === "scripture_reading") && <option value="" disabled>{draft.item_type === "prayer" ? "Prayer" : "Scripture reading"} (legacy; preserved unless changed)</option>}
-              {itemTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </>}
+            <label htmlFor="schedule-item-title">Title <span aria-hidden="true">*</span></label>
+            <select
+              id="schedule-item-title"
+              value={draft.title}
+              required
+              onChange={(event) => {
+                const title = event.target.value;
+                const itemType = itemTitles.find(([option]) => option === title)?.[1] ?? draft.item_type;
+                setDraft({ ...draft, title, item_type: itemType });
+              }}
+              autoFocus
+            >
+              {!draft.title && <option value="" disabled>Select a title</option>}
+              {draft.title && !itemTitles.some(([title]) => title === draft.title) && <option value={draft.title}>{draft.title} (existing)</option>}
+              {itemTitles.map(([title]) => <option key={title} value={title}>{title}</option>)}
+            </select>
 
             {draft.item_type === "song" && <SongPicker
               songs={songs}
@@ -617,33 +623,10 @@ export function InlineScheduleDetails({
         <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
         <label htmlFor={`date-${schedule.id}`}>Date</label>
         <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
+        <label htmlFor={`description-${schedule.id}`}>Description <span className="muted">(optional)</span></label>
+        <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={2} maxLength={2000} />
         {error && <p className="form-error" role="alert">{error}</p>}
         <PendingSubmitButton pendingLabel="Saving…">Save schedule</PendingSubmitButton>
-      </form>
-    </section>
-  );
-}
-
-export function ScheduleDescriptionForm({
-  schedule,
-}: {
-  schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; updated_at: string };
-}) {
-  const { error, formAction } = useServerFormAction(updateSchedule);
-  return (
-    <section className="schedule-description-editor">
-      <h2>Description</h2>
-      <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
-        <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
-        <input type="hidden" name="schedule_id" value={schedule.id} />
-        <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
-        <input type="hidden" name="title" value={schedule.title} />
-        <input type="hidden" name="service_date" value={schedule.service_date} />
-        <input type="hidden" name="venue" value={schedule.venue ?? ""} />
-        <label htmlFor={`description-${schedule.id}`}>Description</label>
-        <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={3} maxLength={2000} />
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <PendingSubmitButton pendingLabel="Saving…">Save description</PendingSubmitButton>
       </form>
     </section>
   );
@@ -696,10 +679,6 @@ export function NewScheduleForm() {
       <label htmlFor="new-service-title">Title</label><input id="new-service-title" name="title" required maxLength={200} />
       <label htmlFor="new-service-venue">Venue</label><input id="new-service-venue" name="venue" maxLength={200} />
       <label htmlFor="new-service-date">Date</label><input id="new-service-date" type="date" name="service_date" required />
-      <fieldset className="new-schedule-items">
-        <legend>Schedule Items</legend>
-        <p className="muted">Create the schedule first, then add items directly in its editing view.</p>
-      </fieldset>
       <label htmlFor="new-service-description">Description</label><textarea id="new-service-description" name="description" rows={3} maxLength={2000} />
       {error && <p className="form-error" role="alert">{error}</p>}
       <PendingSubmitButton pendingLabel="Creating schedule…">Create schedule</PendingSubmitButton>
