@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ArrowRight, CalendarDays, Plus } from "lucide-react";
 import { connection } from "next/server";
@@ -38,14 +39,19 @@ async function ScheduleContent({ searchParams }: Props) {
   const membership = await hasSupabaseAuthCookie() ? await getMembership(supabase) : null;
   const isOwner = membership?.role === "owner";
   let schedulesQuery = supabase.from("schedules")
-    .select("id, title, service_date, venue, description, status, updated_at")
+    .select("id, title, service_date, venue, description, status, updated_at", {
+      count: isOwner ? undefined : "exact",
+    })
     .eq("church_id", churchId);
   if (!isOwner) schedulesQuery = schedulesQuery.eq("status", "published");
-  const { data: schedules, error } = await schedulesQuery
+  const { data: schedules, error, count } = await schedulesQuery
     .order("service_date", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   if (error) throw new Error(`Unable to load services: ${error.message}`);
   const schedulesForPage = schedules ?? [];
+  if (!isOwner && count === 1 && schedulesForPage[0]) {
+    redirect(`/schedule/${schedulesForPage[0].id}`);
+  }
   const hasNextPage = schedulesForPage.length > PAGE_SIZE;
   const visibleSchedules = schedulesForPage.slice(0, PAGE_SIZE);
   return (
