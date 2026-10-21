@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MonitorPlay } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { connection } from "next/server";
 import { PageContentLoading, PageShell } from "@/components/page-shell";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -51,7 +51,6 @@ async function ScheduleDetailContent({ params }: Props) {
       ]} />
       <article className="content-wrap">
         <Link href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</Link>
-        <p className="eyebrow">SERVICE PROGRAMME {schedule.status === "draft" ? "· DRAFT" : ""}</p>
         <h1 className="detail-title">{schedule.title}</h1>
         <div className="detail-meta">{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>· {schedule.venue}</span>}</div>
         {schedule.description && <p className="section-description">{schedule.description}</p>}
@@ -65,7 +64,7 @@ async function ScheduleDetailContent({ params }: Props) {
               <p>{item.item_type === "scripture_reading"
                 ? "Scripture reading"
                 : item.item_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase())}</p>
-              {song && <p>Song: <Link href={`/songbook/${song.id}`}>{song.title}</Link></p>}
+              {song && <p>Song: <Link className="song-title-link" href={`/songbook/${song.id}`}>{song.title}</Link></p>}
               {item.leader_name && <p>{item.item_type === "song" ? "Song leader" : "Responsible"}: {item.leader_name}</p>}
               {item.duration_minutes != null && <p>{item.duration_minutes} min</p>}
               {item.translator_name && <p>Translator: {item.translator_name}</p>}
@@ -81,7 +80,6 @@ async function ScheduleDetailContent({ params }: Props) {
           })}
         </ol> : <div className="empty-state" style={{ marginTop: 22 }}>The programme has not been added yet.</div>}
         {totalMinutes > 0 && <p className="muted" style={{ marginTop: 14, fontSize: 12 }}>Estimated duration: {Math.floor(totalMinutes / 60) ? `${Math.floor(totalMinutes / 60)} hr ` : ""}{totalMinutes % 60} min</p>}
-        <div className="schedule-actions"><Link className="button button-primary" href={`/schedule/${schedule.id}/slides`}><MonitorPlay size={16} /> Open slides</Link></div>
       </article>
     </>
   );

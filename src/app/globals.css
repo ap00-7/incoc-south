@@ -179,12 +179,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .lyrics-section { margin-top: 26px; padding: 0; background: transparent; border: 0; border-radius: 0; }
 .lyrics-section h2 { margin: 0 0 9px; color: #c8c8c8; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .lyrics-text { margin: 0; color: var(--ink); font-family: Georgia, "Times New Roman", serif; font-size: 17px; line-height: 1.85; white-space: pre-wrap; }
-.programme-list { display: grid; gap: 9px; margin-top: 25px; padding: 0; list-style: none; }
-.programme-item { display: grid; grid-template-columns: 40px 1fr auto; gap: 14px; align-items: center; padding: 15px 17px; background: white; border: 1px solid var(--border); border-radius: 9px; }
+.programme-list { margin: 20px 0 0; padding: 0; list-style: none; }
+.programme-item { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.programme-item:last-child { border-bottom: 0; }
+.programme-item > div { min-width: 0; }
 .programme-position { color: #987b40; font-family: Georgia, "Times New Roman", serif; font-size: 19px; }
-.programme-item h2 { margin: 0; color: var(--navy); font-size: 14px; }
-.programme-item p { margin: 5px 0 0; color: var(--muted); font-size: 11px; }
+.programme-item h2 { margin: 0; color: var(--navy); font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+.programme-item p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
 .programme-duration { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.song-title-link { color: #83b7ff; text-decoration: underline; text-underline-offset: 3px; }
+.song-title-link:hover { color: #b3d4ff; }
 .schedule-item-media, .schedule-item-background { display: block; max-width: min(100%, 720px); max-height: 430px; margin-top: 13px; border-radius: 8px; object-fit: contain; }
 .schedule-item-background { max-height: 240px; }
 .schedule-actions { display: flex; gap: 10px; margin-top: 24px; }
@@ -224,7 +228,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .schedule-item-edit-form { margin-top: 18px; padding-top: 17px; border-top: 1px solid var(--border); }
 .section-edit-form { margin-top: 16px; }
 .realtime-notice { position: fixed; right: 16px; bottom: 14px; z-index: 10; max-width: 340px; margin: 0; padding: 10px 13px; color: #684e1e; background: #fff8e6; border: 1px solid #e8d7a9; border-radius: 7px; box-shadow: 0 4px 16px #101d3518; font-size: 11px; }
-.detail-title { margin: 0; color: var(--navy); font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4vw, 46px); font-weight: 500; letter-spacing: -.8px; }
+.detail-title { margin: 0; color: var(--navy); font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4vw, 46px); font-weight: 500; letter-spacing: -.8px; overflow-wrap: anywhere; }
 .admin-subheading { margin: 34px 0 15px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .admin-subheading .eyebrow { margin-bottom: 5px; }
 .admin-subheading h2, .admin-section-title { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--navy); font-family: Georgia, "Times New Roman", serif; font-size: 22px; font-weight: 500; }
@@ -356,7 +360,7 @@ html { color-scheme: dark; }
 }
 .search-input::placeholder, .form-stack input::placeholder, .form-stack textarea::placeholder { color: #888; }
 .toolbar select { color: #ddd; }
-.result-card, .programme-item, .auth-card, .admin-nav,
+.result-card, .auth-card, .admin-nav,
 .admin-link-card, .admin-stats > div, .admin-form, .schedule-edit-form,
 .member-row, .settings-list { color: var(--ink); background: #111; }
 .result-card:hover { border-color: #666; }
@@ -428,7 +432,7 @@ html { color-scheme: dark; }
   .admin-title-row .button { flex: 0 0 auto; }
   .admin-form, .schedule-edit-form { max-width: 100%; padding: 17px; }
   .admin-card-grid { grid-template-columns: 1fr; }
-  .programme-item { grid-template-columns: 28px minmax(0, 1fr); gap: 10px; }
+  .programme-item { grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 13px 0; }
   .programme-duration { grid-column: 2; }
   .schedule-actions { flex-wrap: wrap; }
   .presentation-toolbar { align-items: stretch; flex-direction: column; padding: 9px 12px; }
@@ -543,6 +547,14 @@ html { color-scheme: dark; }
 .song-reading .song-translation-section { margin-top: 36px; padding-top: 19px; border-top: 1px solid #303030; }
 
 @media (max-width: 600px) {
+  .result-card { gap: 12px; padding: 16px; }
+  .result-card > div, .result-card-main { min-width: 0; }
+  .result-card h2 { font-size: 16px; line-height: 1.4; overflow-wrap: anywhere; }
+  .result-card p { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .song-owner-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .detail-meta { font-size: 14px; line-height: 1.6; }
+  .programme-item p { font-size: 14px; }
+  .home-option-copy > span { font-size: 13px; }
   .schedule-list-heading { align-items: flex-start; flex-direction: column; gap: 0; }
   .schedule-list-heading .section-heading { margin-bottom: 13px; }
   .schedule-list-heading > .button { margin-bottom: 20px; }

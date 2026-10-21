@@ -162,6 +162,7 @@ export function InlineScheduleManager({
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
   const [selectedBackground, setSelectedBackground] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [mediaValidation, setMediaValidation] = useState("");
@@ -217,7 +218,7 @@ export function InlineScheduleManager({
 
   async function saveItem(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft) return;
+    if (!draft || saving) return;
     if (mediaValidation) {
       setError(mediaValidation);
       return;
@@ -227,6 +228,7 @@ export function InlineScheduleManager({
       return;
     }
     setSaving(true);
+    setUploading(Boolean(selectedMedia || selectedBackground));
     setError("");
     try {
       let mediaUrl = draft.media_url;
@@ -241,6 +243,7 @@ export function InlineScheduleManager({
         setDraft((current) => current ? { ...current, background_image_url: backgroundImageUrl } : current);
         setSelectedBackground(null);
       }
+      setUploading(false);
       const result = await saveScheduleItem({
         schedule_id: schedule.id,
         ...(draft.id ? { item_id: draft.id, expected_updated_at: draft.expectedUpdatedAt } : {}),
@@ -270,6 +273,7 @@ export function InlineScheduleManager({
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "The item could not be saved.");
     } finally {
+      setUploading(false);
       setSaving(false);
     }
   }
@@ -320,13 +324,13 @@ export function InlineScheduleManager({
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="direction" value="-1" />
                   <input type="hidden" name="return_to" value={returnTo} />
-                  <button className="icon-button" aria-label="Move item up" disabled={index === 0}><ArrowUp size={15} /></button>
+                  <PendingSubmitButton className="icon-button" ariaLabel="Move item up" pendingLabel="Moving…" disabled={index === 0}><ArrowUp size={15} /></PendingSubmitButton>
                 </form>
                 <form action={moveScheduleItem}>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="direction" value="1" />
                   <input type="hidden" name="return_to" value={returnTo} />
-                  <button className="icon-button" aria-label="Move item down" disabled={index === items.length - 1}><ArrowDown size={15} /></button>
+                  <PendingSubmitButton className="icon-button" ariaLabel="Move item down" pendingLabel="Moving…" disabled={index === items.length - 1}><ArrowDown size={15} /></PendingSubmitButton>
                 </form>
                 <form>
                   <input type="hidden" name="item_id" value={item.id} />
@@ -430,7 +434,7 @@ export function InlineScheduleManager({
             {error && <p className="item-modal-error" role="alert">{error}</p>}
             <footer className="item-modal-footer">
               <button type="button" className="button button-secondary" onClick={closeModal} disabled={saving}>Cancel</button>
-              <button type="submit" className="button button-primary" disabled={saving} aria-busy={saving}>{saving && <LoaderCircle size={15} className="button-spinner" aria-hidden="true" />}{saving ? "Saving…" : "Save"}</button>
+              <button type="submit" className="button button-primary" disabled={saving} aria-busy={saving}>{saving && <LoaderCircle size={15} className="button-spinner" aria-hidden="true" />}{uploading ? "Uploading…" : saving ? "Saving…" : "Save"}</button>
             </footer>
           </form>
         </section>
