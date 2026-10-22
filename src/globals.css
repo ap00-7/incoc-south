@@ -831,8 +831,7 @@ code, kbd, pre { font-family: var(--font-mono); }
 .slide-lyric-area { width: 100%; max-height: calc(100dvh - 220px); overflow-y: auto; overscroll-behavior: contain; }
 .slide-section { margin: 0; color: #e0b878; font-size: 12px; font-weight: 700; letter-spacing: .1em; }
 .slide-lyrics { max-width: 100%; color: #fffaf3; font-family: var(--font-body); font-weight: 700; line-height: 1.32; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; text-wrap: pretty; }
-.slide-translation { margin: 0; color: #eadbca; font-family: var(--font-body); font-weight: 600; line-height: 1.38; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; }
-.slide-translation span { margin-bottom: 6px; color: #d7b27c; }
+.slide-translation { margin: clamp(12px, 2vh, 24px) 0 0; text-align: center; }
 .slide-media { max-width: min(80vw, 1100px); max-height: min(40dvh, 420px); margin: 0; }
 .slide-empty { color: #eadbca; }
 .presentation-bottom-controls { z-index: 6; bottom: max(18px, env(safe-area-inset-bottom)); left: max(18px, env(safe-area-inset-left)); max-width: calc(100vw - 24px); opacity: 0; transition: opacity .16s ease; }

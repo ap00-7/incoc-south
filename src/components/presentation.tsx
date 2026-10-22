@@ -258,8 +258,7 @@ export function Presentation({
               {hasLyrics && <div className="slide-lyric-area">
                 {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * zoomedLyricScale}rem, ${3 * zoomedLyricScale}vw, ${2.5 * zoomedLyricScale}rem)` }}>{current.lines.join("\n")}</div>}
                 {current.translationLines?.length ? <div className="slide-translation">
-                  {current.translationLabel && <span>{current.translationLabel}</span>}
-                  <p style={{ fontSize: `clamp(${1.125 * zoomedLyricScale}rem, ${2.25 * zoomedLyricScale}vw, ${1.75 * zoomedLyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
+                  <p className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * zoomedLyricScale}rem, ${3 * zoomedLyricScale}vw, ${2.5 * zoomedLyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
                 </div> : null}
               </div>}
               {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
