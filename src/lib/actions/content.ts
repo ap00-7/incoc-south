@@ -420,8 +420,7 @@ export async function saveSong(formData: FormData) {
   }
   const newSectionRows = sectionRows.filter(({ section }) => !section.id).map(({ values }) => values);
   if (newSectionRows.length > 0) {
-    const { error } = await supabase.from("song_sections")
-      .upsert(newSectionRows, { onConflict: "song_id,position" });
+    const { error } = await supabase.from("song_sections").insert(newSectionRows);
     if (error) throw new Error(`Unable to save new lyric sections: ${error.message}`);
   }
   invalidateRouteData("/song");

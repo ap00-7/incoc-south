@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Plus, Trash2, X } from "lucide-react";
 import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
@@ -309,6 +309,23 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
     });
   }
 
+  function duplicateVerse(section: SectionDraft) {
+    const duplicate: SectionDraft = {
+      key: crypto.randomUUID(),
+      section_type: section.section_type,
+      label: section.label,
+      lyrics: section.lyrics,
+      translation: section.translation,
+      translation_language: section.translation_language,
+      is_hidden: section.is_hidden,
+    };
+    setSections((current) => {
+      const index = current.findIndex((item) => item.key === section.key);
+      if (index < 0) return current;
+      return [...current.slice(0, index + 1), duplicate, ...current.slice(index + 1)];
+    });
+  }
+
   function deleteVerse() {
     if (!deleteVerseKey) return;
     setSections((current) => current.filter((section) => section.key !== deleteVerseKey));
@@ -506,6 +523,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
               <span className="verse-row-copy"><strong>{sectionTitle(section, number)}</strong><span>{section.is_hidden ? "Hidden" : section.lyrics.trim() || "No lyrics added"}</span></span>
             </button>
             <div className="verse-actions">
+              <button type="button" className="icon-button" aria-label="Duplicate verse" title="Duplicate verse" onClick={() => duplicateVerse(section)}><Copy size={16} /></button>
               <button type="button" className="icon-button" aria-label={`Move verse ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => moveVerse(section.key, -1)}><ArrowUp size={16} /></button>
               <button type="button" className="icon-button" aria-label={`Move verse ${index + 1} down`} title="Move down" disabled={index === verses.length - 1} onClick={() => moveVerse(section.key, 1)}><ArrowDown size={16} /></button>
               <button type="button" className="icon-button danger" aria-label={`Delete verse ${index + 1}`} title="Delete verse" onClick={() => setDeleteVerseKey(section.key)}><Trash2 size={16} /></button>
