@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
@@ -86,6 +86,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [workingSection, setWorkingSection] = useState<SectionDraft | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [deleteVerseKey, setDeleteVerseKey] = useState<string | null>(null);
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
 
@@ -115,6 +116,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
     index,
     number: section.is_hidden ? visibleVerseNumber + 1 : ++visibleVerseNumber,
   }));
+  const versePendingDelete = numberedVerses.find(({ section }) => section.key === deleteVerseKey);
   const primarySpecialKeys = new Set((["pre_chorus", "chorus", "bridge"] as const)
     .map((type) => sections.find((section) => section.section_type === type)?.key));
   const additionalSections = sections.filter((section) => section.section_type !== "verse" && !primarySpecialKeys.has(section.key));
@@ -163,6 +165,12 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       let verseIndex = 0;
       return current.map((section) => section.section_type === "verse" ? versesOnly[verseIndex++] : section);
     });
+  }
+
+  function deleteVerse() {
+    if (!deleteVerseKey) return;
+    setSections((current) => current.filter((section) => section.key !== deleteVerseKey));
+    setDeleteVerseKey(null);
   }
 
   function handleDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
@@ -251,6 +259,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
             <div className="verse-actions">
               <button type="button" className="icon-button" aria-label={`Move verse ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => moveVerse(section.key, -1)}><ArrowUp size={16} /></button>
               <button type="button" className="icon-button" aria-label={`Move verse ${index + 1} down`} title="Move down" disabled={index === verses.length - 1} onClick={() => moveVerse(section.key, 1)}><ArrowDown size={16} /></button>
+              <button type="button" className="icon-button danger" aria-label={`Delete verse ${index + 1}`} title="Delete verse" onClick={() => setDeleteVerseKey(section.key)}><Trash2 size={16} /></button>
             </div>
           </li>)}
         </ol>
@@ -335,6 +344,12 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
         pendingLabel="Discarding…"
         onConfirm={discardVerse}
         onCancel={() => setConfirmDiscard(false)}
+      />}
+      {versePendingDelete && <ConfirmationDialog
+        title="Delete verse?"
+        description={`Delete "${sectionTitle(versePendingDelete.section, versePendingDelete.number)}" from this song? This change will be saved when you save the song.`}
+        onConfirm={deleteVerse}
+        onCancel={() => setDeleteVerseKey(null)}
       />}
     </form>
   );

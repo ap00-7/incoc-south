@@ -728,6 +728,7 @@ code, kbd, pre { font-family: var(--font-mono); }
 .song-editor .verse-row-copy strong, .song-editor .legacy-section h3 { color: var(--navy); }
 .song-editor .verse-row-copy > span { color: var(--muted); }
 .song-editor .verse-actions .icon-button, .verse-close { color: var(--ink); background: var(--surface-soft); border-color: var(--border); }
+.song-editor .verse-actions .icon-button.danger { color: var(--danger); }
 .song-options legend, .song-options .check-row { color: var(--muted); }
 .legacy-section, .delete-song-form { border-color: var(--border); }
 .confirm-dialog > p { color: var(--muted); }

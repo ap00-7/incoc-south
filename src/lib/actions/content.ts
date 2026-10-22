@@ -372,6 +372,7 @@ export async function saveSong(formData: FormData) {
   if (sections.some((section) => section.id && !existingIds.has(section.id))) {
     throw new Error("A lyric section no longer belongs to this song. Reload and review the latest version.");
   }
+  const retainedSectionIds = new Set(sections.flatMap((section) => section.id ? [section.id] : []));
 
   const savedPositionById = new Map((existingSections ?? []).map(({ id, position }) => [id, position]));
   const sectionOrderChanged = sections.some((section, position) =>
@@ -398,6 +399,12 @@ export async function saveSong(formData: FormData) {
   }));
   const { error: saveSectionsError } = await supabase.from("song_sections").upsert(rows, { onConflict: "id" });
   if (saveSectionsError) throw new Error(`Unable to save lyric sections: ${saveSectionsError.message}`);
+  const removedSectionIds = [...existingIds].filter((id) => !retainedSectionIds.has(id));
+  if (removedSectionIds.length > 0) {
+    const { error: deleteSectionsError } = await supabase.from("song_sections").delete()
+      .in("id", removedSectionIds).eq("song_id", songId);
+    if (deleteSectionsError) throw new Error(`Unable to delete removed lyric sections: ${deleteSectionsError.message}`);
+  }
   invalidateRouteData("/song");
   invalidateRouteData(`/song/${songId}`);
   invalidateRouteData(`/admin/songs/${songId}`);
