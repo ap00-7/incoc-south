@@ -83,6 +83,7 @@ type Draft = {
   id?: string;
   tempId: string;
   expectedUpdatedAt?: string;
+  song_title: string;
   item_type: string;
   title: string;
   song_id: string;
@@ -102,6 +103,7 @@ type Draft = {
 function emptyDraft(itemType: string): Draft {
   return {
     tempId: crypto.randomUUID(),
+    song_title: "",
     item_type: itemType,
     title: itemType === "song" ? "Communion Song" : "",
     song_id: "",
@@ -120,10 +122,12 @@ function emptyDraft(itemType: string): Draft {
 }
 
 function draftFromItem(item: ScheduleItem): Draft {
+  const song = Array.isArray(item.song) ? item.song[0] : item.song;
   return {
     id: item.id,
     tempId: item.id,
     expectedUpdatedAt: item.updated_at,
+    song_title: song?.title ?? "",
     item_type: itemTypeForTitle(item.title, item.item_type),
     title: item.title,
     song_id: item.song_id ?? "",
@@ -147,6 +151,8 @@ export function InlineScheduleManager({
   schedule,
   items,
   songs,
+  privateNotesReady,
+  songsReady,
   returnTo,
   churchId,
 }: {
@@ -160,6 +166,8 @@ export function InlineScheduleManager({
   };
   items: ScheduleItem[];
   songs: SongOption[];
+  privateNotesReady: boolean;
+  songsReady: boolean;
   returnTo: string;
   churchId: string;
 }) {
@@ -229,7 +237,7 @@ export function InlineScheduleManager({
       return;
     }
     if (draft.item_type === "song" && !draft.song_id && !draft.id) {
-      setError("Select a song from the church Songbook.");
+      setError(songsReady ? "Select a song from the church Songbook." : "Song options are still loading. Try again in a moment.");
       return;
     }
     setSaving(true);
@@ -309,10 +317,12 @@ export function InlineScheduleManager({
         <button className="button button-primary" type="button" onClick={() => openAdd()}>
           <Plus size={15} /> Add Item
         </button>
-        <button className="button button-secondary" type="button" onClick={() => openAdd("song")}>
+        <button className="button button-secondary" type="button" onClick={() => openAdd("song")} disabled={!songsReady}>
           <Plus size={15} /> Add Song
         </button>
       </div>
+      {!privateNotesReady && <p className="muted" role="status">Loading private schedule notes; existing items cannot be edited until they are ready.</p>}
+      {privateNotesReady && !songsReady && <p className="muted" role="status">Loading Songbook options…</p>}
       {feedback && <p className="inline-item-feedback" role="status">{feedback}</p>}
       {items.length ? <ol className="inline-programme-list">
         {items.map((item, index) => {
@@ -324,7 +334,7 @@ export function InlineScheduleManager({
                 {relatedSong && <p className="muted">{relatedSong.title}</p>}
               </div>
               <div className="mini-actions">
-                <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)}>Edit</button>
+                <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)} disabled={!privateNotesReady}>Edit</button>
                 <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
                 <MoveScheduleItemForm itemId={item.id} direction={-1} returnTo={returnTo} disabled={index === 0} />
                 <MoveScheduleItemForm itemId={item.id} direction={1} returnTo={returnTo} disabled={index === items.length - 1} />
@@ -367,13 +377,18 @@ export function InlineScheduleManager({
             >
               {!draft.title && <option value="" disabled>Select a title</option>}
               {draft.title && !itemTitles.some(([title]) => title === draft.title) && <option value={draft.title}>{draft.title} (existing)</option>}
-              {itemTitles.map(([title]) => <option key={title} value={title}>{title}</option>)}
+              {itemTitles.map(([title, type]) => <option key={title} value={title} disabled={type === "song" && !songsReady}>{title}</option>)}
             </select>
 
             {draft.item_type === "song" && <SongPicker
               songs={songs}
               value={draft.song_id}
-              onChange={(songId) => setDraft({ ...draft, song_id: songId })}
+              selectedTitle={draft.song_title}
+              onChange={(songId) => setDraft({
+                ...draft,
+                song_id: songId,
+                song_title: songs.find(({ id }) => id === songId)?.title ?? "",
+              })}
               onCreate={() => window.open("/song?create=1", "_blank", "noopener,noreferrer")}
             />}
 
@@ -452,11 +467,13 @@ export function InlineScheduleManager({
 function SongPicker({
   songs,
   value,
+  selectedTitle,
   onChange,
   onCreate,
 }: {
   songs: SongOption[];
   value: string;
+  selectedTitle: string;
   onChange: (id: string) => void;
   onCreate: () => void;
 }) {
@@ -471,7 +488,7 @@ function SongPicker({
       <div className="song-picker-row">
         <FileText size={18} aria-hidden="true" />
         <button type="button" className="song-picker-select" aria-expanded={open} onClick={() => { setOpen(!open); setMenuOpen(false); }}>
-          {selected ? `${selected.title} · ${selected.language}` : "Select a Songbook song"}
+          {selected ? `${selected.title} · ${selected.language}` : selectedTitle || "Select a Songbook song"}
         </button>
         <div className="song-picker-menu">
           <button type="button" className="icon-button" aria-label="Song options" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}><MoreHorizontal size={18} /></button>

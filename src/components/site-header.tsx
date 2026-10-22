@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BookOpen, CalendarDays, ShieldCheck } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/spa/auth-provider";
 
 export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean; showNavigation: boolean }) {
@@ -38,7 +37,6 @@ export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean;
           <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
         </nav>}
         <div className="header-actions">
-          <ThemeToggle />
           {showOwner && <>
             <Link className="owner-session-label" to="/admin/songs"><ShieldCheck size={15} /> Owner</Link>
             <button className="header-session-action" type="button" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut}>

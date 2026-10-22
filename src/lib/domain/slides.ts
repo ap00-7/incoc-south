@@ -186,6 +186,22 @@ export function getAdjacentItemSlideIndex(
   return targetIndex;
 }
 
+export function getTouchSwipeSlideIndex(
+  slides: Array<Pick<PresentationSlide, "itemId">>,
+  currentIndex: number,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+) {
+  const currentItemId = slides[currentIndex]?.itemId;
+  const deltaX = endX - startX;
+  const deltaY = endY - startY;
+  if (!currentItemId || Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return null;
+  const targetIndex = currentIndex + (deltaX < 0 ? 1 : -1);
+  return slides[targetIndex]?.itemId === currentItemId ? targetIndex : null;
+}
+
 const LINES_PER_SLIDE = 6;
 const TARGET_LINE_LENGTH = 52;
 

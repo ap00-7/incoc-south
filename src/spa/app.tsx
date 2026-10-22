@@ -10,7 +10,6 @@ import { SongbookSearch } from "@/components/songbook-search";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark } from "@/components/brand-mark";
 import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
@@ -37,9 +36,10 @@ const SetupForm = lazy(() => import("@/components/auth/setup-form").then((module
 
 function PageShell({ children, owner = false }: { children: ReactNode; owner?: boolean }) {
   const { pathname } = useLocation();
+  const showHeader = pathname === "/";
   return <>
-    <SiteHeader owner={owner} showNavigation={pathname === "/"} />
-    <main className="page-main">{children}</main>
+    {showHeader && <SiteHeader owner={owner} showNavigation />}
+    <main className={`page-main${showHeader ? "" : " page-main-headerless"}`}>{children}</main>
     <SiteFooter />
   </>;
 }
@@ -546,40 +546,58 @@ function AdminScheduleEditPage() {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
   const loadSchedule = useCallback(async () => {
-    const supabase = createClient();
-    const [{ data: schedule, error }, { data: songs, error: songsError }] = await Promise.all([
-      supabase.from("schedules")
-        .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, show_in_slides, updated_at, song:songs(id, title))")
-        .eq("id", scheduleId).eq("church_id", membership?.churchId ?? "").maybeSingle(),
-      supabase.from("songs").select("id, title, language")
-        .eq("church_id", membership?.churchId ?? "").order("title").limit(1000),
-    ]);
+    const { data: schedule, error } = await createClient().from("schedules")
+      .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, show_in_slides, updated_at, song:songs(id, title))")
+      .eq("id", scheduleId).eq("church_id", membership?.churchId ?? "").maybeSingle();
     if (error) throw new Error(`Unable to load service: ${error.message}`);
-    if (songsError) throw new Error(`Unable to load Songbook: ${songsError.message}`);
     if (!schedule) throw new Error("This schedule is not available.");
     const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);
-    const { data: notes, error: notesError } = items.length
-      ? await supabase.from("schedule_item_notes").select("schedule_item_id, notes").in("schedule_item_id", items.map((item) => item.id))
-      : { data: [], error: null };
-    if (notesError) throw new Error(`Unable to load private service notes: ${notesError.message}`);
-    const notesByItem = new Map((notes ?? []).map((note) => [note.schedule_item_id, note.notes]));
-    return { schedule, items: items.map((item) => ({ ...item, notes: notesByItem.get(item.id) ?? "" })), songs: songs ?? [] };
+    return { schedule, items };
   }, [membership?.churchId, scheduleId]);
   const resource = useAsyncResource(`admin:schedule:${scheduleId}`, loadSchedule);
-  if (resource.loading && !resource.data) return <LoadingPage title="Edit schedule" />;
-  if (resource.error) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
-  if (!resource.data) return <ResourceMessage error="This schedule is not available." />;
+  const loadSongs = useCallback(async () => {
+    const { data, error } = await createClient().from("songs").select("id, title, language")
+      .eq("church_id", membership?.churchId ?? "").order("title").limit(1000);
+    if (error) throw new Error(`Unable to load Songbook: ${error.message}`);
+    return data ?? [];
+  }, [membership?.churchId]);
+  const songsResource = useAsyncResource(`admin:schedule-songs:${membership?.churchId ?? ""}`, loadSongs);
+  const itemIds = resource.data?.items.map(({ id }) => id).join(",") ?? "";
+  const loadNotes = useCallback(async () => {
+    if (!itemIds) return {};
+    const { data, error } = await createClient().from("schedule_item_notes")
+      .select("schedule_item_id, notes").in("schedule_item_id", itemIds.split(","));
+    if (error) throw new Error(`Unable to load private service notes: ${error.message}`);
+    return Object.fromEntries((data ?? []).map(({ schedule_item_id, notes }) => [schedule_item_id, notes]));
+  }, [itemIds]);
+  const notesResource = useAsyncResource(`admin:schedule-notes:${scheduleId}:${itemIds}`, loadNotes);
+  if (resource.error && !resource.data) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
+  if (!resource.data) return <>
+    <IntentPrefetchLink href="/admin/schedules" className="back-link"><ArrowLeft size={15} /> Back to schedules</IntentPrefetchLink>
+    <h1 className="detail-title">Edit schedule</h1>
+    <InlineLoading>Loading schedule details…</InlineLoading>
+  </>;
+  const scheduleItems = resource.data.items.map((item) => ({
+    ...item,
+    notes: notesResource.data?.[item.id] ?? "",
+  }));
   return <>
+    {resource.error && <ResourceMessage error={`The latest schedule refresh failed: ${resource.error}`} retry={resource.refresh} />}
     <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
     <h1 className="detail-title">{resource.data.schedule.title}</h1>
     <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
       <InlineScheduleDetails schedule={resource.data.schedule} />
-      <section className="schedule-items-editor" aria-label="Schedule items">
+      {notesResource.error && <ResourceMessage error={notesResource.error} retry={notesResource.refresh} />}
+      {songsResource.error && <ResourceMessage error={songsResource.error} retry={songsResource.refresh} />}
+      {(resource.loading || notesResource.loading || songsResource.loading) && <InlineLoading>Loading schedule options…</InlineLoading>}
+      <section className="schedule-items-editor" aria-label="Schedule Items">
         <h2>Schedule Items</h2>
         <InlineScheduleManager
           schedule={resource.data.schedule}
-          items={resource.data.items}
-          songs={resource.data.songs}
+          items={scheduleItems}
+          songs={songsResource.data ?? []}
+          privateNotesReady={Boolean(notesResource.data) && !notesResource.error}
+          songsReady={Boolean(songsResource.data)}
           returnTo={`/admin/schedules/${resource.data.schedule.id}`}
           churchId={membership?.churchId ?? ""}
         />
@@ -649,7 +667,6 @@ function LoginPage() {
   if (user) return <Navigate to={membership ? "/song" : "/access-denied"} replace />;
   return <main className="auth-page">
     <section className="auth-card">
-      <div className="auth-theme-toggle"><ThemeToggle /></div>
       <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
       <p className="eyebrow">INDIAN CHURCH OF CHRIST</p><h1>Welcome back</h1>
       <p className="muted">Sign-in is restricted to the website owner.</p>

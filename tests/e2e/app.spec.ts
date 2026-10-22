@@ -18,6 +18,9 @@ test("About page explains the app and keeps header navigation focused", async ({
   await expect(primaryNavigation.getByRole("link", { name: "Songbook" })).toHaveAttribute("href", "/song");
   await expect(primaryNavigation.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/schedule");
   await expect(primaryNavigation.getByRole("link", { name: "Slides" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
 });
 
 test("About page and feature grid fit mobile, tablet, and laptop widths", async ({ page }) => {
@@ -59,15 +62,13 @@ test("public and owner route shells avoid horizontal overflow across viewport si
   }
 });
 
-test("theme toggle changes and persists on the About page", async ({ page }) => {
+test("dark theme is fixed and no light-theme switcher is exposed", async ({ page }) => {
   await page.goto("/");
   const root = page.locator("html");
-  const initialTheme = await root.getAttribute("data-theme");
-  await page.getByRole("button", { name: "Toggle color theme" }).click();
-  const updatedTheme = initialTheme === "dark" ? "light" : "dark";
-  await expect(root).toHaveAttribute("data-theme", updatedTheme);
+  await expect(root).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
   await page.reload();
-  await expect(root).toHaveAttribute("data-theme", updatedTheme);
+  await expect(root).toHaveAttribute("data-theme", "dark");
 });
 
 test("public content routes remain reachable without authentication controls", async ({ page }) => {
@@ -76,11 +77,37 @@ test("public content routes remain reachable without authentication controls", a
     await expect(page.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+    await expect(page.locator(".site-header")).toHaveCount(0);
     await expect(page.locator(".page-main")).toBeVisible();
   }
 });
 
 test("main navigation is home-only across direct visits and browser history", async ({ page }) => {
+  await page.goto("/song");
+  await page.goto("/");
+  const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation).toBeVisible();
+  await navigation.getByRole("link", { name: "Songbook" }).click();
+  await expect(page).toHaveURL(/\/song$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL("/");
+  await expect(page.locator(".site-header")).toBeVisible();
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Schedule" }).click();
+  await expect(page).toHaveURL(/\/schedule$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/song$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.goForward();
+  await expect(page).toHaveURL("/");
+  await page.goForward();
+  await expect(page).toHaveURL(/\/schedule$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+
   const routes = [
     "/song",
     "/song/00000000-0000-0000-0000-000000000001",
@@ -96,32 +123,11 @@ test("main navigation is home-only across direct visits and browser history", as
     const response = await page.goto(route);
     expect(response?.ok(), route).toBe(true);
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+    await expect(page.locator(".site-header")).toHaveCount(0);
     await page.reload();
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+    await expect(page.locator(".site-header")).toHaveCount(0);
   }
-
-  await page.goto("/");
-  const navigation = page.getByRole("navigation", { name: "Main navigation" });
-  await expect(navigation).toBeVisible();
-  await navigation.getByRole("link", { name: "Songbook" }).click();
-  await expect(page).toHaveURL(/\/song$/);
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
-  await page.getByRole("link", { name: "INCOC South home" }).click();
-  await expect(page).toHaveURL("/");
-  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Schedule" }).click();
-  await expect(page).toHaveURL(/\/schedule$/);
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
-  await page.goBack();
-  await expect(page).toHaveURL("/");
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-  await page.goBack();
-  await expect(page).toHaveURL(/\/song$/);
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
-  await page.goForward();
-  await expect(page).toHaveURL("/");
-  await page.goForward();
-  await expect(page).toHaveURL(/\/schedule$/);
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
 });
 
 test("the custom cross icon is served", async ({ request }) => {

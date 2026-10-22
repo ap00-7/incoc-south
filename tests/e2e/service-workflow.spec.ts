@@ -26,15 +26,19 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
   await expect(ownerPage).toHaveURL(/\/song$/);
-  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
+  await expect(ownerPage.locator(".site-header")).toHaveCount(0);
   await ownerPage.goto("/login");
   await expect(ownerPage).toHaveURL(/\/song$/);
   await ownerPage.reload();
-  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
+  await expect(ownerPage.locator(".site-header")).toHaveCount(0);
 
   for (const path of ["/", "/songbook", "/schedule", "/slides"]) {
     await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
-    await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
+    if (new URL(ownerPage.url()).pathname === "/") {
+      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
+    } else {
+      await expect(ownerPage.locator(".site-header")).toHaveCount(0);
+    }
   }
   await ownerPage.setViewportSize({ width: 360, height: 800 });
   const hasHeaderOverflow = await ownerPage.evaluate(
@@ -43,12 +47,12 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   expect(hasHeaderOverflow).toBe(false);
   await ownerPage.setViewportSize({ width: 1280, height: 900 });
   await ownerPage.goto("/admin/songs");
-  await expect(ownerPage.getByRole("link", { name: "Owner" })).toBeVisible();
+  await expect(ownerPage.locator(".site-header")).toHaveCount(0);
 
   const secondTab = await ownerContext.newPage();
   await secondTab.goto("/admin/songs", { waitUntil: "domcontentloaded" });
   await expect(secondTab).toHaveURL(/\/admin\/songs$/);
-  await expect(secondTab.getByRole("link", { name: "Owner" })).toBeVisible();
+  await expect(secondTab.locator(".site-header")).toHaveCount(0);
   await secondTab.close();
 
   const uniqueSuffix = Date.now();
@@ -219,6 +223,24 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   ownerSlideCards = ownerPage.locator(".slides-preview-card");
   await expect(ownerSlideCards).toHaveCount(2);
   await expect(ownerSlideCards.nth(1).locator(".slides-preview-image")).toHaveAttribute("src", /\.gif$/);
+  await ownerSlideCards.nth(1).click();
+  const fullscreenImage = ownerPage.locator(".presentation-fullscreen-image");
+  await expect(fullscreenImage).toBeVisible();
+  await expect(ownerPage.locator(".slide-title")).toHaveCount(0);
+  await expect(fullscreenImage).toHaveCSS("object-fit", "contain");
+  for (const [width, height] of [[360, 800], [768, 1024], [1440, 900]]) {
+    await ownerPage.setViewportSize({ width, height });
+    const imageBounds = await fullscreenImage.evaluate((image) => {
+      const rect = image.getBoundingClientRect();
+      return { right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    });
+    expect(imageBounds.width).toBe(width);
+    expect(imageBounds.height).toBe(height);
+    expect(imageBounds.right).toBeLessThanOrEqual(width);
+    expect(imageBounds.bottom).toBeLessThanOrEqual(height);
+  }
+  await ownerPage.setViewportSize({ width: 1280, height: 900 });
+  await ownerPage.getByRole("button", { name: "Home: return to slide overview" }).click();
 
   await ownerPage.goto(`/admin/schedules/${scheduleId}`);
   await ownerPage.getByRole("button", { name: "Edit item" }).nth(2).click();
@@ -246,6 +268,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
   await itemDialog.getByRole("button", { name: "Cancel" }).click();
 
+  await ownerPage.goto("/");
   await ownerPage.getByRole("button", { name: "Sign out" }).click();
   await expect(ownerPage).toHaveURL(/\/login$/);
   await expect(ownerPage.getByRole("heading", { name: "Welcome back" })).toBeVisible();
@@ -304,7 +327,13 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(viewerPage.locator(".presentation-toolbar")).toHaveCount(0);
   await expect(viewerPage.getByRole("button", { name: "Previous item" })).toBeDisabled();
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
-  await expect(viewerPage.locator(".slide-stage")).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await expect(viewerPage.locator(".slide-stage")).toHaveCSS("background-color", "rgb(11, 11, 10)");
+  const zoomShortcutsPrevented = await viewerPage.evaluate(() => ["+", "-", "0"].map((key) => {
+    const event = new KeyboardEvent("keydown", { key, ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }));
+  expect(zoomShortcutsPrevented).toEqual([false, false, false]);
   await expect(viewerPage.locator(".slide-section")).toHaveCount(0);
   await expect(viewerPage.getByLabel("Lyrics size")).toHaveCount(0);
   const songTitleSize = await viewerPage.locator(".slide-title").evaluate((element) => getComputedStyle(element).fontSize);
@@ -331,9 +360,40 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
 
   const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const touchPage = await touchContext.newPage();
-  await touchPage.goto(`/present/${scheduleId}`);
+  await touchPage.goto(`/present/${scheduleId}?slide=0`);
   const touchControls = touchPage.locator(".presentation-bottom-controls");
   await expect(touchControls).toHaveCSS("opacity", "0.8");
+  const touchCounter = touchPage.locator(".presentation-slide-counter");
+  const touchStage = touchPage.locator(".slide-stage");
+  async function swipe(startX: number, startY: number, endX: number, endY: number) {
+    await touchStage.evaluate((stage, coordinates) => {
+      const dispatch = (type: "touchstart" | "touchend", x: number, y: number) => {
+        const touch = new Touch({ identifier: 1, target: stage, clientX: x, clientY: y });
+        stage.dispatchEvent(new TouchEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          touches: type === "touchstart" ? [touch] : [],
+          changedTouches: [touch],
+        }));
+      };
+      dispatch("touchstart", coordinates.startX, coordinates.startY);
+      dispatch("touchend", coordinates.endX, coordinates.endY);
+    }, { startX, startY, endX, endY });
+  }
+  await swipe(300, 300, 220, 302);
+  await expect(touchCounter).toContainText(/^2 \/ \d+$/);
+  await expect(touchPage.locator(".slide-title")).toHaveText(songTitle);
+  await swipe(220, 300, 300, 302);
+  await expect(touchCounter).toContainText(/^1 \/ \d+$/);
+  await swipe(300, 300, 304, 220);
+  await expect(touchCounter).toContainText(/^1 \/ \d+$/);
+  const nextSlideHref = await slideCards.nth(1).getAttribute("href");
+  const nextItemSlide = Number(new URL(nextSlideHref!, viewerPage.url()).searchParams.get("slide"));
+  await touchPage.goto(`/present/${scheduleId}?slide=${nextItemSlide - 1}`);
+  const lastSongSlide = await touchCounter.innerText();
+  await swipe(300, 300, 220, 302);
+  await expect(touchCounter).toHaveText(lastSongSlide);
+  await expect(touchPage.locator(".slide-title")).toHaveText(songTitle);
   await touchPage.getByRole("button", { name: "Next item" }).tap();
   await expect(touchPage.locator(".slide-title")).toHaveText("Announcements");
   await touchContext.close();

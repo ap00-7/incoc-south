@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { clampSlideIndex, getAdjacentItemSlideIndex, type PresentationSlide } from "@/lib/domain/slides";
+import { clampSlideIndex, getAdjacentItemSlideIndex, getTouchSwipeSlideIndex, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 export function Presentation({
@@ -32,10 +32,15 @@ export function Presentation({
   );
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
-  const touchStartX = useRef<number | null>(null);
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const currentIndex = clampSlideIndex(index, slides.length);
   const previousItemIndex = getAdjacentItemSlideIndex(slides, currentIndex, -1);
   const nextItemIndex = getAdjacentItemSlideIndex(slides, currentIndex, 1);
+  const current = slides[currentIndex];
+  const isVideo = Boolean(current?.mediaUrl && /\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl));
+  const fullscreenImageUrl = current && !isVideo
+    ? current.mediaUrl || current.backgroundImageUrl
+    : null;
 
   useEffect(() => {
     if (!canReadSession) return;
@@ -108,6 +113,7 @@ export function Presentation({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName))) return;
       if (event.key === "ArrowRight" || event.key === " ") {
@@ -125,7 +131,6 @@ export function Presentation({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goTo, navigate, nextItemIndex, previousItemIndex, scheduleId]);
 
-  const current = slides[currentIndex];
   const hasLyrics = Boolean(current?.lines.length || current?.translationLines?.length);
   const totalLyricLines = (current?.lines.length ?? 0) + (current?.translationLines?.length ?? 0);
   const lyricScale = current
@@ -145,30 +150,32 @@ export function Presentation({
       {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section
-        className="slide-stage"
+        className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}`}
         aria-live="polite"
         onTouchStart={(event) => {
           const target = event.target;
           if (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]")) return;
-          touchStartX.current = event.touches[0]?.clientX ?? null;
+          const touch = event.touches[0];
+          touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
         }}
         onTouchEnd={(event) => {
-          const startX = touchStartX.current;
-          touchStartX.current = null;
+          const start = touchStart.current;
+          touchStart.current = null;
           const target = event.target;
-          const endX = event.changedTouches[0]?.clientX;
-          if (startX === null || endX === undefined || (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]"))) return;
-          const difference = endX - startX;
-          if (difference < -50 && nextItemIndex !== null) void goTo(nextItemIndex);
-          else if (difference > 50 && previousItemIndex !== null) void goTo(previousItemIndex);
+          const touch = event.changedTouches[0];
+          if (!start || !touch || (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]"))) return;
+          const targetIndex = getTouchSwipeSlideIndex(slides, currentIndex, start.x, start.y, touch.clientX, touch.clientY);
+          if (targetIndex !== null) void goTo(targetIndex);
         }}
-        onTouchCancel={() => { touchStartX.current = null; }}
+        onTouchCancel={() => { touchStart.current = null; }}
       >
-        {current ? <>
+        {current && fullscreenImageUrl
+          ? <img className="presentation-fullscreen-image" src={fullscreenImageUrl} alt={current.itemTitle} />
+          : current ? <>
             {current.backgroundImageUrl && !hasLyrics && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
             <h1 className="slide-title">{current.itemTitle}</h1>
             <div className="slide-content">
-              {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
+              {current.mediaUrl && (isVideo
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
                 : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
               {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * lyricScale}rem, ${3 * lyricScale}vw, ${2.5 * lyricScale}rem)` }}>{current.lines.join("\n")}</div>}

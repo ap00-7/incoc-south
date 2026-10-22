@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSlideIndex, filterPresentationItems, generateSlides, getAdjacentItemSlideIndex, getSectionDisplayLabel, groupPresentationSlides, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
+import { clampSlideIndex, filterPresentationItems, generateSlides, getAdjacentItemSlideIndex, getSectionDisplayLabel, getTouchSwipeSlideIndex, groupPresentationSlides, labelSongSections, sequenceSongSections, type LyricSection, type ProgrammeItem } from "./slides";
 
 const songItem = (
   title: string,
@@ -16,6 +16,16 @@ const songItem = (
 });
 
 describe("generateSlides", () => {
+  it("keeps horizontal touch swipes within a song and ignores vertical or boundary gestures", () => {
+    const slides = [{ itemId: "song" }, { itemId: "song" }, { itemId: "next-item" }];
+    expect(getTouchSwipeSlideIndex(slides, 0, 300, 200, 220, 204)).toBe(1);
+    expect(getTouchSwipeSlideIndex(slides, 1, 220, 200, 300, 204)).toBe(0);
+    expect(getTouchSwipeSlideIndex(slides, 0, 220, 200, 300, 204)).toBeNull();
+    expect(getTouchSwipeSlideIndex(slides, 1, 300, 200, 220, 204)).toBeNull();
+    expect(getTouchSwipeSlideIndex(slides, 0, 300, 200, 304, 120)).toBeNull();
+    expect(getTouchSwipeSlideIndex(slides, 0, 300, 200, 260, 202)).toBeNull();
+  });
+
   it("orders programme items and sections deterministically", () => {
     const slides = generateSlides([
       songItem("Second", 2, [{ id: "b", section_type: "chorus", label: null, position: 1, lyrics: "Chorus" }]),
