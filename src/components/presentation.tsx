@@ -1,9 +1,28 @@
 import { useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { clampSlideIndex, getAdjacentItemSlideIndex, getTouchSwipeSlideIndex, type PresentationSlide } from "@/lib/domain/slides";
+import { clampSlideIndex, getTouchSwipeSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
+
+type PresentationPosition = {
+  itemIndex: number;
+  slideIndex: number;
+};
+
+function getPresentationPosition(groups: ReturnType<typeof groupPresentationSlides>, slideIndex: number): PresentationPosition {
+  if (!groups.length) return { itemIndex: 0, slideIndex: 0 };
+  const totalSlides = groups.reduce((total, group) => total + group.slides.length, 0);
+  const safeIndex = clampSlideIndex(slideIndex, totalSlides);
+  const itemIndex = groups.findIndex((group) =>
+    safeIndex >= group.firstSlideIndex && safeIndex < group.firstSlideIndex + group.slides.length,
+  );
+  const selectedItemIndex = itemIndex < 0 ? 0 : itemIndex;
+  return {
+    itemIndex: selectedItemIndex,
+    slideIndex: safeIndex - groups[selectedItemIndex].firstSlideIndex,
+  };
+}
 
 export function Presentation({
   scheduleId,
@@ -27,16 +46,18 @@ export function Presentation({
   songIds: string[];
 }) {
   const navigate = useNavigate();
-  const [index, setIndex] = useState(() =>
-    clampSlideIndex(initialSlide, slides.length),
-  );
+  const groups = useMemo(() => groupPresentationSlides(slides), [slides]);
+  const initialPosition = getPresentationPosition(groups, initialSlide);
+  const [selectedItemIndex, setSelectedItemIndex] = useState(initialPosition.itemIndex);
+  const [slideIndex, setSlideIndex] = useState(initialPosition.slideIndex);
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
   const touchStart = useRef<{ x: number; y: number } | null>(null);
-  const currentIndex = clampSlideIndex(index, slides.length);
-  const previousItemIndex = getAdjacentItemSlideIndex(slides, currentIndex, -1);
-  const nextItemIndex = getAdjacentItemSlideIndex(slides, currentIndex, 1);
-  const current = slides[currentIndex];
+  const positionRef = useRef<PresentationPosition>(initialPosition);
+  const currentGroupIndex = clampSlideIndex(selectedItemIndex, groups.length);
+  const currentGroup = groups[currentGroupIndex];
+  const currentSlideIndex = clampSlideIndex(slideIndex, currentGroup?.slides.length ?? 0);
+  const current = currentGroup?.slides[currentSlideIndex];
   const isVideo = Boolean(current?.mediaUrl && /\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl));
   const fullscreenImageUrl = current && !isVideo
     ? current.mediaUrl || current.backgroundImageUrl
@@ -61,7 +82,12 @@ export function Presentation({
       } else if (data) {
         setSyncError((current) => current.startsWith("Could not refresh shared presentation state:") ? "" : current);
         setSyncActive(data.is_active);
-        if (data.is_active) setIndex(clampSlideIndex(data.current_slide_index, slides.length));
+        if (data.is_active) {
+          const position = getPresentationPosition(groups, data.current_slide_index);
+          positionRef.current = position;
+          setSelectedItemIndex(position.itemIndex);
+          setSlideIndex(position.slideIndex);
+        }
       }
     };
     const channel = supabase.channel(`presentation:${scheduleId}`)
@@ -88,12 +114,19 @@ export function Presentation({
       clearFailureTimer();
       void supabase.removeChannel(channel);
     };
-  }, [canReadSession, scheduleId, slides.length]);
+  }, [canReadSession, groups, scheduleId]);
 
-  const goTo = useCallback(async (nextIndex: number) => {
-    const safeIndex = clampSlideIndex(nextIndex, slides.length);
+  const moveSlide = useCallback(async (direction: -1 | 1) => {
     if (syncActive && !isOwner) return;
-    setIndex(safeIndex);
+    const currentPosition = positionRef.current;
+    const itemIndex = clampSlideIndex(currentPosition.itemIndex, groups.length);
+    const group = groups[itemIndex];
+    if (!group) return;
+    const safeIndex = clampSlideIndex(currentPosition.slideIndex + direction, group.slides.length);
+    if (safeIndex === currentPosition.slideIndex) return;
+    const nextPosition = { itemIndex, slideIndex: safeIndex };
+    positionRef.current = nextPosition;
+    setSlideIndex(safeIndex);
     setSyncError("");
     if (!syncActive || !isOwner) return;
     if (!userId) {
@@ -103,13 +136,13 @@ export function Presentation({
     const supabase = createClient();
     const { error } = await supabase.from("presentation_sessions")
       .update({
-        current_item_id: slides[safeIndex]?.itemId ?? null,
-        current_slide_index: safeIndex,
+        current_item_id: group.itemId,
+        current_slide_index: group.firstSlideIndex + safeIndex,
         updated_by: userId,
       })
       .eq("schedule_id", scheduleId);
     if (error) setSyncError(`Slide changed locally, but could not update the shared presentation: ${error.message}`);
-  }, [isOwner, scheduleId, slides, syncActive, userId]);
+  }, [groups, isOwner, scheduleId, syncActive, userId]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -118,10 +151,10 @@ export function Presentation({
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName))) return;
       if (event.key === "ArrowRight" || event.key === " ") {
         event.preventDefault();
-        if (nextItemIndex !== null) void goTo(nextItemIndex);
+        void moveSlide(1);
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
-        if (previousItemIndex !== null) void goTo(previousItemIndex);
+        void moveSlide(-1);
       } else if (event.key === "Home") {
         event.preventDefault();
         navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`);
@@ -129,7 +162,7 @@ export function Presentation({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [goTo, navigate, nextItemIndex, previousItemIndex, scheduleId]);
+  }, [moveSlide, navigate, scheduleId]);
 
   const hasLyrics = Boolean(current?.lines.length || current?.translationLines?.length);
   const totalLyricLines = (current?.lines.length ?? 0) + (current?.translationLines?.length ?? 0);
@@ -164,8 +197,8 @@ export function Presentation({
           const target = event.target;
           const touch = event.changedTouches[0];
           if (!start || !touch || (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]"))) return;
-          const targetIndex = getTouchSwipeSlideIndex(slides, currentIndex, start.x, start.y, touch.clientX, touch.clientY);
-          if (targetIndex !== null) void goTo(targetIndex);
+          const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, touch.clientX, touch.clientY);
+          if (targetIndex !== null) void moveSlide(targetIndex > currentSlideIndex ? 1 : -1);
         }}
         onTouchCancel={() => { touchStart.current = null; }}
       >
@@ -187,12 +220,12 @@ export function Presentation({
             </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
-      <nav className="presentation-bottom-controls" aria-label="Presentation item navigation">
-        <button type="button" onClick={() => { if (previousItemIndex !== null) void goTo(previousItemIndex); }} disabled={previousItemIndex === null || (syncActive && !isOwner)} aria-label="Previous item"><ChevronLeft size={21} /></button>
+      <nav className="presentation-bottom-controls" aria-label="Presentation slide navigation">
+        <button type="button" onClick={() => { void moveSlide(-1); }} disabled={currentSlideIndex === 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={21} /></button>
         <button type="button" onClick={() => navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
-        <button type="button" onClick={() => { if (nextItemIndex !== null) void goTo(nextItemIndex); }} disabled={nextItemIndex === null || (syncActive && !isOwner)} aria-label="Next item"><ChevronRight size={21} /></button>
+        <button type="button" onClick={() => { void moveSlide(1); }} disabled={!currentGroup || currentSlideIndex === currentGroup.slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={21} /></button>
       </nav>
-      <span className="presentation-slide-counter" aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
+      <span className="presentation-slide-counter" aria-live="polite">{currentGroup ? `${currentSlideIndex + 1} / ${currentGroup.slides.length}` : "0 / 0"}</span>
     </main>
   );
 }
