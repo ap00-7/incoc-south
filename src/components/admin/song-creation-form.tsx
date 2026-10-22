@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
+import { createClient } from "@/lib/supabase/browser";
+import { useAuth } from "@/spa/auth-provider";
 import { ConfirmationDialog } from "@/components/confirm-button";
 import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
@@ -20,6 +24,43 @@ type SectionInput = {
 };
 type SectionDraft = SectionInput & { key: string };
 type SongEnding = "bridge" | "chorus" | "pre_chorus_chorus";
+
+type SongTitleMatch = { id: string; title: string };
+type SongTitleSearch = { matches: SongTitleMatch[]; exactMatch: SongTitleMatch | null };
+type SongTitleMenuPosition = { left: number; top: number; width: number; maxHeight: number };
+
+const pendingTitleSearches = new Map<string, Promise<SongTitleSearch>>();
+
+function searchSongTitles(churchId: string, title: string) {
+  const normalizedTitle = title.trim();
+  const key = `${churchId}:${normalizedTitle.toLocaleLowerCase()}`;
+  const pending = pendingTitleSearches.get(key);
+  if (pending) return pending;
+
+  const pattern = normalizedTitle.replace(/[\\%_]/g, "\\$&");
+  const request = (async (): Promise<SongTitleSearch> => {
+    const supabase = createClient();
+    const [matchesResult, exactResult] = await Promise.all([
+      supabase.from("songs").select("id, title").eq("church_id", churchId)
+        .ilike("title", `%${pattern}%`).order("title").limit(8),
+      supabase.from("songs").select("id, title").eq("church_id", churchId)
+        .ilike("title", pattern).limit(1),
+    ]);
+    if (matchesResult.error) throw new Error(`Unable to search song titles: ${matchesResult.error.message}`);
+    if (exactResult.error) throw new Error(`Unable to check for an exact song title: ${exactResult.error.message}`);
+
+    const exactMatch = exactResult.data?.[0] ?? matchesResult.data?.find((song) =>
+      song.title.trim().toLocaleLowerCase() === normalizedTitle.toLocaleLowerCase(),
+    ) ?? null;
+    const matches = [...(matchesResult.data ?? [])];
+    if (exactMatch && !matches.some((song) => song.id === exactMatch.id)) matches.unshift(exactMatch);
+    return { matches, exactMatch };
+  })().finally(() => {
+    if (pendingTitleSearches.get(key) === request) pendingTitleSearches.delete(key);
+  });
+  pendingTitleSearches.set(key, request);
+  return request;
+}
 
 type SongEditorFormProps = {
   returnTo?: string;
@@ -66,7 +107,22 @@ function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
 }
 
 export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id}` : "/admin/songs" }: SongEditorFormProps) {
+  const navigate = useNavigate();
+  const { membership } = useAuth();
   const { error, formAction } = useFormAction(saveSong, () => invalidateSongCache(song?.id));
+  const [title, setTitle] = useState(song?.title ?? "");
+  const [titleMatches, setTitleMatches] = useState<SongTitleMatch[]>([]);
+  const [exactTitleMatch, setExactTitleMatch] = useState<SongTitleMatch | null>(null);
+  const [titleSearchLoading, setTitleSearchLoading] = useState(false);
+  const [titleSearchError, setTitleSearchError] = useState("");
+  const [titleSuggestionsOpen, setTitleSuggestionsOpen] = useState(false);
+  const [activeTitleSuggestion, setActiveTitleSuggestion] = useState(-1);
+  const [titleMenuPosition, setTitleMenuPosition] = useState<SongTitleMenuPosition | null>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleFieldRef = useRef<HTMLDivElement>(null);
+  const titleMenuRef = useRef<HTMLDivElement>(null);
+  const titleBlurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleSearchRequestId = useRef(0);
   const [sections, setSections] = useState<SectionDraft[]>(() => {
     let keyIndex = 0;
     const initial: SectionDraft[] = song?.sections.map((section) => ({ ...section, key: `section-${keyIndex++}` })) ?? [];
@@ -89,6 +145,92 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   const [deleteVerseKey, setDeleteVerseKey] = useState<string | null>(null);
   const lyricsRef = useRef<HTMLTextAreaElement>(null);
   const restoreFocus = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const query = title.trim();
+    if (song || !membership?.churchId || !query) {
+      setTitleMatches([]);
+      setExactTitleMatch(null);
+      setTitleSearchLoading(false);
+      setTitleSearchError("");
+      return;
+    }
+
+    const requestId = ++titleSearchRequestId.current;
+    setTitleSearchLoading(true);
+    setTitleSearchError("");
+    const timer = setTimeout(() => {
+      void searchSongTitles(membership.churchId, query).then((result) => {
+        if (titleSearchRequestId.current !== requestId) return;
+        setTitleMatches(result.matches);
+        setExactTitleMatch(result.exactMatch);
+        setActiveTitleSuggestion(-1);
+        setTitleSearchLoading(false);
+      }).catch((searchError: unknown) => {
+        if (titleSearchRequestId.current !== requestId) return;
+        setTitleMatches([]);
+        setExactTitleMatch(null);
+        setTitleSearchLoading(false);
+        setTitleSearchError(searchError instanceof Error ? searchError.message : "Unable to search song titles.");
+      });
+    }, 220);
+    return () => {
+      clearTimeout(timer);
+      titleSearchRequestId.current += 1;
+    };
+  }, [membership?.churchId, song, title]);
+
+  useLayoutEffect(() => {
+    if (!titleSuggestionsOpen || !titleInputRef.current) {
+      setTitleMenuPosition(null);
+      return;
+    }
+    const updatePosition = () => {
+      const rect = titleInputRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const edge = 8;
+      const gap = 5;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      const width = Math.min(rect.width, viewportWidth - edge * 2);
+      const left = Math.min(Math.max(edge, rect.left), viewportWidth - width - edge);
+      const below = viewportHeight - rect.bottom - edge - gap;
+      const above = rect.top - edge - gap;
+      const openAbove = below < Math.min(220, above) && above > below;
+      const maxHeight = Math.max(80, Math.min(320, openAbove ? above : below));
+      setTitleMenuPosition({
+        left,
+        top: openAbove ? Math.max(edge, rect.top - gap - maxHeight) : rect.bottom + gap,
+        width,
+        maxHeight,
+      });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [titleSuggestionsOpen]);
+
+  useEffect(() => {
+    if (!titleSuggestionsOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (!titleFieldRef.current?.contains(target) && !titleMenuRef.current?.contains(target)) {
+        setTitleSuggestionsOpen(false);
+        setActiveTitleSuggestion(-1);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [titleSuggestionsOpen]);
+
+  useEffect(() => () => {
+    if (titleBlurTimer.current) clearTimeout(titleBlurTimer.current);
+  }, []);
 
   useEffect(() => {
     if (editingKey) lyricsRef.current?.focus();
@@ -192,7 +334,18 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   }
 
   return (
-    <form className="form-stack admin-form song-editor" action={formAction} data-dirty-form>
+    <form
+      className="form-stack admin-form song-editor"
+      action={formAction}
+      data-dirty-form
+      onSubmit={(event) => {
+        if (!song && title.trim() && (titleSearchLoading || titleSearchError || exactTitleMatch)) {
+          event.preventDefault();
+          setTitleSuggestionsOpen(true);
+          titleInputRef.current?.focus();
+        }
+      }}
+    >
       {song && <>
         <input type="hidden" name="song_id" value={song.id} />
         <input type="hidden" name="expected_updated_at" value={song.updated_at} />
@@ -202,7 +355,103 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       <input type="hidden" name="sections" value={sectionPayload} />
       <div className="song-editor-fields">
         <label htmlFor="title">Title</label>
-        <input id="title" name="title" required defaultValue={song?.title} maxLength={200} />
+        <div className="song-title-autocomplete" ref={titleFieldRef}>
+          <input
+            id="title"
+            name="title"
+            required
+            ref={titleInputRef}
+            value={title}
+            maxLength={200}
+            autoComplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            aria-expanded={titleSuggestionsOpen && Boolean(title.trim())}
+            aria-controls={titleSuggestionsOpen ? "admin-song-title-suggestions" : undefined}
+            aria-activedescendant={activeTitleSuggestion >= 0 ? `admin-song-title-option-${titleMatches[activeTitleSuggestion]?.id}` : undefined}
+            onFocus={() => {
+              if (titleBlurTimer.current) clearTimeout(titleBlurTimer.current);
+              if (title.trim() && !song) setTitleSuggestionsOpen(true);
+            }}
+            onBlur={() => {
+              titleBlurTimer.current = setTimeout(() => setTitleSuggestionsOpen(false), 120);
+            }}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              setTitle(value);
+              setTitleMatches([]);
+              setExactTitleMatch(null);
+              setTitleSearchLoading(Boolean(value.trim()) && !song);
+              setTitleSearchError("");
+              setActiveTitleSuggestion(-1);
+              setTitleSuggestionsOpen(Boolean(value.trim()) && !song);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                setTitleSuggestionsOpen(Boolean(title.trim()) && !song);
+                if (titleMatches.length) {
+                  const direction = event.key === "ArrowDown" ? 1 : -1;
+                  setActiveTitleSuggestion((current) => current < 0
+                    ? direction > 0 ? 0 : titleMatches.length - 1
+                    : (current + direction + titleMatches.length) % titleMatches.length);
+                }
+              } else if (event.key === "Enter" && titleSuggestionsOpen && activeTitleSuggestion >= 0) {
+                event.preventDefault();
+                const selected = titleMatches[activeTitleSuggestion];
+                if (selected) navigate(`/admin/songs/${selected.id}`);
+              } else if (event.key === "Escape" && titleSuggestionsOpen) {
+                event.preventDefault();
+                setTitleSuggestionsOpen(false);
+                setActiveTitleSuggestion(-1);
+              }
+            }}
+          />
+          {exactTitleMatch && title.trim().toLocaleLowerCase() === exactTitleMatch.title.trim().toLocaleLowerCase()
+            ? <p className="song-title-duplicate-warning" role="alert">
+              A song with this exact title already exists. Select “{exactTitleMatch.title}” to open it, or change the title to create a different song.
+            </p>
+            : null}
+          {titleSearchError && <p className="form-error" role="alert">{titleSearchError}</p>}
+          {titleSuggestionsOpen && title.trim() && titleMenuPosition && createPortal(
+            <div
+              className="song-title-suggestions"
+              id="admin-song-title-suggestions"
+              role="listbox"
+              aria-label="Matching existing songs"
+              ref={titleMenuRef}
+              style={{
+                left: titleMenuPosition.left,
+                top: titleMenuPosition.top,
+                width: titleMenuPosition.width,
+                maxHeight: titleMenuPosition.maxHeight,
+              }}
+            >
+              {titleSearchLoading
+                ? <p className="song-title-suggestion-status" role="status">Searching songs…</p>
+                : titleSearchError
+                  ? <p className="song-title-suggestion-status" role="status">Search unavailable. Try again before creating this song.</p>
+                  : titleMatches.length
+                    ? titleMatches.map((match, index) => <button
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeTitleSuggestion}
+                      id={`admin-song-title-option-${match.id}`}
+                      className="song-title-suggestion"
+                      data-active={index === activeTitleSuggestion || undefined}
+                      key={match.id}
+                      onPointerMove={() => setActiveTitleSuggestion(index)}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => navigate(`/admin/songs/${match.id}`)}
+                    >
+                      {match.title}
+                    </button>)
+                    : <p className="song-title-suggestion-status" role="status">No matching songs found. You can create a different title.</p>}
+            </div>,
+            document.body,
+          )}
+        </div>
         <label htmlFor="author">Author (optional)</label>
         <input id="author" name="author" defaultValue={song?.author ?? ""} maxLength={200} />
         <label htmlFor="source">Source (optional)</label>
@@ -305,7 +554,11 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       </details>}
 
       {error && <p className="form-error" role="alert">{error}</p>}
-          <PendingSubmitButton className="button button-primary song-save-button" pendingLabel="Saving song…">
+          <PendingSubmitButton
+            className="button button-primary song-save-button"
+            pendingLabel="Saving song…"
+            disabled={!song && Boolean(title.trim()) && (titleSearchLoading || Boolean(titleSearchError) || Boolean(exactTitleMatch))}
+          >
             {song ? "Save song" : "Create song"}
           </PendingSubmitButton>
 

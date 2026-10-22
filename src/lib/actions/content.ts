@@ -313,6 +313,12 @@ export async function saveSong(formData: FormData) {
   const supabase = await createClient();
 
   if (!songId) {
+    const exactTitlePattern = parsedMetadata.data.title.replace(/[\\%_]/g, "\\$&");
+    const { data: duplicateSongs, error: duplicateLookupError } = await supabase.from("songs")
+      .select("id").eq("church_id", member.churchId).ilike("title", exactTitlePattern).limit(1);
+    if (duplicateLookupError) throw new Error(`Unable to check for an existing song title: ${duplicateLookupError.message}`);
+    if (duplicateSongs?.length) throw new Error("A song with this exact title already exists. Select the existing song instead.");
+
     const { data: song, error } = await supabase.from("songs").insert({
       church_id: member.churchId,
       created_by: member.user.id,
