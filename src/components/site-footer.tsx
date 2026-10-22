@@ -4,17 +4,18 @@ import { useAuth } from "@/spa/auth-provider";
 
 export function SiteFooter() {
   const { pathname, search } = useLocation();
-  const { loading, user, signOut } = useAuth();
+  const { loading, user, membership, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const searchParams = new URLSearchParams(search);
   const footerSection = pathname === "/song"
     ? "songbook"
-    : pathname === "/schedule"
+    : pathname === "/schedule" || /^\/schedule\/[^/]+$/.test(pathname)
       ? "schedule"
       : pathname === "/slides" && !searchParams.get("scheduleId")
         ? "slides"
         : null;
+  const canSignOut = Boolean(user && membership?.role === "owner");
   const returnTo = `${pathname}${search}`;
 
   async function handleSignOut() {
@@ -34,7 +35,7 @@ export function SiteFooter() {
     <footer className={`site-footer${footerSection ? ` site-footer-${footerSection}` : ""}`}>
       <span className="site-footer-copy">Indian Church of Christ · South Sector</span>
       {footerSection && !loading && <div className="site-footer-auth">
-        {user
+        {canSignOut
           ? <button type="button" className="footer-auth-action" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut}>
             {signingOut ? "Signing out…" : "Sign out"}
           </button>

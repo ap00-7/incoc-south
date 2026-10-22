@@ -1005,6 +1005,8 @@ code, kbd, pre { font-family: var(--font-mono); }
 @media (max-width: 360px) {
   .site-footer { align-items: flex-start; flex-direction: column; }
   .site-footer-schedule .site-footer-auth, .site-footer-slides .site-footer-auth { margin-left: 0; }
+  .site-footer-schedule { align-items: center; flex-direction: row; }
+  .site-footer-schedule .site-footer-auth { margin-left: auto; }
   .slides-preview-grid { grid-template-columns: minmax(0, 1fr); }
   .member-actions form > .dropdown { min-width: 0; }
 }
