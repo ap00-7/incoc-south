@@ -30,7 +30,6 @@ export function Presentation({
   const [index, setIndex] = useState(() =>
     clampSlideIndex(initialSlide, slides.length),
   );
-  const [lyricsSize, setLyricsSize] = useState(100);
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
   const touchStartX = useRef<number | null>(null);
@@ -132,8 +131,6 @@ export function Presentation({
   const lyricScale = current
     ? Math.min(current.fontScale, Math.min(1, 7 / Math.max(7, totalLyricLines)))
     : 1;
-  const adjustedLyricsScale = lyricScale * lyricsSize / 100;
-
   return (
     <main className="presentation-page" aria-label={scheduleTitle}>
       <RealtimeRefresh subscriptions={[
@@ -174,10 +171,10 @@ export function Presentation({
               {current.mediaUrl && (/\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl)
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
                 : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
-              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * adjustedLyricsScale}rem, ${3 * adjustedLyricsScale}vw, ${2.5 * adjustedLyricsScale}rem)` }}>{current.lines.join("\n")}</div>}
+              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * lyricScale}rem, ${3 * lyricScale}vw, ${2.5 * lyricScale}rem)` }}>{current.lines.join("\n")}</div>}
               {current.translationLines?.length ? <div className="slide-translation">
                 {current.translationLabel && <span>{current.translationLabel}</span>}
-                <p style={{ fontSize: `clamp(${1.125 * adjustedLyricsScale}rem, ${2.25 * adjustedLyricsScale}vw, ${1.75 * adjustedLyricsScale}rem)` }}>{current.translationLines.join("\n")}</p>
+                <p style={{ fontSize: `clamp(${1.125 * lyricScale}rem, ${2.25 * lyricScale}vw, ${1.75 * lyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
               </div> : null}
               {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
             </div>
@@ -188,19 +185,6 @@ export function Presentation({
         <button type="button" onClick={() => navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
         <button type="button" onClick={() => { if (nextItemIndex !== null) void goTo(nextItemIndex); }} disabled={nextItemIndex === null || (syncActive && !isOwner)} aria-label="Next item"><ChevronRight size={21} /></button>
       </nav>
-      <div className="presentation-lyrics-size">
-        <label htmlFor="presentation-lyrics-size">Lyrics size</label>
-        <input
-          id="presentation-lyrics-size"
-          type="range"
-          min="70"
-          max="120"
-          step="5"
-          value={lyricsSize}
-          aria-valuetext={`${lyricsSize}%`}
-          onChange={(event) => setLyricsSize(Number(event.target.value))}
-        />
-      </div>
       <span className="presentation-slide-counter" aria-live="polite">{slides.length ? `${currentIndex + 1} / ${slides.length}` : "0 / 0"}</span>
     </main>
   );

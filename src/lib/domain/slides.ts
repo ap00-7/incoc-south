@@ -200,7 +200,8 @@ const excludedPresentationTitles = new Set([
 
 export function filterPresentationItems(items: ProgrammeItem[]) {
   return [...items]
-    .filter((item) => item.show_in_slides !== false && !excludedPresentationTitles.has(item.title.toLocaleLowerCase().replace(/[^a-z0-9]/g, "")))
+    .filter((item) => item.show_in_slides === true
+      || (item.show_in_slides !== false && !excludedPresentationTitles.has(item.title.toLocaleLowerCase().replace(/[^a-z0-9]/g, ""))))
     .sort((a, b) => a.position - b.position);
 }
 
@@ -216,6 +217,7 @@ function splitSlideLines(text: string) {
 export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
   const slides: PresentationSlide[] = [];
   for (const item of filterPresentationItems(items)) {
+    const itemSlideStart = slides.length;
     if (item.song) {
       const songTitle = item.song.title;
       const sections = sequenceSongSections(
@@ -250,6 +252,22 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
       };
       for (const { section, label } of labeledSections) {
         addSectionSlides(section, label);
+      }
+      if (slides.length === itemSlideStart) {
+        slides.push({
+          itemId: item.id,
+          itemType: item.item_type,
+          itemTitle: item.song.title,
+          itemHeader: item.title && item.title !== item.song.title ? item.title : null,
+          itemSubtitle: null,
+          backgroundImageUrl: item.background_image_url ?? null,
+          mediaUrl: item.media_url ?? null,
+          sectionLabel: null,
+          lines: [],
+          translationLines: null,
+          translationLabel: null,
+          fontScale: 1,
+        });
       }
     } else {
       const content = item.public_content?.trim();

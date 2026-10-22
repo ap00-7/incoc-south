@@ -170,16 +170,45 @@ describe("generateSlides", () => {
       "Opening",
       "Worship",
     ];
-    const items = titles.map((title, position) => ({
+    const items: ProgrammeItem[] = titles.map((title, position) => ({
       id: `item-${position}`,
       item_type: "other",
       title,
       position,
       public_content: title,
-      show_in_slides: true,
     }));
     items.push({ id: "hidden", item_type: "other", title: "Hidden item", position: 9, public_content: "Hidden", show_in_slides: false });
     expect(filterPresentationItems(items).map(({ title }) => title)).toEqual(["Welcome", "Opening", "Worship"]);
+  });
+
+  it("honors explicit slide visibility for legacy-excluded titles and sorts enabled items", () => {
+    const items: ProgrammeItem[] = [
+      { id: "later", item_type: "other", title: "Announcements", position: 2, public_content: "Later", show_in_slides: true },
+      { id: "excluded-enabled", item_type: "other", title: "Welcome and Prayer", position: 1, public_content: "Welcome", show_in_slides: true },
+      { id: "disabled", item_type: "other", title: "Opening", position: 0, public_content: "Hidden", show_in_slides: false },
+      { id: "legacy-excluded", item_type: "other", title: "Closing Prayer", position: 3, public_content: "Legacy" },
+    ];
+
+    expect(filterPresentationItems(items).map(({ id }) => id)).toEqual(["excluded-enabled", "later"]);
+  });
+
+  it("keeps an explicitly enabled song with no lyric sections in Slides", () => {
+    const [slide] = generateSlides([{
+      id: "empty-song",
+      item_type: "song",
+      title: "Communion Song",
+      position: 0,
+      public_content: null,
+      show_in_slides: true,
+      song: { title: "Song without lyrics", song_sections: [] },
+    }]);
+
+    expect(slide).toMatchObject({
+      itemId: "empty-song",
+      itemTitle: "Song without lyrics",
+      itemHeader: "Communion Song",
+      lines: [],
+    });
   });
 
   it("groups each song into one overview card while preserving song order and first slide index", () => {

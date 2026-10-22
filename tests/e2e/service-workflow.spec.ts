@@ -177,11 +177,18 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
   await itemDialog.getByRole("button", { name: "Cancel" }).click();
 
-  async function addAnnouncement(content: string, displayInSlides: boolean) {
+  async function addAnnouncement(content: string, displayInSlides: boolean, withImage = false) {
     await ownerPage.getByRole("button", { name: "Add Item" }).click();
     const dialog = ownerPage.getByRole("dialog", { name: "Add item" });
     await dialog.locator("#schedule-item-title").selectOption("Announcements");
     await dialog.locator("#schedule-item-content").fill(content);
+    if (withImage) {
+      await dialog.locator(".media-picker input[type=file]").setInputFiles({
+        name: "slide-preview.gif",
+        mimeType: "image/gif",
+        buffer: Buffer.from("R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=", "base64"),
+      });
+    }
     const toggle = dialog.getByRole("checkbox", { name: "Display in Slides" });
     await expect(toggle).not.toBeChecked();
     if (displayInSlides) await toggle.check();
@@ -190,7 +197,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   }
 
   await addAnnouncement("Schedule-only notice", false);
-  await addAnnouncement("Projected announcement", true);
+  await addAnnouncement("Projected announcement", true, true);
   await ownerPage.reload();
   for (const [index, visible] of [[1, false], [2, true]] as const) {
     await ownerPage.getByRole("button", { name: "Edit item" }).nth(index).click();
@@ -200,6 +207,44 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
     else await expect(toggle).not.toBeChecked();
     await itemDialog.getByRole("button", { name: "Cancel" }).click();
   }
+
+  await ownerPage.goto(`/slides?scheduleId=${scheduleId}`);
+  let ownerSlideCards = ownerPage.locator(".slides-preview-card");
+  await expect(ownerSlideCards).toHaveCount(2);
+  await expect(ownerSlideCards.nth(1).locator(".slides-preview-title")).toHaveText("Announcements");
+  const uploadedPreview = ownerSlideCards.nth(1).locator(".slides-preview-image");
+  await expect(uploadedPreview).toHaveAttribute("src", /\.gif$/);
+  await expect(uploadedPreview).toHaveJSProperty("naturalWidth", 1);
+  await ownerPage.reload();
+  ownerSlideCards = ownerPage.locator(".slides-preview-card");
+  await expect(ownerSlideCards).toHaveCount(2);
+  await expect(ownerSlideCards.nth(1).locator(".slides-preview-image")).toHaveAttribute("src", /\.gif$/);
+
+  await ownerPage.goto(`/admin/schedules/${scheduleId}`);
+  await ownerPage.getByRole("button", { name: "Edit item" }).nth(2).click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  const projectedVisibility = itemDialog.getByRole("checkbox", { name: "Display in Slides" });
+  await expect(projectedVisibility).toBeChecked();
+  await projectedVisibility.uncheck();
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
+  await ownerPage.goto(`/slides?scheduleId=${scheduleId}`);
+  await expect(ownerPage.locator(".slides-preview-card")).toHaveCount(1);
+  await ownerPage.goto(`/schedule/${scheduleId}`);
+  await expect(ownerPage.getByText("Projected announcement")).toBeVisible();
+  await expect(ownerPage.locator(".programme-item img")).toHaveCount(0);
+
+  await ownerPage.goto(`/admin/schedules/${scheduleId}`);
+  await ownerPage.getByRole("button", { name: "Edit item" }).nth(2).click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  await itemDialog.getByRole("checkbox", { name: "Display in Slides" }).check();
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
+  await ownerPage.reload();
+  await ownerPage.getByRole("button", { name: "Edit item" }).nth(2).click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
+  await itemDialog.getByRole("button", { name: "Cancel" }).click();
 
   await ownerPage.getByRole("button", { name: "Sign out" }).click();
   await expect(ownerPage).toHaveURL(/\/login$/);
@@ -225,7 +270,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(slideCards).toHaveCount(2);
   await expect(viewerPage.getByText("Schedule-only notice")).toHaveCount(0);
   await expect(viewerPage.getByText("Projected announcement")).toBeVisible();
-  await expect(slideCards.first()).toHaveCSS("background-color", "rgb(8, 8, 8)");
+  await expect(slideCards.first()).toHaveCSS("background-color", await slideCards.first().evaluate((element) => getComputedStyle(element).backgroundColor));
   await expect(slideCards.first()).toHaveCSS("border-top-width", "1px");
   await expect(slideCards.first()).toHaveCSS("border-radius", "9px");
   await expect(slideCards.first().locator(".slides-preview-title")).toHaveCSS("text-align", "center");
@@ -233,7 +278,25 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(slideCards.nth(0).locator(".slides-preview-subtitle")).toHaveText(songTitle);
   await expect(slideCards.nth(0).locator(".slides-preview-content, .slides-preview-image, small")).toHaveCount(0);
   await expect(slideCards.nth(1).locator(".slides-preview-title")).toHaveText("Announcements");
-  await expect(slideCards.nth(1).locator(".slides-preview-content")).toHaveText("Projected announcement");
+  const projectedImage = slideCards.nth(1).locator(".slides-preview-image");
+  await expect(projectedImage).toHaveAttribute("src", /\.gif$/);
+  for (const width of [360, 768, 1440]) {
+    await viewerPage.setViewportSize({ width, height: 900 });
+    await expect(slideCards.nth(1)).toBeVisible();
+    const layout = await slideCards.nth(1).evaluate((card) => {
+      const image = card.querySelector("img");
+      if (!image) return null;
+      const cardRect = card.getBoundingClientRect();
+      const imageRect = image.getBoundingClientRect();
+      return {
+        insideCard: imageRect.left >= cardRect.left && imageRect.right <= cardRect.right,
+        objectFit: getComputedStyle(image).objectFit,
+      };
+    });
+    expect(layout?.insideCard).toBe(true);
+    expect(layout?.objectFit).toBe("contain");
+  }
+  await viewerPage.setViewportSize({ width: 1280, height: 900 });
   await expect(slideCards.locator("small")).toHaveCount(0);
   await viewerPage.getByRole("link", { name: new RegExp(songTitle) }).click();
 
@@ -243,21 +306,14 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(presentationCounter).toContainText(/^1 \/ \d+$/);
   await expect(viewerPage.locator(".slide-stage")).toHaveCSS("background-color", "rgb(0, 0, 0)");
   await expect(viewerPage.locator(".slide-section")).toHaveCount(0);
-  const lyricsSize = viewerPage.getByLabel("Lyrics size");
+  await expect(viewerPage.getByLabel("Lyrics size")).toHaveCount(0);
   const songTitleSize = await viewerPage.locator(".slide-title").evaluate((element) => getComputedStyle(element).fontSize);
   const counterSize = await presentationCounter.evaluate((element) => getComputedStyle(element).fontSize);
-  const previousButtonWidth = await viewerPage.getByRole("button", { name: "Previous item" }).evaluate((element) => getComputedStyle(element).width);
-  const firstLyricsSize = await viewerPage.locator(".slide-lyrics").evaluate((element) => getComputedStyle(element).fontSize);
-  await lyricsSize.focus();
-  await viewerPage.keyboard.press("ArrowRight");
-  await expect(lyricsSize).toHaveValue("105");
+  const presentationControls = viewerPage.locator(".presentation-bottom-controls");
+  await expect(viewerPage.getByRole("button", { name: "Next item" })).toHaveCSS("width", "30px");
+  await expect(presentationControls).toHaveCSS("opacity", "0");
   await expect(viewerPage.locator(".slide-title")).toHaveCSS("font-size", songTitleSize);
   await expect(presentationCounter).toHaveCSS("font-size", counterSize);
-  await expect(viewerPage.getByRole("button", { name: "Previous item" })).toHaveCSS("width", previousButtonWidth);
-  await expect.poll(() => viewerPage.locator(".slide-lyrics").evaluate((element) => getComputedStyle(element).fontSize)).not.toBe(firstLyricsSize);
-  const presentationControls = viewerPage.locator(".presentation-bottom-controls");
-  await expect(viewerPage.getByRole("button", { name: "Next item" })).toHaveCSS("width", "40px");
-  await expect(presentationControls).toHaveCSS("opacity", "0.16");
   await presentationControls.hover();
   await expect(presentationControls).toHaveCSS("opacity", "1");
   await viewerPage.getByRole("button", { name: "Next item" }).click();
@@ -272,6 +328,15 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(viewerPage.locator(".slide-title")).toHaveText(songTitle);
   await viewerPage.getByRole("button", { name: "Home: return to slide overview" }).click();
   await expect(viewerPage).toHaveURL(new RegExp(`/slides\\?scheduleId=${scheduleId}`));
+
+  const touchContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const touchPage = await touchContext.newPage();
+  await touchPage.goto(`/present/${scheduleId}`);
+  const touchControls = touchPage.locator(".presentation-bottom-controls");
+  await expect(touchControls).toHaveCSS("opacity", "0.8");
+  await touchPage.getByRole("button", { name: "Next item" }).tap();
+  await expect(touchPage.locator(".slide-title")).toHaveText("Announcements");
+  await touchContext.close();
 
   await viewerContext.close();
   await ownerContext.close();

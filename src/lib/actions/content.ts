@@ -158,9 +158,12 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     if (!expectedUpdatedAt) return { ok: false, message: "Reload this schedule item and try again." };
     const { data, error } = await supabase.from("schedule_items").update(row)
       .eq("id", itemId).eq("schedule_id", schedule.id).eq("church_id", member.churchId)
-      .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
+      .eq("updated_at", expectedUpdatedAt).select("id, show_in_slides").maybeSingle();
     if (error) return { ok: false, message: `Unable to save the item: ${error.message}` };
     if (!data) return { ok: false, message: "This item changed since you opened it. Reload and review the latest version." };
+    if (data.show_in_slides !== parsed.data.show_in_slides) {
+      return { ok: false, message: "The item was saved, but its Slides visibility could not be confirmed. Reload and try again." };
+    }
   } else {
     const { data: lastItems, error: positionError } = await supabase.from("schedule_items")
       .select("position").eq("schedule_id", schedule.id).order("position", { ascending: false }).limit(1);
@@ -170,8 +173,11 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
       schedule_id: schedule.id,
       church_id: schedule.church_id,
       position: (lastItems?.[0]?.position ?? -1) + 1,
-    }).select("id").single();
+    }).select("id, show_in_slides").single();
     if (error) return { ok: false, message: `Unable to add the item: ${error.message}` };
+    if (data.show_in_slides !== parsed.data.show_in_slides) {
+      return { ok: false, message: "The item was added, but its Slides visibility could not be confirmed. Reload and try again." };
+    }
     itemId = data.id;
   }
 

@@ -277,10 +277,9 @@ function ScheduleDetailPage() {
               return <li className="programme-item" key={item.id}><div>
                 <h2>{item.title}</h2><p>{primary}</p>
                 {(details.length > 0 || item.link_url) && <p>{details.join(" · ")}{item.link_url && <>{details.length > 0 && " · "}<a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></>}</p>}
-                {item.background_image_url && <img className="schedule-item-background" src={item.background_image_url} alt={`${item.title} background`} />}
-                {item.media_url && (/\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
+                {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
                   ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
-                  : <img className="schedule-item-media" src={item.media_url} alt={`${item.title} media`} />)}
+                  : null}
               </div></li>;
             })}
           </ol> : <div className="empty-state" style={{ marginTop: 22 }}>The programme has not been added yet.</div>}
@@ -341,15 +340,17 @@ function SlidesPage() {
             <p className="slides-overview-meta"><CalendarDays size={15} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>{schedule.venue}</span>}</p>
             {resource.data.groups.length ? <div className="slides-preview-grid">
               {resource.data.groups.map((group) => {
-                  const media = group.itemType === "song" ? null : group.mediaUrl || group.backgroundImageUrl;
+                const media = group.mediaUrl || group.backgroundImageUrl;
                 return <Link className="slides-preview-card" to={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
                   <h2 className="slides-preview-title">{group.itemTitle}</h2>
-                  {group.itemSubtitle && <p className="slides-preview-subtitle">{group.itemSubtitle}</p>}
                   {media
                     ? /\.(mp4|webm)(?:$|\?)/i.test(media)
                       ? <video className="slides-preview-image" src={media} muted autoPlay loop playsInline />
                       : <img className="slides-preview-image" src={media} alt="" loading="lazy" />
-                    : group.content && <p className="slides-preview-content">{group.content}</p>}
+                    : <>
+                      {group.itemSubtitle && <p className="slides-preview-subtitle">{group.itemSubtitle}</p>}
+                      {group.content && <p className="slides-preview-content">{group.content}</p>}
+                    </>}
                 </Link>;
               })}
             </div> : <div className="empty-state">There are no presentation slides for this service.</div>}
