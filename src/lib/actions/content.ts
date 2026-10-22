@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
 import { songEditorLanguageValues, songLanguageValues, songSectionValues } from "@/lib/domain/songs";
 import { invalidateSongCache } from "@/lib/song-cache";
-import { notifyDataChanged } from "@/spa/data-events";
+import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 function invalidateRouteData(path: string) {
   notifyDataChanged(path);
@@ -796,6 +796,7 @@ export async function deleteSchedule(formData: FormData) {
   const { error } = await supabase.from("schedules").delete()
     .eq("id", scheduleId).eq("church_id", member.churchId);
   if (error) throw new Error(`Unable to delete schedule: ${error.message}`);
+  notifyScheduleDeleted(scheduleId);
   invalidateRouteData("/admin/schedules");
   invalidateRouteData("/schedule");
   invalidateRouteData("/slides");

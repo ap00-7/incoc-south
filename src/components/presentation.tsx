@@ -224,7 +224,9 @@ export function Presentation({
           { table: "song_sections" as const, column: "song_id", value: songId },
         ]),
         ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
-      ]} />
+      ]} onDelete={(deletedId) => {
+        if (deletedId === scheduleId) navigate("/slides", { replace: true });
+      }} />
       {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section

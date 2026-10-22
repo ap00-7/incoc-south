@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { notifyDataChanged } from "@/spa/data-events";
+import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 export type RealtimeFilter = {
   table: "songs" | "song_sections" | "schedules" | "schedule_items" | "church_members";
@@ -8,14 +8,27 @@ export type RealtimeFilter = {
   value: string;
 };
 
-export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: RealtimeFilter[]; onChange?: () => void }) {
+export function RealtimeRefresh({
+  subscriptions,
+  onChange,
+  onDelete,
+}: {
+  subscriptions: RealtimeFilter[];
+  onChange?: () => void;
+  onDelete?: (scheduleId: string) => void;
+}) {
   const [unavailable, setUnavailable] = useState(false);
   const onChangeRef = useRef(onChange);
+  const onDeleteRef = useRef(onDelete);
   const serialized = useMemo(() => JSON.stringify(subscriptions), [subscriptions]);
 
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(() => {
+    onDeleteRef.current = onDelete;
+  }, [onDelete]);
 
   useEffect(() => {
     const filters = JSON.parse(serialized) as RealtimeFilter[];
@@ -24,6 +37,7 @@ export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: Re
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     let failureTimer: ReturnType<typeof setTimeout> | undefined;
     let alive = true;
+    let hasSubscribed = false;
     const clearFailureTimer = () => {
       if (failureTimer) clearTimeout(failureTimer);
       failureTimer = undefined;
@@ -38,18 +52,44 @@ export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: Re
     };
     let channel = supabase.channel(`content-updates:${filters.map((filter) => `${filter.table}-${filter.value}`).join(":")}`);
     for (const filter of filters) {
+      if (filter.table === "schedules") {
+        for (const event of ["INSERT", "UPDATE"] as const) {
+          channel = channel.on("postgres_changes", {
+            event,
+            schema: "public",
+            table: filter.table,
+            filter: `${filter.column}=eq.${filter.value}`,
+          }, refresh);
+        }
+      } else {
+        channel = channel.on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: filter.table,
+          filter: `${filter.column}=eq.${filter.value}`,
+        }, refresh);
+      }
+    }
+    if (filters.some((filter) => filter.table === "schedules")) {
       channel = channel.on("postgres_changes", {
-        event: "*",
+        event: "DELETE",
         schema: "public",
-        table: filter.table,
-        filter: `${filter.column}=eq.${filter.value}`,
-      }, refresh);
+        table: "schedules",
+      }, (payload) => {
+        const scheduleId = payload.old.id;
+        if (typeof scheduleId !== "string") return;
+        if (!notifyScheduleDeleted(scheduleId)) return;
+        onDeleteRef.current?.(scheduleId);
+        refresh();
+      });
     }
     channel.subscribe((status) => {
       if (!alive) return;
       if (status === "SUBSCRIBED") {
         clearFailureTimer();
         setUnavailable(false);
+        if (hasSubscribed) refresh();
+        hasSubscribed = true;
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
         if (!failureTimer) {
           failureTimer = setTimeout(() => {

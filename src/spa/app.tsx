@@ -233,6 +233,7 @@ function ScheduleListPage() {
 function ScheduleDetailPage() {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
+  const navigate = useNavigate();
   const loadSchedule = useCallback(async () => {
     const { data, error } = await createClient().from("schedules")
       .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(slug)")
@@ -259,7 +260,9 @@ function ScheduleDetailPage() {
             { table: "songs" as const, column: "id", value: item.song_id },
             { table: "song_sections" as const, column: "song_id", value: item.song_id },
           ] : []),
-        ]} />
+        ]} onDelete={(deletedId) => {
+          if (deletedId === schedule.id) navigate("/schedule", { replace: true });
+        }} />
         <article className="content-wrap">
           <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>
           <h1 className="detail-title">{schedule.title}</h1>
@@ -340,7 +343,9 @@ function SlidesPage() {
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
-          ]} />
+          ]} onDelete={(deletedId) => {
+            if (deletedId === schedule.id) navigate("/slides", { replace: true });
+          }} />
           <div className="content-wrap slides-overview">
             <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>
             <div className="slides-overview-heading">
@@ -534,6 +539,7 @@ function AdminSchedulesPage() {
   if (resource.loading && !resource.data) return <LoadingPage title="Schedules" />;
   if (resource.error) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
   return <>
+    {membership?.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: membership.churchId }]} />}
     <p className="eyebrow">SERVICE PLANNING</p>
     <div className="admin-title-row"><h1>Schedules</h1><Link className="button button-primary" to="/admin/schedules/new"><Plus size={16} /> Create schedule</Link></div>
     <p>Each schedule is a dated gathering.</p>
@@ -554,6 +560,7 @@ function AdminScheduleCreatePage() {
 function AdminScheduleEditPage() {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
+  const navigate = useNavigate();
   const loadSchedule = useCallback(async () => {
     const { data: schedule, error } = await createClient().from("schedules")
       .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, show_in_slides, updated_at, song:songs(id, title))")
@@ -592,6 +599,12 @@ function AdminScheduleEditPage() {
   }));
   return <>
     {resource.error && <ResourceMessage error={`The latest schedule refresh failed: ${resource.error}`} retry={resource.refresh} />}
+    <RealtimeRefresh
+      subscriptions={[{ table: "schedules", column: "id", value: resource.data.schedule.id }]}
+      onDelete={(deletedId) => {
+        if (deletedId === resource.data?.schedule.id) navigate("/admin/schedules", { replace: true });
+      }}
+    />
     <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
     <h1 className="detail-title">{resource.data.schedule.title}</h1>
     <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
