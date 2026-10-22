@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
@@ -33,6 +33,58 @@ const InviteMemberForm = lazy(() => import("@/components/admin/member-action-for
 const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
 const LoginForm = lazy(() => import("@/components/auth/login-form").then((module) => ({ default: module.LoginForm })));
 const SetupForm = lazy(() => import("@/components/auth/setup-form").then((module) => ({ default: module.SetupForm })));
+
+const routeScrollPositions = new Map<string, { x: number; y: number }>();
+let songbookScrollPosition = 0;
+
+function ScrollPositionRestoration() {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  useLayoutEffect(() => {
+    let observer: ResizeObserver | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    let frame = 0;
+    let restored = false;
+    const savedPosition = navigationType === "POP"
+      ? routeScrollPositions.get(location.key)
+      : location.pathname === "/song" && (location.state as { restoreSongbook?: boolean } | null)?.restoreSongbook
+        ? { x: 0, y: songbookScrollPosition }
+        : undefined;
+    const restore = () => {
+      if (restored) return;
+      restored = true;
+      if (frame) cancelAnimationFrame(frame);
+      if (timeout) clearTimeout(timeout);
+      observer?.disconnect();
+      window.scrollTo(savedPosition?.x ?? 0, savedPosition?.y ?? 0);
+    };
+
+    if (!savedPosition || savedPosition.y === 0) {
+      restore();
+    } else {
+      const tryRestore = () => {
+        if (document.documentElement.scrollHeight >= savedPosition.y + window.innerHeight) restore();
+      };
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(tryRestore);
+      });
+      observer = new ResizeObserver(tryRestore);
+      observer.observe(document.documentElement);
+      observer.observe(document.body);
+      timeout = setTimeout(restore, 1200);
+    }
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      if (timeout) clearTimeout(timeout);
+      observer?.disconnect();
+      const position = { x: window.scrollX, y: window.scrollY };
+      routeScrollPositions.set(location.key, position);
+      if (location.pathname === "/song") songbookScrollPosition = position.y;
+    };
+  }, [location.key, location.pathname, location.state, navigationType]);
+  return null;
+}
 
 function PageShell({ children, owner = false }: { children: ReactNode; owner?: boolean }) {
   const { pathname } = useLocation();
@@ -754,7 +806,9 @@ function NotFoundPage() {
 }
 
 export function App() {
-  return <Suspense fallback={<main className="route-loading" role="status">Loading INCOC South…</main>}>
+  return <>
+    <ScrollPositionRestoration />
+    <Suspense fallback={<main className="route-loading" role="status">Loading INCOC South…</main>}>
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/song" element={<SongbookPage />} />
@@ -783,7 +837,8 @@ export function App() {
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
-  </Suspense>;
+    </Suspense>
+  </>;
 }
 
 function SongbookSongRedirect() {

@@ -58,15 +58,15 @@ export function SongPageContent({
   const error = currentResult?.error ?? "";
   if (error && !song) return <article className="content-wrap">
     <p className="notice notice-warning" role="alert">{error}</p>
-    <IntentPrefetchLink href="/song">Return to the Songbook</IntentPrefetchLink>
+    <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }}>Return to the Songbook</IntentPrefetchLink>
   </article>;
   if (currentResult && !currentResult.song) return <article className="content-wrap">
-    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href="/song">Return to the Songbook</IntentPrefetchLink></p>
+    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }}>Return to the Songbook</IntentPrefetchLink></p>
   </article>;
   if (!song || (updatedAt && song.updated_at !== updatedAt)) {
     const summary = updatedAt ? getCachedSongSummary(songId, updatedAt) : null;
     return <article className="content-wrap song-reading" role="status" aria-busy="true">
-      <IntentPrefetchLink href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
+      <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }} className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
       <p className="muted">Loading song…</p>
       {summary && <h1 className="detail-title">{summary.title}</h1>}
     </article>;
@@ -84,7 +84,7 @@ export function SongPageContent({
         onChange={refreshSong}
       />
       <article className="content-wrap song-reading">
-        <IntentPrefetchLink href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
+        <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }} className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
         {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
         {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
         <h1 className="detail-title">{song.title}</h1>
