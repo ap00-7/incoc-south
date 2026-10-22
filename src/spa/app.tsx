@@ -353,8 +353,15 @@ function ScheduleDetailPage() {
         }} />
         <article className="content-wrap">
           {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
-          <h1 className="detail-title">{schedule.title}</h1>
-          <div className="detail-meta">{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>· {schedule.venue}</span>}</div>
+          <header className={`schedule-detail-heading${isOwner ? " has-edit" : ""}`}>
+            {isOwner && <IntentPrefetchLink href={`/admin/schedules/${schedule.id}`} className="schedule-edit-link">Edit schedule</IntentPrefetchLink>}
+            <h1 className="detail-title">{schedule.title}</h1>
+            <div className="detail-meta schedule-detail-meta">
+              <CalendarDays size={16} aria-hidden="true" />
+              <span>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</span>
+              {schedule.venue && <span className="schedule-detail-venue"><span aria-hidden="true">·</span> {schedule.venue}</span>}
+            </div>
+          </header>
           {schedule.description && <p className="section-description">{schedule.description}</p>}
           {schedule.schedule_items.length ? <ol className="programme-list">
             {schedule.schedule_items.map((item) => {
