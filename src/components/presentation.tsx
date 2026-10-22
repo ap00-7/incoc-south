@@ -52,7 +52,7 @@ export function Presentation({
   const [slideIndex, setSlideIndex] = useState(initialPosition.slideIndex);
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const positionRef = useRef<PresentationPosition>(initialPosition);
   const currentGroupIndex = clampSlideIndex(selectedItemIndex, groups.length);
   const currentGroup = groups[currentGroupIndex];
@@ -144,6 +144,32 @@ export function Presentation({
     if (error) setSyncError(`Slide changed locally, but could not update the shared presentation: ${error.message}`);
   }, [groups, isOwner, scheduleId, syncActive, userId]);
 
+  const moveItem = useCallback(async (direction: -1 | 1) => {
+    if (syncActive && !isOwner) return;
+    const nextItemIndex = positionRef.current.itemIndex + direction;
+    const group = groups[nextItemIndex];
+    if (!group) return;
+    const nextPosition = { itemIndex: nextItemIndex, slideIndex: 0 };
+    positionRef.current = nextPosition;
+    setSelectedItemIndex(nextItemIndex);
+    setSlideIndex(0);
+    setSyncError("");
+    if (!syncActive || !isOwner) return;
+    if (!userId) {
+      setSyncError("Your owner session is unavailable. Sign in again to control the shared presentation.");
+      return;
+    }
+    const supabase = createClient();
+    const { error } = await supabase.from("presentation_sessions")
+      .update({
+        current_item_id: group.itemId,
+        current_slide_index: group.firstSlideIndex,
+        updated_by: userId,
+      })
+      .eq("schedule_id", scheduleId);
+    if (error) setSyncError(`Item changed locally, but could not update the shared presentation: ${error.message}`);
+  }, [groups, isOwner, scheduleId, syncActive, userId]);
+
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -185,22 +211,21 @@ export function Presentation({
       <section
         className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}`}
         aria-live="polite"
-        onTouchStart={(event) => {
+        onPointerDown={(event) => {
+          if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
           const target = event.target;
           if (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]")) return;
-          const touch = event.touches[0];
-          touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+          swipeStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+          event.currentTarget.setPointerCapture(event.pointerId);
         }}
-        onTouchEnd={(event) => {
-          const start = touchStart.current;
-          touchStart.current = null;
-          const target = event.target;
-          const touch = event.changedTouches[0];
-          if (!start || !touch || (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]"))) return;
-          const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, touch.clientX, touch.clientY);
+        onPointerUp={(event) => {
+          const start = swipeStart.current;
+          swipeStart.current = null;
+          if (!start || start.pointerId !== event.pointerId) return;
+          const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, event.clientX, event.clientY);
           if (targetIndex !== null) void moveSlide(targetIndex > currentSlideIndex ? 1 : -1);
         }}
-        onTouchCancel={() => { touchStart.current = null; }}
+        onPointerCancel={() => { swipeStart.current = null; }}
       >
         {current && fullscreenImageUrl
           ? <img className="presentation-fullscreen-image" src={fullscreenImageUrl} alt={current.itemTitle} />
@@ -220,10 +245,10 @@ export function Presentation({
             </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
-      <nav className="presentation-bottom-controls" aria-label="Presentation slide navigation">
-        <button type="button" onClick={() => { void moveSlide(-1); }} disabled={currentSlideIndex === 0 || (syncActive && !isOwner)} aria-label="Previous slide"><ChevronLeft size={21} /></button>
+      <nav className="presentation-bottom-controls" aria-label="Presentation item navigation">
+        <button type="button" onClick={() => { void moveItem(-1); }} disabled={currentGroupIndex === 0 || (syncActive && !isOwner)} aria-label="Previous item"><ChevronLeft size={21} /></button>
         <button type="button" onClick={() => navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
-        <button type="button" onClick={() => { void moveSlide(1); }} disabled={!currentGroup || currentSlideIndex === currentGroup.slides.length - 1 || (syncActive && !isOwner)} aria-label="Next slide"><ChevronRight size={21} /></button>
+        <button type="button" onClick={() => { void moveItem(1); }} disabled={currentGroupIndex >= groups.length - 1 || (syncActive && !isOwner)} aria-label="Next item"><ChevronRight size={21} /></button>
       </nav>
       <span className="presentation-slide-counter" aria-live="polite">{currentGroup ? `${currentSlideIndex + 1} / ${currentGroup.slides.length}` : "0 / 0"}</span>
     </main>
