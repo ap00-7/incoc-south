@@ -247,6 +247,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .schedule-detail-meta { justify-content: center; margin-top: 9px; color: var(--ink); font-size: 16px; font-weight: 600; opacity: 1; }
 .schedule-detail-meta svg { flex: 0 0 auto; }
 .schedule-detail-venue { overflow-wrap: anywhere; }
+.content-wrap > .programme-list .programme-item h2 { font-size: 16px; line-height: 1.4; }
+.content-wrap > .programme-list .programme-item p { font-size: 14px; line-height: 1.5; }
 .admin-subheading { margin: 20px 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .admin-subheading .eyebrow { margin-bottom: 5px; }
 .admin-subheading h2, .admin-section-title { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--navy); font-family: var(--font-display); font-size: 22px; font-weight: 500; }
