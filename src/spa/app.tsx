@@ -179,20 +179,23 @@ function SongDetailPage() {
   </PageShell>;
 }
 
+async function loadPublishedSchedules(page: number) {
+  const { data, error, count } = await createClient().from("schedules")
+    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
+    .eq("church.slug", "incoc-south").eq("status", "published")
+    .order("service_date", { ascending: false })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  if (error) throw new Error(`Unable to load services: ${error.message}`);
+  return { schedules: data ?? [], count: count ?? 0 };
+}
+
 function ScheduleListPage() {
   const { membership } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const loadSchedules = useCallback(async () => {
-    const { data, error, count } = await createClient().from("schedules")
-      .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
-      .eq("church.slug", "incoc-south").order("service_date", { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    if (error) throw new Error(`Unable to load services: ${error.message}`);
-    return { schedules: data ?? [], count: count ?? 0 };
-  }, [page]);
+  const loadSchedules = useCallback(() => loadPublishedSchedules(page), [page]);
   const resource = useAsyncResource(`schedules:${page}`, loadSchedules);
   const schedules = resource.data?.schedules ?? EMPTY_LIST;
   const isOwner = membership?.role === "owner";
@@ -236,25 +239,28 @@ function ScheduleDetailPage() {
   const navigate = useNavigate();
   const loadSchedule = useCallback(async () => {
     const { data, error } = await createClient().from("schedules")
-      .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(slug)")
+      .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(id, slug)")
       .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
     if (error) throw new Error(`Unable to load service: ${error.message}`);
     if (!data) throw new Error("This service is not available.");
     return { ...data, schedule_items: [...(data.schedule_items ?? [])].sort((a, b) => a.position - b.position) };
   }, [scheduleId]);
   const resource = useAsyncResource(`schedule:${scheduleId}`, loadSchedule);
+  const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
+  const publishedServices = useAsyncResource("schedules:1", loadPublishedServices);
   const schedule = resource.data;
   return <PageShell owner={membership?.role === "owner"}>
     {resource.error && !schedule ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : !schedule
       ? <article className="content-wrap">
-        <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>
+        {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
         <h1 className="detail-title">Sunday Schedule</h1><InlineLoading>Loading service…</InlineLoading>
       </article>
       : <>
         {resource.error && <ResourceMessage error={`The latest service refresh failed: ${resource.error}`} retry={resource.refresh} />}
+        {publishedServices.error && <ResourceMessage error={`Unable to check available services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
         {resource.loading && resource.data && <div className="content-wrap"><InlineLoading>Checking for service updates…</InlineLoading></div>}
         <RealtimeRefresh subscriptions={[
-          { table: "schedules", column: "id", value: schedule.id },
+          { table: "schedules", column: "church_id", value: schedule.church.id },
           { table: "schedule_items", column: "schedule_id", value: schedule.id },
           ...schedule.schedule_items.flatMap((item) => item.song_id ? [
             { table: "songs" as const, column: "id", value: item.song_id },
@@ -264,7 +270,7 @@ function ScheduleDetailPage() {
           if (deletedId === schedule.id) navigate("/schedule", { replace: true });
         }} />
         <article className="content-wrap">
-          <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>
+          {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
           <h1 className="detail-title">{schedule.title}</h1>
           <div className="detail-meta">{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>· {schedule.venue}</span>}</div>
           {schedule.description && <p className="section-description">{schedule.description}</p>}
