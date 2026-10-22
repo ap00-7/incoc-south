@@ -155,7 +155,7 @@ function SongbookPage() {
               <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/song" /></Suspense>
             </details>}
             <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
-            {visibleSongs.length ? <div className="results-list">
+            {visibleSongs.length ? <div className="results-list songbook-results-list">
               {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink>)}
             </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
             {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
@@ -343,7 +343,10 @@ function SlidesPage() {
           ]} />
           <div className="content-wrap slides-overview">
             <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>
-            <h1 className="detail-title">{schedule.title}</h1>
+            <div className="slides-overview-heading">
+              <h1 className="detail-title">{schedule.title}</h1>
+              {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
+            </div>
             <p className="slides-overview-meta"><CalendarDays size={15} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>{schedule.venue}</span>}</p>
             {resource.data.groups.length ? <div className="slides-preview-grid">
               {resource.data.groups.map((group) => {
@@ -361,7 +364,6 @@ function SlidesPage() {
                 </Link>;
               })}
             </div> : <div className="empty-state">There are no presentation slides for this service.</div>}
-            {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
           </div>
         </>
         : <>
