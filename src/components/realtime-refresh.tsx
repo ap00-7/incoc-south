@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { notifyDataChanged } from "@/spa/data-events";
 
@@ -9,20 +9,30 @@ export type RealtimeFilter = {
 };
 
 export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: RealtimeFilter[]; onChange?: () => void }) {
-  const [error, setError] = useState("");
+  const [unavailable, setUnavailable] = useState(false);
+  const onChangeRef = useRef(onChange);
   const serialized = useMemo(() => JSON.stringify(subscriptions), [subscriptions]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     const filters = JSON.parse(serialized) as RealtimeFilter[];
     if (!filters.length) return;
     const supabase = createClient();
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let failureTimer: ReturnType<typeof setTimeout> | undefined;
     let alive = true;
+    const clearFailureTimer = () => {
+      if (failureTimer) clearTimeout(failureTimer);
+      failureTimer = undefined;
+    };
     const refresh = () => {
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         if (!alive) return;
-        onChange?.();
+        onChangeRef.current?.();
         notifyDataChanged();
       }, 80);
     };
@@ -36,16 +46,32 @@ export function RealtimeRefresh({ subscriptions, onChange }: { subscriptions: Re
       }, refresh);
     }
     channel.subscribe((status) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        setError("Live updates are unavailable. Refresh the page to see the latest changes.");
+      if (!alive) return;
+      if (status === "SUBSCRIBED") {
+        clearFailureTimer();
+        setUnavailable(false);
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        if (!failureTimer) {
+          failureTimer = setTimeout(() => {
+            if (alive) setUnavailable(true);
+          }, 8_000);
+        }
       }
     });
     return () => {
       alive = false;
       if (refreshTimer) clearTimeout(refreshTimer);
+      clearFailureTimer();
       void supabase.removeChannel(channel);
     };
-  }, [onChange, serialized]);
+  }, [serialized]);
 
-  return error ? <p className="realtime-notice" role="status">{error}</p> : null;
+  if (!unavailable) return null;
+  return <p className="realtime-notice" role="status">
+    Live updates are temporarily unavailable. Existing content remains available.{" "}
+    <button type="button" className="text-link" onClick={() => {
+      onChangeRef.current?.();
+      notifyDataChanged();
+    }}>Refresh content</button>
+  </p>;
 }

@@ -52,7 +52,10 @@ export function useAsyncResource<T>(key: string, load: () => Promise<T>) {
       ? { key, data: null, loading: true, error: "" }
       : { key, data, loading: false, error: "" };
   });
-  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  const refresh = useCallback(() => {
+    setState((current) => current.key === key ? { ...current, loading: true, error: "" } : current);
+    setRevision((value) => value + 1);
+  }, [key]);
 
   useEffect(() => {
     window.addEventListener("incoc:data-changed", refresh);
@@ -64,19 +67,19 @@ export function useAsyncResource<T>(key: string, load: () => Promise<T>) {
     void loadCached(key, load).then((data) => {
       if (active) setState({ key, data, loading: false, error: "" });
     }).catch((loadError: unknown) => {
-      if (active) setState({
+      if (active) setState((current) => ({
         key,
-        data: null,
+        data: current.key === key ? current.data : null,
         loading: false,
         error: loadError instanceof Error ? loadError.message : "Unable to load this page.",
-      });
+      }));
     });
     return () => { active = false; };
   }, [key, load, revision]);
 
   return {
-    data: state.key === key ? state.data : null,
-    loading: state.key !== key || state.loading,
+    data: state.key === key ? state.data : cachedData<T>(key) ?? null,
+    loading: state.key === key ? state.loading : cachedData<T>(key) === undefined,
     error: state.key === key ? state.error : "",
     refresh,
   };

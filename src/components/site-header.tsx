@@ -5,7 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/spa/auth-provider";
 
-export function SiteHeader({ owner = false }: { owner?: boolean }) {
+export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean; showNavigation: boolean }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const [signingOut, setSigningOut] = useState(false);
@@ -33,10 +33,10 @@ export function SiteHeader({ owner = false }: { owner?: boolean }) {
           <BrandMark />
           <span><strong>INCOC South</strong><small>Church in South Sector</small></span>
         </Link>
-        <nav className="primary-nav" aria-label="Main navigation">
+        {showNavigation && <nav className="primary-nav" aria-label="Main navigation">
           <Link to="/song"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
           <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
-        </nav>
+        </nav>}
         <div className="header-actions">
           <ThemeToggle />
           {showOwner && <>

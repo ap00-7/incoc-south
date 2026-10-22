@@ -8,6 +8,7 @@ import { RealtimeRefresh } from "@/components/realtime-refresh";
 export function Presentation({
   scheduleId,
   scheduleTitle,
+  refreshing,
   initialSlide,
   slides,
   isOwner,
@@ -17,6 +18,7 @@ export function Presentation({
 }: {
   scheduleId: string;
   scheduleTitle: string;
+  refreshing: boolean;
   initialSlide: number;
   slides: PresentationSlide[];
   isOwner: boolean;
@@ -40,6 +42,12 @@ export function Presentation({
     if (!canReadSession) return;
     const supabase = createClient();
     let alive = true;
+    let failureTimer: ReturnType<typeof setTimeout> | undefined;
+    const clearFailureTimer = () => {
+      if (failureTimer) clearTimeout(failureTimer);
+      failureTimer = undefined;
+    };
+    const connectionError = "Live connection is unavailable. Local slide navigation still works.";
     const refresh = async () => {
       const { data, error } = await supabase.from("presentation_sessions")
         .select("current_slide_index, is_active").eq("schedule_id", scheduleId).maybeSingle();
@@ -47,6 +55,7 @@ export function Presentation({
       if (error) {
         setSyncError(`Could not refresh shared presentation state: ${error.message}`);
       } else if (data) {
+        setSyncError((current) => current.startsWith("Could not refresh shared presentation state:") ? "" : current);
         setSyncActive(data.is_active);
         if (data.is_active) setIndex(clampSlideIndex(data.current_slide_index, slides.length));
       }
@@ -59,13 +68,20 @@ export function Presentation({
         filter: `schedule_id=eq.${scheduleId}`,
       }, () => { void refresh(); })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") void refresh();
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          setSyncError("Live connection is unavailable. Local slide navigation still works.");
+        if (!alive) return;
+        if (status === "SUBSCRIBED") {
+          clearFailureTimer();
+          setSyncError((current) => current === connectionError ? "" : current);
+          void refresh();
+        } else if ((status === "CHANNEL_ERROR" || status === "TIMED_OUT") && !failureTimer) {
+          failureTimer = setTimeout(() => {
+            if (alive) setSyncError((current) => current || connectionError);
+          }, 8_000);
         }
       });
     return () => {
       alive = false;
+      clearFailureTimer();
       void supabase.removeChannel(channel);
     };
   }, [canReadSession, scheduleId, slides.length]);
@@ -129,6 +145,7 @@ export function Presentation({
         ]),
         ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
       ]} />
+      {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section
         className="slide-stage"

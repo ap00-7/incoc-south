@@ -1,29 +1,17 @@
-import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, Outlet, Route, Routes, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { CachedSongLink } from "@/components/cached-song-link";
 import { SongCacheSeed } from "@/components/song-cache-seed";
-import { SongPageContent } from "@/components/song-page-content";
 import { SongbookSearch } from "@/components/songbook-search";
-import { Presentation } from "@/components/presentation";
-import { SongEditorForm } from "@/components/admin/song-creation-form";
-import {
-  InlineScheduleDetails,
-  InlineScheduleManager,
-  NewScheduleForm,
-  ScheduleActions,
-} from "@/components/admin/inline-schedule-manager";
-import { InviteMemberForm, MemberRoleForm } from "@/components/admin/member-action-forms";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandMark } from "@/components/brand-mark";
-import { LoginForm } from "@/components/auth/login-form";
-import { SetupForm } from "@/components/auth/setup-form";
 import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
@@ -35,10 +23,22 @@ import { useAsyncResource } from "@/spa/use-async-resource";
 const PAGE_SIZE = 50;
 const EMPTY_LIST: never[] = [];
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "long", timeZone: "Asia/Kolkata" });
+const SongPageContent = lazy(() => import("@/components/song-page-content").then((module) => ({ default: module.SongPageContent })));
+const Presentation = lazy(() => import("@/components/presentation").then((module) => ({ default: module.Presentation })));
+const SongEditorForm = lazy(() => import("@/components/admin/song-creation-form").then((module) => ({ default: module.SongEditorForm })));
+const InlineScheduleDetails = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.InlineScheduleDetails })));
+const InlineScheduleManager = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.InlineScheduleManager })));
+const NewScheduleForm = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.NewScheduleForm })));
+const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.ScheduleActions })));
+const InviteMemberForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.InviteMemberForm })));
+const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
+const LoginForm = lazy(() => import("@/components/auth/login-form").then((module) => ({ default: module.LoginForm })));
+const SetupForm = lazy(() => import("@/components/auth/setup-form").then((module) => ({ default: module.SetupForm })));
 
 function PageShell({ children, owner = false }: { children: ReactNode; owner?: boolean }) {
+  const { pathname } = useLocation();
   return <>
-    <SiteHeader owner={owner} />
+    <SiteHeader owner={owner} showNavigation={pathname === "/"} />
     <main className="page-main">{children}</main>
     <SiteFooter />
   </>;
@@ -53,6 +53,10 @@ function LoadingPage({ title }: { title: string }) {
     <span className="loading-line loading-line-short" />
     <span className="sr-only">Loading content…</span>
   </div>;
+}
+
+function InlineLoading({ children = "Loading content…" }: { children?: ReactNode }) {
+  return <p className="muted" role="status" aria-busy="true">{children}</p>;
 }
 
 function ResourceMessage({ error, retry, children }: { error: string; retry?: () => void; children?: React.ReactNode }) {
@@ -132,23 +136,26 @@ function SongbookPage() {
   };
 
   return <PageShell owner={membership?.role === "owner"}>
-    {resource.error ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : resource.loading && !resource.data
-      ? <LoadingPage title="Songbook" />
+    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} />
       : <>
+        {resource.error && <ResourceMessage error={`The latest Songbook refresh failed: ${resource.error}`} retry={resource.refresh} />}
         {resource.data?.churchId && <SongCacheSeed songs={visibleSongs} churchId={resource.data.churchId} />}
         <div className="content-wrap">
           <div className="section-heading"><h1>Songbook</h1></div>
-          {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
-            <summary>Add a song</summary><SongEditorForm returnTo="/song" />
-          </details>}
-          <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
-          {visibleSongs.length ? <div className="results-list">
-            {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink>)}
-          </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
-          {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
-            {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
-            {hasNextPage && <Link className="button button-secondary" to={pageHref(page + 1)}>More songs</Link>}
-          </nav>}
+          {resource.loading && resource.data && <InlineLoading>Checking for Songbook updates…</InlineLoading>}
+          {resource.loading && !resource.data ? <InlineLoading>Loading songs…</InlineLoading> : <>
+            {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
+              <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/song" /></Suspense>
+            </details>}
+            <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
+            {visibleSongs.length ? <div className="results-list">
+              {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink>)}
+            </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
+            {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
+              {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
+              {hasNextPage && <Link className="button button-secondary" to={pageHref(page + 1)}>More songs</Link>}
+            </nav>}
+          </>}
         </div>
       </>}
   </PageShell>;
@@ -159,7 +166,9 @@ function SongDetailPage() {
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
   return <PageShell owner={membership?.role === "owner"}>
-    <SongPageContent songId={songId} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
+    <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
+      <SongPageContent songId={songId} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
+    </Suspense>
   </PageShell>;
 }
 
@@ -186,16 +195,17 @@ function ScheduleListPage() {
   const churchId = schedules[0]?.church.id ?? membership?.churchId;
   const hasNextPage = schedules.length > PAGE_SIZE;
   return <PageShell owner={isOwner}>
-    {resource.error ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : resource.loading && !resource.data
-      ? <LoadingPage title="Sunday Schedule" />
+    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} />
       : <>
+        {resource.error && <ResourceMessage error={`The latest schedule refresh failed: ${resource.error}`} retry={resource.refresh} />}
         {churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: churchId }]} />}
         <div className="content-wrap">
+          {resource.loading && resource.data && <InlineLoading>Checking for schedule updates…</InlineLoading>}
           <div className="schedule-list-heading">
             <div className="section-heading"><h1>Sunday Schedule</h1></div>
             {isOwner && <Link to="/admin/schedules/new" className="button button-primary"><Plus size={15} /> Create schedule</Link>}
           </div>
-          {schedules.length ? <div className="results-list">
+          {resource.loading && !resource.data ? <InlineLoading>Loading services…</InlineLoading> : schedules.length ? <div className="results-list">
             {schedules.slice(0, PAGE_SIZE).map((schedule) => <article className="public-list-entry" key={schedule.id}>
               <IntentPrefetchLink className="result-card" href={`/schedule/${schedule.id}`}>
                 <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
@@ -227,9 +237,14 @@ function ScheduleDetailPage() {
   const resource = useAsyncResource(`schedule:${scheduleId}`, loadSchedule);
   const schedule = resource.data;
   return <PageShell owner={membership?.role === "owner"}>
-    {resource.error ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : !schedule
-      ? <LoadingPage title="Loading service" />
+    {resource.error && !schedule ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : !schedule
+      ? <article className="content-wrap">
+        <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>
+        <h1 className="detail-title">Sunday Schedule</h1><InlineLoading>Loading service…</InlineLoading>
+      </article>
       : <>
+        {resource.error && <ResourceMessage error={`The latest service refresh failed: ${resource.error}`} retry={resource.refresh} />}
+        {resource.loading && resource.data && <div className="content-wrap"><InlineLoading>Checking for service updates…</InlineLoading></div>}
         <RealtimeRefresh subscriptions={[
           { table: "schedules", column: "id", value: schedule.id },
           { table: "schedule_items", column: "schedule_id", value: schedule.id },
@@ -310,10 +325,12 @@ function SlidesPage() {
   }, [navigate, resource.error, scheduleId]);
 
   return <PageShell owner={isOwner}>
-    {resource.error ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : resource.loading && !resource.data
-      ? <LoadingPage title="Choose a presentation" />
+    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : resource.loading && !resource.data
+      ? <div className="content-wrap"><div className="section-heading"><h1>Slides</h1></div><InlineLoading>Loading presentations…</InlineLoading></div>
       : schedule && resource.data
         ? <>
+          {resource.error && <ResourceMessage error={`The latest presentation refresh failed: ${resource.error}`} retry={resource.refresh} />}
+          {resource.loading && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
@@ -343,6 +360,7 @@ function SlidesPage() {
           {resource.data?.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: resource.data.churchId }]} />}
           <div className="content-wrap">
             <div className="section-heading"><h1>Slides</h1></div>
+            {resource.loading && resource.data && <InlineLoading>Checking for presentation updates…</InlineLoading>}
             {schedules.length ? <div className="results-list">
               {schedules.slice(0, PAGE_SIZE).map((item) => <article className="public-list-entry" key={item.id}>
                 <IntentPrefetchLink className="result-card" href={`/slides?scheduleId=${item.id}`}>
@@ -383,18 +401,24 @@ function PresentationPage() {
   }, [scheduleId]);
   const resource = useAsyncResource(`presentation:${scheduleId}`, loadPresentation);
   if (resource.error) return <main className="presentation-page"><p role="alert">{resource.error}</p><Link to="/slides">Return to Slides</Link></main>;
-  if (!resource.data) return <main className="presentation-page" role="status" aria-busy="true">Loading presentation…</main>;
-  return <Presentation
-    key={`${scheduleId}-${initialSlide}`}
-    scheduleId={scheduleId}
-    scheduleTitle={resource.data.schedule.title}
-    initialSlide={initialSlide}
-    slides={resource.data.slides}
-    isOwner={membership?.role === "owner"}
-    canReadSession={Boolean(membership)}
-    userId={user?.id ?? null}
-    songIds={resource.data.songIds}
-  />;
+  if (!resource.data) return <main className="presentation-page">
+    <InlineLoading>Loading presentation…</InlineLoading>
+    <Link to="/slides">Return to Slides</Link>
+  </main>;
+  return <Suspense fallback={<main className="presentation-page"><InlineLoading>Loading presentation…</InlineLoading></main>}>
+    <Presentation
+      key={`${scheduleId}-${initialSlide}`}
+      scheduleId={scheduleId}
+      scheduleTitle={resource.data.schedule.title}
+      refreshing={resource.loading}
+      initialSlide={initialSlide}
+      slides={resource.data.slides}
+      isOwner={membership?.role === "owner"}
+      canReadSession={Boolean(membership)}
+      userId={user?.id ?? null}
+      songIds={resource.data.songIds}
+    />
+  </Suspense>;
 }
 
 function OwnerOnly() {
@@ -448,7 +472,7 @@ function AdminSongCreatePage() {
     <IntentPrefetchLink href="/admin/songs" className="back-link"><ArrowLeft size={15} /> Back to songs</IntentPrefetchLink>
     <p className="eyebrow">ADD TO THE LIBRARY</p><h1>New song</h1>
     <p>Add the song and organize its verses, chorus, and translations before saving.</p>
-    <SongEditorForm />
+    <Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm /></Suspense>
   </>;
 }
 
@@ -471,7 +495,7 @@ function AdminSongEditPage() {
   return <>
     <IntentPrefetchLink href="/admin/songs" className="back-link"><ArrowLeft size={15} /> Back to songs</IntentPrefetchLink>
     <p className="eyebrow">EDIT SONG</p><h1>{song.title}</h1>
-    <SongEditorForm song={{
+    <Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm song={{
       id: song.id, updated_at: song.updated_at, title: song.title, language: song.language,
       author: song.author, source: song.source, has_translation: song.has_translation,
       start_with_chorus: song.start_with_chorus,
@@ -480,7 +504,7 @@ function AdminSongEditPage() {
         lyrics: section.lyrics, translation: section.translation ?? "",
         translation_language: section.translation_language ?? "", is_hidden: section.is_hidden,
       })),
-    }} />
+    }} /></Suspense>
     <form className="delete-song-form"><input type="hidden" name="song_id" value={song.id} />
       <ConfirmButton action={deleteSong} title="Delete song?" message="This permanently deletes the song from the Songbook. A song used by a schedule cannot be deleted." className="button button-danger" pendingLabel="Deleting…">Delete song</ConfirmButton>
     </form>
@@ -512,7 +536,8 @@ function AdminSchedulesPage() {
 function AdminScheduleCreatePage() {
   return <>
     <IntentPrefetchLink href="/admin/schedules" className="back-link"><ArrowLeft size={15} /> Back to schedules</IntentPrefetchLink>
-    <h1 className="detail-title">Create Sunday Schedule</h1><NewScheduleForm />
+    <h1 className="detail-title">Create Sunday Schedule</h1>
+    <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}><NewScheduleForm /></Suspense>
   </>;
 }
 
@@ -546,18 +571,20 @@ function AdminScheduleEditPage() {
   return <>
     <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
     <h1 className="detail-title">{resource.data.schedule.title}</h1>
-    <InlineScheduleDetails schedule={resource.data.schedule} />
-    <section className="schedule-items-editor" aria-label="Schedule items">
-      <h2>Schedule Items</h2>
-      <InlineScheduleManager
-        schedule={resource.data.schedule}
-        items={resource.data.items}
-        songs={resource.data.songs}
-        returnTo={`/admin/schedules/${resource.data.schedule.id}`}
-        churchId={membership?.churchId ?? ""}
-      />
-    </section>
-    <ScheduleActions schedule={resource.data.schedule} />
+    <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
+      <InlineScheduleDetails schedule={resource.data.schedule} />
+      <section className="schedule-items-editor" aria-label="Schedule items">
+        <h2>Schedule Items</h2>
+        <InlineScheduleManager
+          schedule={resource.data.schedule}
+          items={resource.data.items}
+          songs={resource.data.songs}
+          returnTo={`/admin/schedules/${resource.data.schedule.id}`}
+          churchId={membership?.churchId ?? ""}
+        />
+      </section>
+      <ScheduleActions schedule={resource.data.schedule} />
+    </Suspense>
   </>;
 }
 
@@ -581,7 +608,9 @@ function AdminMembersPage() {
       return <article className="member-row" key={item.user_id}>
         <div><h2>{profile?.display_name || "Church member"}</h2><p>{item.user_id === user?.id ? "You · " : ""}Added {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" }).format(new Date(item.created_at))}</p></div>
         <div className="member-actions">
-          <MemberRoleForm userId={item.user_id} displayName={profile?.display_name || "member"} role={item.role} disabled={item.user_id === user?.id} />
+          <Suspense fallback={<InlineLoading>Loading member controls…</InlineLoading>}>
+            <MemberRoleForm userId={item.user_id} displayName={profile?.display_name || "member"} role={item.role} disabled={item.user_id === user?.id} />
+          </Suspense>
           {item.user_id !== user?.id && <form><input type="hidden" name="user_id" value={item.user_id} />
             <ConfirmButton action={removeMember} title="Remove member?" message={`Remove ${profile?.display_name || "this member"} from the church? They will lose access to private content.`} className="icon-button danger"><Trash2 size={15} /></ConfirmButton>
           </form>}
@@ -590,7 +619,7 @@ function AdminMembersPage() {
     })}</div>
     <h2 className="admin-section-title">Invite a member</h2>
     <p className="muted">Supabase sends a sign-in invitation. New members set their password after opening the email link.</p>
-    <InviteMemberForm />
+    <Suspense fallback={<InlineLoading>Loading invitation form…</InlineLoading>}><InviteMemberForm /></Suspense>
     {!import.meta.env.VITE_SUPABASE_URL ? null
       : <p className="notice">Member invitations require the server-only SUPABASE_SERVICE_ROLE_KEY on Vercel. Never expose it to the browser.</p>}
   </>;
@@ -623,7 +652,7 @@ function LoginPage() {
       <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
       <p className="eyebrow">INDIAN CHURCH OF CHRIST</p><h1>Welcome back</h1>
       <p className="muted">Sign-in is restricted to the website owner.</p>
-      {configured ? <LoginForm /> : <div className="notice notice-warning" role="status">Sign-in is unavailable until Supabase is configured. Follow the setup guide in the project README.</div>}
+      {configured ? <Suspense fallback={<InlineLoading>Loading sign-in form…</InlineLoading>}><LoginForm /></Suspense> : <div className="notice notice-warning" role="status">Sign-in is unavailable until Supabase is configured. Follow the setup guide in the project README.</div>}
       <p className="auth-footnote">Songs, Sunday schedules, and slides are available without signing in.</p>
     </section>
   </main>;
@@ -637,7 +666,8 @@ function AccountSetupPage() {
   return <main className="auth-page"><section className="auth-card">
     <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
     <p className="eyebrow">ACCOUNT SETUP</p><h1>Choose a password</h1>
-    <p className="muted">Use at least 12 characters.</p><SetupForm />
+    <p className="muted">Use at least 12 characters.</p>
+    <Suspense fallback={<InlineLoading>Loading setup form…</InlineLoading>}><SetupForm /></Suspense>
   </section></main>;
 }
 

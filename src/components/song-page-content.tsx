@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { SongEditorForm } from "@/components/admin/song-creation-form";
 import { deleteSong } from "@/lib/actions/content";
 import { getCachedSong, getCachedSongSummary, invalidateSongCache, loadSong, type CachedSong } from "@/lib/song-cache";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
+
+const SongEditorForm = lazy(() => import("@/components/admin/song-creation-form").then((module) => ({ default: module.SongEditorForm })));
 
 export function SongPageContent({
   songId,
@@ -21,9 +22,10 @@ export function SongPageContent({
 }) {
   const [result, setResult] = useState<{ songId: string; updatedAt?: string; song: CachedSong | null; error: string } | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const refreshSong = useCallback(() => {
     invalidateSongCache(songId);
-    setResult(null);
+    setRefreshing(true);
     setRefreshVersion((current) => current + 1);
   }, [songId]);
 
@@ -32,14 +34,20 @@ export function SongPageContent({
     if (cachedSong) return;
     let active = true;
     void loadSong(songId, updatedAt).then((result) => {
-      if (active) setResult({ songId, updatedAt, song: result, error: "" });
+      if (active) {
+        setResult({ songId, updatedAt, song: result, error: "" });
+        setRefreshing(false);
+      }
     }).catch((loadError: unknown) => {
-      if (active) setResult({
-        songId,
-        updatedAt,
-        song: null,
-        error: loadError instanceof Error ? loadError.message : "Unable to load song.",
-      });
+      if (active) {
+        setResult((current) => ({
+          songId,
+          updatedAt,
+          song: current?.songId === songId && current.updatedAt === updatedAt ? current.song : null,
+          error: loadError instanceof Error ? loadError.message : "Unable to load song.",
+        }));
+        setRefreshing(false);
+      }
     });
     return () => { active = false; };
   }, [songId, isOwner, updatedAt, refreshVersion]);
@@ -48,13 +56,17 @@ export function SongPageContent({
   const currentResult = result?.songId === songId && result.updatedAt === updatedAt ? result : null;
   const song = cachedSong ?? currentResult?.song ?? null;
   const error = currentResult?.error ?? "";
-  if (error) return <article className="content-wrap"><p className="notice notice-warning" role="alert">{error}</p></article>;
+  if (error && !song) return <article className="content-wrap">
+    <p className="notice notice-warning" role="alert">{error}</p>
+    <IntentPrefetchLink href="/song">Return to the Songbook</IntentPrefetchLink>
+  </article>;
   if (currentResult && !currentResult.song) return <article className="content-wrap">
     <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href="/song">Return to the Songbook</IntentPrefetchLink></p>
   </article>;
   if (!song || (updatedAt && song.updated_at !== updatedAt)) {
     const summary = updatedAt ? getCachedSongSummary(songId, updatedAt) : null;
-    return <article className="content-wrap" role="status" aria-busy="true">
+    return <article className="content-wrap song-reading" role="status" aria-busy="true">
+      <IntentPrefetchLink href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
       <p className="muted">Loading song…</p>
       {summary && <h1 className="detail-title">{summary.title}</h1>}
     </article>;
@@ -73,6 +85,8 @@ export function SongPageContent({
       />
       <article className="content-wrap song-reading">
         <IntentPrefetchLink href="/song" className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
+        {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
+        {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
         <h1 className="detail-title">{song.title}</h1>
         <hr className="song-reading-divider" />
         {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
@@ -92,28 +106,30 @@ export function SongPageContent({
         {isOwner && <div id="owner-edit" className="inline-owner-area">
           <details className="inline-owner-editor" open={editOpen}>
             <summary>Edit song sections and translations</summary>
-            <SongEditorForm
-              returnTo={`/song/${song.id}?edit=1#owner-edit`}
-              song={{
-                id: song.id,
-                updated_at: song.updated_at,
-                title: song.title,
-                language: song.language,
-                author: song.author,
-                source: song.source,
-                has_translation: song.has_translation,
-                start_with_chorus: song.start_with_chorus,
-                sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
-                  id: section.id,
-                  section_type: section.section_type,
-                  label: section.label ?? "",
-                  lyrics: section.lyrics,
-                  translation: section.translation ?? "",
-                  translation_language: section.translation_language ?? "",
-                  is_hidden: section.is_hidden,
-                })),
-              }}
-            />
+            <Suspense fallback={<p className="muted" role="status">Loading song editor…</p>}>
+              <SongEditorForm
+                returnTo={`/song/${song.id}?edit=1#owner-edit`}
+                song={{
+                  id: song.id,
+                  updated_at: song.updated_at,
+                  title: song.title,
+                  language: song.language,
+                  author: song.author,
+                  source: song.source,
+                  has_translation: song.has_translation,
+                  start_with_chorus: song.start_with_chorus,
+                  sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
+                    id: section.id,
+                    section_type: section.section_type,
+                    label: section.label ?? "",
+                    lyrics: section.lyrics,
+                    translation: section.translation ?? "",
+                    translation_language: section.translation_language ?? "",
+                    is_hidden: section.is_hidden,
+                  })),
+                }}
+              />
+            </Suspense>
           </details>
           <form className="delete-song-form">
             <input type="hidden" name="song_id" value={song.id} />

@@ -75,29 +75,53 @@ test("public content routes remain reachable without authentication controls", a
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await expect(page.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
-    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await expect(page.locator(".page-main")).toBeVisible();
   }
 });
 
-test("nested routes load directly and browser history follows navigation", async ({ page }) => {
-  const nestedRoute = "/schedule/00000000-0000-0000-0000-000000000001";
-  const response = await page.goto(nestedRoute);
-  expect(response?.ok()).toBe(true);
-  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
-  await page.reload();
-  await expect(page).toHaveURL(new RegExp(`${nestedRoute}$`));
+test("main navigation is home-only across direct visits and browser history", async ({ page }) => {
+  const routes = [
+    "/song",
+    "/song/00000000-0000-0000-0000-000000000001",
+    "/songbook/00000000-0000-0000-0000-000000000001",
+    "/schedule",
+    "/schedule/00000000-0000-0000-0000-000000000001",
+    "/schedule/00000000-0000-0000-0000-000000000001/slides",
+    "/slides",
+    "/slides?scheduleId=00000000-0000-0000-0000-000000000001",
+    "/present/00000000-0000-0000-0000-000000000001",
+  ];
+  for (const route of routes) {
+    const response = await page.goto(route);
+    expect(response?.ok(), route).toBe(true);
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  }
 
   await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(navigation).toBeVisible();
   await navigation.getByRole("link", { name: "Songbook" }).click();
   await expect(page).toHaveURL(/\/song$/);
-  await navigation.getByRole("link", { name: "Schedule" }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.getByRole("link", { name: "INCOC South home" }).click();
+  await expect(page).toHaveURL("/");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Schedule" }).click();
   await expect(page).toHaveURL(/\/schedule$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.goBack();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/song$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+  await page.goForward();
+  await expect(page).toHaveURL("/");
   await page.goForward();
   await expect(page).toHaveURL(/\/schedule$/);
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
 });
 
 test("the custom cross icon is served", async ({ request }) => {
