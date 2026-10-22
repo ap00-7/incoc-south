@@ -59,6 +59,13 @@ function InlineLoading({ children = "Loading content…" }: { children?: ReactNo
   return <p className="muted" role="status" aria-busy="true">{children}</p>;
 }
 
+function safeReturnTo(candidate: string | null) {
+  if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/song";
+  const target = new URL(candidate, window.location.origin);
+  if (target.origin !== window.location.origin || ["/login", "/auth/callback"].includes(target.pathname)) return "/song";
+  return `${target.pathname}${target.search}${target.hash}`;
+}
+
 function ResourceMessage({ error, retry, children }: { error: string; retry?: () => void; children?: React.ReactNode }) {
   return <div className="content-wrap">
     <div className="notice notice-warning" role="alert">
@@ -663,8 +670,10 @@ function AdminSettingsPage() {
 
 function LoginPage() {
   const { configured, loading, membership, user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const returnTo = safeReturnTo(searchParams.get("returnTo"));
   if (loading) return <main className="auth-page" role="status" aria-busy="true">Checking sign-in…</main>;
-  if (user) return <Navigate to={membership ? "/song" : "/access-denied"} replace />;
+  if (user) return <Navigate to={membership ? returnTo : "/access-denied"} replace />;
   return <main className="auth-page">
     <section className="auth-card">
       <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>

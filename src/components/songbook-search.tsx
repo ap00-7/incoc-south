@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CachedSongLink } from "@/components/cached-song-link";
+import { Dropdown } from "@/components/dropdown";
 
 export type SongbookResult = {
   id: string;
@@ -106,19 +107,19 @@ export function SongbookSearch({
         onKeyDown={onKeyDown}
       />
       <label className="sr-only" htmlFor="song-language-filter">Filter by language</label>
-      <select
+      <Dropdown
         id="song-language-filter"
         value={selectedLanguage}
         aria-label="Filter by language"
-        onChange={(event) => {
-          const value = event.currentTarget.value;
+        options={[
+          { value: "", label: "All languages" },
+          ...languageOptions.map((item) => ({ value: item, label: item })),
+        ]}
+        onValueChange={(value) => {
           setSelectedLanguage(value);
           navigateToFilters(title, value);
         }}
-      >
-        <option value="">All languages</option>
-        {languageOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-      </select>
+      />
       {open && suggestions.length > 0 && <ul className="song-suggestions" id="song-title-suggestions" role="listbox" aria-label="Matching songs">
         {suggestions.map((song, index) => (
           <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>

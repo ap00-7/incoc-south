@@ -21,6 +21,11 @@ async function signIn(page: import("@playwright/test").Page, email: string, pass
   await page.getByRole("button", { name: "Sign in" }).click();
 }
 
+async function chooseDropdown(page: import("@playwright/test").Page, dropdown: import("@playwright/test").Locator, option: string) {
+  await dropdown.click();
+  await page.getByRole("option", { name: option, exact: true }).click();
+}
+
 test("owner controls Slides visibility while a viewer still sees the full Sunday programme", async ({ browser }) => {
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
@@ -35,9 +40,11 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   for (const path of ["/", "/songbook", "/schedule", "/slides"]) {
     await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
     if (new URL(ownerPage.url()).pathname === "/") {
-      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
+      await expect(ownerPage.locator(".site-footer-auth")).toHaveCount(0);
+      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toHaveCount(0);
     } else {
       await expect(ownerPage.locator(".site-header")).toHaveCount(0);
+      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
     }
   }
   await ownerPage.setViewportSize({ width: 360, height: 800 });
@@ -59,7 +66,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   const songTitle = `E2E Song ${uniqueSuffix}`;
   await ownerPage.goto("/admin/songs/new");
   await ownerPage.getByLabel("Title").fill(songTitle);
-  await ownerPage.getByLabel("Language").selectOption("Kannada");
+  await chooseDropdown(ownerPage, ownerPage.getByLabel("Language"), "Kannada");
   await ownerPage.getByLabel("Has Translation").check();
   await ownerPage.getByLabel("Start With Chorus").check();
 
@@ -83,7 +90,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await ownerPage.locator("#pre_chorus-lyrics").fill("Pre-chorus lyrics");
   await ownerPage.locator("#chorus-lyrics").fill("Chorus lyrics");
   await ownerPage.locator("#chorus-translation").fill("Chorus translation");
-  await ownerPage.locator("#chorus-translation-language").selectOption("Tamil");
+  await chooseDropdown(ownerPage, ownerPage.locator("#chorus-translation-language"), "Tamil");
   await ownerPage.locator("#bridge-lyrics").fill("Bridge lyrics");
 
   await ownerPage.getByRole("button", { name: "Add item" }).click();
@@ -96,7 +103,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(ownerPage.getByRole("heading", { name: songTitle })).toBeVisible();
   const songId = ownerPage.url().match(/\/admin\/songs\/([0-9a-f-]{36})$/i)?.[1];
   expect(songId).toBeTruthy();
-  await expect(ownerPage.getByLabel("Language")).toHaveValue("Kannada");
+  await expect(ownerPage.getByLabel("Language")).toHaveText("Kannada");
   await expect(ownerPage.getByLabel("Has Translation")).toBeChecked();
   await expect(ownerPage.getByLabel("Start With Chorus")).toBeChecked();
   await ownerPage.goto(`/songbook/${songId}`);
@@ -184,7 +191,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   async function addAnnouncement(content: string, displayInSlides: boolean, withImage = false) {
     await ownerPage.getByRole("button", { name: "Add Item" }).click();
     const dialog = ownerPage.getByRole("dialog", { name: "Add item" });
-    await dialog.locator("#schedule-item-title").selectOption("Announcements");
+    await chooseDropdown(ownerPage, dialog.locator("#schedule-item-title"), "Announcements");
     await dialog.locator("#schedule-item-content").fill(content);
     if (withImage) {
       await dialog.locator(".media-picker input[type=file]").setInputFiles({
@@ -257,6 +264,20 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(ownerPage.locator(".programme-item img")).toHaveCount(0);
 
   await ownerPage.goto(`/admin/schedules/${scheduleId}`);
+  await ownerPage.getByRole("button", { name: "Add Item" }).click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Add item" });
+  await chooseDropdown(ownerPage, itemDialog.locator("#schedule-item-title"), "Other / Custom title");
+  await itemDialog.getByLabel("Custom title").fill("Special service segment");
+  await itemDialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(itemDialog).toHaveCount(0);
+  await expect(ownerPage.getByText("Special service segment", { exact: true })).toBeVisible();
+  await ownerPage.getByRole("button", { name: "Edit item" }).last().click();
+  itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
+  await expect(itemDialog.locator("#schedule-item-title")).toHaveText("Other / Custom title");
+  await expect(itemDialog.getByLabel("Custom title")).toHaveValue("Special service segment");
+  await itemDialog.getByRole("button", { name: "Cancel" }).click();
+
+  await ownerPage.goto(`/admin/schedules/${scheduleId}`);
   await ownerPage.getByRole("button", { name: "Edit item" }).nth(2).click();
   itemDialog = ownerPage.getByRole("dialog", { name: "Edit item" });
   await itemDialog.getByRole("checkbox", { name: "Display in Slides" }).check();
@@ -268,10 +289,9 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
   await itemDialog.getByRole("button", { name: "Cancel" }).click();
 
-  await ownerPage.goto("/");
+  await ownerPage.goto("/song");
   await ownerPage.getByRole("button", { name: "Sign out" }).click();
-  await expect(ownerPage).toHaveURL(/\/login$/);
-  await expect(ownerPage.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(ownerPage.getByRole("link", { name: "Sign in" })).toBeVisible();
   await ownerPage.goto("/admin");
   await expect(ownerPage).toHaveURL(/\/login$/);
   await expect(ownerPage.getByRole("heading", { name: "Welcome to INCOC South" })).toHaveCount(0);

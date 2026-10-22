@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { inviteMember, updateMemberRole } from "@/lib/actions/members";
+import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 
@@ -14,13 +16,21 @@ export function MemberRoleForm({
   disabled: boolean;
 }) {
   const { error, formAction } = useFormAction(updateMemberRole);
+  const [selectedRole, setSelectedRole] = useState(role);
   return (
     <form action={formAction}>
       <input type="hidden" name="user_id" value={userId} />
-      <select name="role" aria-label={`Role for ${displayName}`} defaultValue={role} disabled={disabled}>
-        <option value="viewer">Viewer</option>
-        <option value="owner">Owner</option>
-      </select>
+      <Dropdown
+        name="role"
+        value={selectedRole}
+        options={[
+          { value: "viewer", label: "Viewer" },
+          { value: "owner", label: "Owner" },
+        ]}
+        onValueChange={(value) => setSelectedRole(value as "viewer" | "owner")}
+        aria-label={`Role for ${displayName}`}
+        disabled={disabled}
+      />
       <PendingSubmitButton className="button button-secondary" pendingLabel="Saving…" disabled={disabled}>Save role</PendingSubmitButton>
       {error && <p className="form-error" role="alert">{error}</p>}
     </form>
@@ -29,6 +39,7 @@ export function MemberRoleForm({
 
 export function InviteMemberForm() {
   const { error, formAction } = useFormAction(inviteMember);
+  const [role, setRole] = useState("viewer");
   return (
     <form className="form-stack admin-form" action={formAction}>
       <label htmlFor="display_name">Name</label>
@@ -36,10 +47,16 @@ export function InviteMemberForm() {
       <label htmlFor="email">Email</label>
       <input id="email" name="email" type="email" required />
       <label htmlFor="role">Role</label>
-      <select id="role" name="role" defaultValue="viewer">
-        <option value="viewer">Viewer</option>
-        <option value="owner">Owner</option>
-      </select>
+      <Dropdown
+        id="role"
+        name="role"
+        value={role}
+        options={[
+          { value: "viewer", label: "Viewer" },
+          { value: "owner", label: "Owner" },
+        ]}
+        onValueChange={setRole}
+      />
       {error && <p className="form-error" role="alert">{error}</p>}
       <PendingSubmitButton pendingLabel="Sending invitation…">Send invitation</PendingSubmitButton>
     </form>

@@ -25,6 +25,7 @@ import {
   type ScheduleItemInput,
 } from "@/lib/actions/content";
 import { ConfirmButton } from "@/components/confirm-button";
+import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 import { createClient } from "@/lib/supabase/browser";
@@ -60,11 +61,17 @@ const itemTitles = [
   ["Announcements", "announcement"],
   ["Worship", "song"],
   ["Sermon and Communion", "sermon"],
+  ["Communion", "communion"],
   ["Communion Song", "song"],
   ["Contribution Song", "song"],
   ["Closing Prayer", "closing"],
   ["Closing Song", "song"],
 ] as const;
+const customTitleOption = "__custom_schedule_item_title__";
+const titleOptions = [
+  ...itemTitles.map(([title, type]) => ({ label: title, value: title, disabled: type === "song" })),
+  { label: "Other / Custom title", value: customTitleOption },
+];
 function itemTypeForTitle(title: string, fallback: string) {
   return itemTitles.find(([option]) => option === title)?.[1] ?? fallback;
 }
@@ -84,6 +91,8 @@ type Draft = {
   tempId: string;
   expectedUpdatedAt?: string;
   song_title: string;
+  customTitle: boolean;
+  customTitleValue: string;
   item_type: string;
   title: string;
   song_id: string;
@@ -104,6 +113,8 @@ function emptyDraft(itemType: string): Draft {
   return {
     tempId: crypto.randomUUID(),
     song_title: "",
+    customTitle: false,
+    customTitleValue: "",
     item_type: itemType,
     title: itemType === "song" ? "Communion Song" : "",
     song_id: "",
@@ -128,6 +139,8 @@ function draftFromItem(item: ScheduleItem): Draft {
     tempId: item.id,
     expectedUpdatedAt: item.updated_at,
     song_title: song?.title ?? "",
+    customTitle: !itemTitles.some(([title]) => title === item.title),
+    customTitleValue: !itemTitles.some(([title]) => title === item.title) ? item.title : "",
     item_type: itemTypeForTitle(item.title, item.item_type),
     title: item.title,
     song_id: item.song_id ?? "",
@@ -234,6 +247,10 @@ export function InlineScheduleManager({
     if (!draft || saving) return;
     if (mediaValidation) {
       setError(mediaValidation);
+      return;
+    }
+    if (!draft.title.trim()) {
+      setError("Enter an item title.");
       return;
     }
     if (draft.item_type === "song" && !draft.song_id && !draft.id) {
@@ -364,21 +381,45 @@ export function InlineScheduleManager({
           </header>
           <form className="item-modal-form" onSubmit={(event) => void saveItem(event)}>
             <label htmlFor="schedule-item-title">Title <span aria-hidden="true">*</span></label>
-            <select
+            <Dropdown
               id="schedule-item-title"
-              value={draft.title}
+              value={draft.customTitle ? customTitleOption : draft.title}
               required
-              onChange={(event) => {
-                const title = event.target.value;
-                const itemType = itemTypeForTitle(title, draft.item_type);
-                setDraft({ ...draft, title, item_type: itemType });
+              options={titleOptions.map((option) => ({
+                ...option,
+                disabled: option.value !== customTitleOption && "disabled" in option && option.disabled && !songsReady,
+              }))}
+              autoFocus={!draft.customTitle}
+              onValueChange={(selection) => {
+                if (selection === customTitleOption) {
+                  setDraft({
+                    ...draft,
+                    customTitle: true,
+                    title: draft.customTitle ? draft.title : draft.customTitleValue,
+                    item_type: draft.customTitle ? draft.item_type : "other",
+                  });
+                  return;
+                }
+                const itemType = itemTypeForTitle(selection, draft.item_type);
+                setDraft({ ...draft, title: selection, item_type: itemType, customTitle: false });
               }}
-              autoFocus
-            >
-              {!draft.title && <option value="" disabled>Select a title</option>}
-              {draft.title && !itemTitles.some(([title]) => title === draft.title) && <option value={draft.title}>{draft.title} (existing)</option>}
-              {itemTitles.map(([title, type]) => <option key={title} value={title} disabled={type === "song" && !songsReady}>{title}</option>)}
-            </select>
+              placeholder="Select a title"
+            />
+            {draft.customTitle && <>
+              <label htmlFor="schedule-item-custom-title">Custom title <span aria-hidden="true">*</span></label>
+              <input
+                id="schedule-item-custom-title"
+                value={draft.title}
+                maxLength={200}
+                required
+                autoFocus
+                onChange={(event) => setDraft({
+                  ...draft,
+                  title: event.currentTarget.value,
+                  customTitleValue: event.currentTarget.value,
+                })}
+              />
+            </>}
 
             {draft.item_type === "song" && <SongPicker
               songs={songs}
@@ -404,15 +445,14 @@ export function InlineScheduleManager({
               <label htmlFor="schedule-item-translator">Translator</label>
               <input id="schedule-item-translator" value={draft.translator_name} maxLength={200} onChange={(event) => setDraft({ ...draft, translator_name: event.target.value })} />
               <label htmlFor="schedule-item-language">Translation in</label>
-              <select id="schedule-item-language" value={draft.translation_language} onChange={(event) => {
-                const language = event.target.value;
+              <Dropdown id="schedule-item-language" value={draft.translation_language} options={[
+                { label: "Select a language", value: "" },
+                { label: "Kannada", value: "Kannada" },
+                { label: "Tamil", value: "Tamil" },
+                { label: "English", value: "English" },
+              ]} onValueChange={(language) => {
                 setDraft({ ...draft, translation_language: language === "Kannada" || language === "Tamil" || language === "English" ? language : "" });
-              }}>
-                <option value="">Select a language</option>
-                <option value="Kannada">Kannada</option>
-                <option value="Tamil">Tamil</option>
-                <option value="English">English</option>
-              </select>
+              }} />
               <fieldset className="item-link-fields">
                 <legend><Link2 size={14} /> URL</legend>
                 <label htmlFor="schedule-item-link-title">Link Title</label>

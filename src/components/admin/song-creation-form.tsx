@@ -4,6 +4,7 @@ import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
 import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
 import { ConfirmationDialog } from "@/components/confirm-button";
+import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 import { invalidateSongCache } from "@/lib/song-cache";
@@ -199,9 +200,13 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
         <label htmlFor="source">Source (optional)</label>
         <input id="source" name="source" defaultValue={song?.source ?? ""} maxLength={300} />
         <label htmlFor="language">Language</label>
-        <select id="language" value={songEditorLanguages.some((option) => option.value === language) ? language : "English"} onChange={(event) => setLanguage(event.target.value)} required>
-          {songEditorLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-        </select>
+        <Dropdown
+          id="language"
+          value={songEditorLanguages.some((option) => option.value === language) ? language : "English"}
+          options={songEditorLanguages.map((option) => ({ label: option.label, value: option.value }))}
+          onValueChange={setLanguage}
+          required
+        />
         {song && !songEditorLanguages.some((option) => option.value === song.language) && <p className="muted legacy-language-note">Existing language “{song.language}” will be retained unless you choose another.</p>}
       </div>
 
@@ -213,11 +218,18 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
 
       <label className="song-ending-control" htmlFor="song-ending">
         <span>Ending</span>
-        <select id="song-ending" value={ending} onChange={(event) => setEnding(event.target.value as SongEnding)}>
-          <option value="bridge">End with Bridge</option>
-          <option value="chorus">End with Chorus after Bridge</option>
-          {sections.some(({ section_type }) => section_type === "pre_chorus") && <option value="pre_chorus_chorus">End with Pre-Chorus and Chorus after Bridge</option>}
-        </select>
+        <Dropdown
+          id="song-ending"
+          value={ending}
+          options={[
+            { value: "bridge", label: "End with Bridge" },
+            { value: "chorus", label: "End with Chorus after Bridge" },
+            ...(sections.some(({ section_type }) => section_type === "pre_chorus")
+              ? [{ value: "pre_chorus_chorus", label: "End with Pre-Chorus and Chorus after Bridge" }]
+              : []),
+          ]}
+          onValueChange={(value) => setEnding(value as SongEnding)}
+        />
       </label>
 
       <section className="song-editor-section" aria-labelledby="verses-heading">
@@ -257,10 +269,15 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
               <label htmlFor={`${type}-translation`}>Translation</label>
               <textarea id={`${type}-translation`} value={section.translation} maxLength={20000} rows={6} onChange={(event) => updateSection(section.key, { translation: event.target.value })} />
               <label htmlFor={`${type}-translation-language`}>Translation language</label>
-              <select id={`${type}-translation-language`} value={section.translation_language} onChange={(event) => updateSection(section.key, { translation_language: event.target.value })}>
-                <option value="">Select a language</option>
-                {songLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-              </select>
+              <Dropdown
+                id={`${type}-translation-language`}
+                value={section.translation_language}
+                options={[
+                  { value: "", label: "Select a language" },
+                  ...songLanguages.map((language) => ({ label: language.label, value: language.value })),
+                ]}
+                onValueChange={(value) => updateSection(section.key, { translation_language: value })}
+              />
             </>}
           </div>
         </details>;
@@ -294,10 +311,15 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
               <label htmlFor="verse-translation">Translation</label>
               <textarea id="verse-translation" value={workingSection.translation} maxLength={20000} rows={7} onChange={(event) => setWorkingSection({ ...workingSection, translation: event.target.value })} />
               <label htmlFor="verse-translation-language">Translation language</label>
-              <select id="verse-translation-language" value={workingSection.translation_language} onChange={(event) => setWorkingSection({ ...workingSection, translation_language: event.target.value })}>
-                <option value="">Select a language</option>
-                {songLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
-              </select>
+              <Dropdown
+                id="verse-translation-language"
+                value={workingSection.translation_language}
+                options={[
+                  { value: "", label: "Select a language" },
+                  ...songLanguages.map((language) => ({ label: language.label, value: language.value })),
+                ]}
+                onValueChange={(value) => setWorkingSection({ ...workingSection, translation_language: value })}
+              />
             </>}
           </div>
           <footer className="verse-dialog-actions">

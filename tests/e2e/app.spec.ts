@@ -71,15 +71,62 @@ test("dark theme is fixed and no light-theme switcher is exposed", async ({ page
   await expect(root).toHaveAttribute("data-theme", "dark");
 });
 
-test("public content routes remain reachable without authentication controls", async ({ page }) => {
+test("section footers provide sign-in links only on landing pages and preserve the destination", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
+
   for (const path of ["/song", "/schedule", "/slides"]) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await expect(page.getByRole("button", { name: /sign in|sign out/i })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: /sign in|sign out/i })).toHaveCount(0);
+    const signInLink = page.getByRole("link", { name: "Sign in" });
+    await expect(signInLink).toBeVisible();
+    await expect(signInLink).toHaveAttribute("href", `/login?returnTo=${encodeURIComponent(path)}`);
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await expect(page.locator(".site-header")).toHaveCount(0);
     await expect(page.locator(".page-main")).toBeVisible();
   }
+
+  await page.goto("/song/00000000-0000-0000-0000-000000000001");
+  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
+  await page.goto("/schedule/00000000-0000-0000-0000-000000000001");
+  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
+});
+
+test("custom dropdown supports keyboard selection and stays inside the viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 240 });
+  await page.goto("/tests/fixtures/dropdown.html");
+  const languageDropdown = page.getByRole("combobox", { name: "Language" });
+  await expect(languageDropdown).toBeVisible();
+  await expect(page.locator("select")).toHaveCount(0);
+  await languageDropdown.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  const listbox = page.getByRole("listbox");
+  await expect(listbox).toHaveCSS("background-color", "rgb(23, 21, 18)");
+  const menuBounds = await listbox.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  });
+  const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+  expect(menuBounds.left).toBeGreaterThanOrEqual(0);
+  expect(menuBounds.right).toBeLessThanOrEqual(viewport.width);
+  expect(menuBounds.top).toBeGreaterThanOrEqual(0);
+  expect(menuBounds.bottom).toBeLessThanOrEqual(viewport.height);
+
+  await languageDropdown.focus();
+  await languageDropdown.press("ArrowDown");
+  await languageDropdown.press("Enter");
+  await expect(page.getByTestId("selected-language")).toHaveText("English");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+
+  await languageDropdown.focus();
+  await languageDropdown.press("Space");
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await languageDropdown.press("End");
+  await languageDropdown.press("Enter");
+  await expect(page.getByTestId("selected-language")).toHaveText("Tamil");
+  await languageDropdown.click();
+  await page.getByRole("button", { name: "Outside menu" }).click();
+  await expect(page.getByRole("listbox")).toHaveCount(0);
 });
 
 test("main navigation is home-only across direct visits and browser history", async ({ page }) => {
