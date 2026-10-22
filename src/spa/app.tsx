@@ -41,7 +41,16 @@ function ScrollPositionRestoration() {
   const location = useLocation();
   const navigationType = useNavigationType();
   useLayoutEffect(() => {
+    const scrollContainer = document.querySelector<HTMLElement>(".page-main");
+    const readPosition = () => scrollContainer
+      ? { x: scrollContainer.scrollLeft, y: scrollContainer.scrollTop }
+      : { x: window.scrollX, y: window.scrollY };
+    const scrollTo = (x: number, y: number) => {
+      if (scrollContainer) scrollContainer.scrollTo(x, y);
+      else window.scrollTo(x, y);
+    };
     let observer: ResizeObserver | undefined;
+    let mutationObserver: MutationObserver | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     let frame = 0;
     let restored = false;
@@ -56,21 +65,38 @@ function ScrollPositionRestoration() {
       if (frame) cancelAnimationFrame(frame);
       if (timeout) clearTimeout(timeout);
       observer?.disconnect();
-      window.scrollTo(savedPosition?.x ?? 0, savedPosition?.y ?? 0);
+      mutationObserver?.disconnect();
+      scrollTo(savedPosition?.x ?? 0, savedPosition?.y ?? 0);
     };
 
     if (!savedPosition || savedPosition.y === 0) {
       restore();
     } else {
       const tryRestore = () => {
-        if (document.documentElement.scrollHeight >= savedPosition.y + window.innerHeight) restore();
+        const contentHeight = scrollContainer?.scrollHeight ?? document.documentElement.scrollHeight;
+        const viewportHeight = scrollContainer?.clientHeight ?? window.innerHeight;
+        if (contentHeight >= savedPosition.y + viewportHeight) restore();
       };
       frame = requestAnimationFrame(() => {
         frame = requestAnimationFrame(tryRestore);
       });
       observer = new ResizeObserver(tryRestore);
-      observer.observe(document.documentElement);
-      observer.observe(document.body);
+      if (scrollContainer) {
+        observer.observe(scrollContainer);
+        for (const child of scrollContainer.children) {
+          if (child instanceof Element) observer.observe(child);
+        }
+        mutationObserver = new MutationObserver(() => {
+          for (const child of scrollContainer.children) {
+            if (child instanceof Element) observer?.observe(child);
+          }
+          tryRestore();
+        });
+        mutationObserver.observe(scrollContainer, { childList: true });
+      } else {
+        observer.observe(document.documentElement);
+        observer.observe(document.body);
+      }
       timeout = setTimeout(restore, 1200);
     }
 
@@ -78,7 +104,8 @@ function ScrollPositionRestoration() {
       if (frame) cancelAnimationFrame(frame);
       if (timeout) clearTimeout(timeout);
       observer?.disconnect();
-      const position = { x: window.scrollX, y: window.scrollY };
+      mutationObserver?.disconnect();
+      const position = readPosition();
       routeScrollPositions.set(location.key, position);
       if (location.pathname === "/song") songbookScrollPosition = position.y;
     };
@@ -288,20 +315,23 @@ function ScheduleListPage() {
 function ScheduleDetailPage() {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
+  const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
   const loadSchedule = useCallback(async () => {
-    const { data, error } = await createClient().from("schedules")
+    const baseQuery = createClient().from("schedules")
       .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(id, slug)")
-      .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
+      .eq("id", scheduleId).eq("church.slug", "incoc-south");
+    const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
+    const { data, error } = await serviceQuery.maybeSingle();
     if (error) throw new Error(`Unable to load service: ${error.message}`);
     if (!data) throw new Error("This service is not available.");
     return { ...data, schedule_items: [...(data.schedule_items ?? [])].sort((a, b) => a.position - b.position) };
-  }, [scheduleId]);
-  const resource = useAsyncResource(`schedule:${scheduleId}`, loadSchedule);
+  }, [isOwner, scheduleId]);
+  const resource = useAsyncResource(`schedule:${scheduleId}:${isOwner ? "owner" : "viewer"}`, loadSchedule);
   const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
   const publishedServices = useAsyncResource("schedules:1", loadPublishedServices);
   const schedule = resource.data;
-  return <PageShell owner={membership?.role === "owner"}>
+  return <PageShell owner={isOwner}>
     {resource.error && !schedule ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : !schedule
       ? <article className="content-wrap">
         {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
@@ -358,6 +388,7 @@ function ScheduleDetailPage() {
 
 function SlidesPage() {
   const { membership } = useAuth();
+  const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const scheduleId = searchParams.get("scheduleId");
@@ -366,46 +397,67 @@ function SlidesPage() {
   const loadSlides = useCallback(async () => {
     const supabase = createClient();
     if (scheduleId) {
-      const { data, error } = await supabase.from("schedules")
-        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
-        .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
+      const baseQuery = supabase.from("schedules")
+        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(id, slug)")
+        .eq("id", scheduleId).eq("church.slug", "incoc-south");
+      const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
+      const { data, error } = await serviceQuery.maybeSingle();
       if (error) throw new Error(`Unable to load slide previews: ${error.message}`);
       if (!data) throw new Error("This service is not available.");
       const slides = generateSlides(normalizeProgrammeItems(data.schedule_items ?? []));
       return { schedule: data, groups: groupPresentationSlides(slides), schedules: [], count: 0, churchId: "" };
     }
-    const { data, error, count } = await supabase.from("schedules")
+    const baseQuery = supabase.from("schedules")
       .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
-      .eq("church.slug", "incoc-south").order("service_date", { ascending: false })
-      .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+      .eq("church.slug", "incoc-south");
+    const visibleSchedulesQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
+    const [{ data, error, count }, { data: church, error: churchError }] = await Promise.all([
+      visibleSchedulesQuery.order("service_date", { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+      supabase.from("churches").select("id").eq("slug", "incoc-south").maybeSingle(),
+    ]);
     if (error) throw new Error(`Unable to load presentations: ${error.message}`);
-    return { schedule: null, groups: [], schedules: data ?? [], count: count ?? 0, churchId: data?.[0]?.church.id ?? membership?.churchId ?? "" };
-  }, [membership?.churchId, page, scheduleId]);
-  const resource = useAsyncResource(`slides:${scheduleId ?? "list"}:${page}`, loadSlides);
-  const isOwner = membership?.role === "owner";
+    if (churchError) throw new Error(`Unable to identify the church for presentation updates: ${churchError.message}`);
+    return { schedule: null, groups: [], schedules: data ?? [], count: count ?? 0, churchId: data?.[0]?.church.id ?? church?.id ?? membership?.churchId ?? "" };
+  }, [isOwner, membership?.churchId, page, scheduleId]);
+  const resource = useAsyncResource(`slides:${scheduleId ?? "list"}:${page}:${isOwner ? "owner" : "viewer"}`, loadSlides);
   const schedule = resource.data?.schedule;
   const schedules = resource.data?.schedules ?? [];
   const hasNextPage = schedules.length > PAGE_SIZE;
+  const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
+  const publishedServices = useAsyncResource("schedules:1", loadPublishedServices);
+  const soleService = isOwner
+    ? publishedServices.data?.schedules[0]
+    : schedules[0] ?? publishedServices.data?.schedules[0];
+  const serviceCount = isOwner ? publishedServices.data?.count : resource.data?.count;
+  const openingSoleService = !scheduleId && serviceCount === 1;
 
   useEffect(() => {
     if (resource.error && scheduleId) navigate("/slides", { replace: true });
   }, [navigate, resource.error, scheduleId]);
+  useEffect(() => {
+    if (!scheduleId && serviceCount === 1 && soleService) {
+      navigate(`/slides?scheduleId=${encodeURIComponent(soleService.id)}`, { replace: true });
+    }
+  }, [navigate, scheduleId, serviceCount, soleService]);
 
   return <PageShell owner={isOwner}>
-    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : resource.loading && !resource.data
+    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : (resource.loading && !resource.data) || (!scheduleId && isOwner && !publishedServices.data && !publishedServices.error) || (openingSoleService && !publishedServices.error)
       ? <div className="content-wrap"><div className="section-heading"><h1>Slides</h1></div><InlineLoading>Loading presentations…</InlineLoading></div>
       : schedule && resource.data
         ? <>
           {resource.error && <ResourceMessage error={`The latest presentation refresh failed: ${resource.error}`} retry={resource.refresh} />}
+          {publishedServices.error && <ResourceMessage error={`Unable to check available services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
           {resource.loading && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
+            ...(schedule.church?.id ? [{ table: "schedules" as const, column: "church_id", value: schedule.church.id }] : []),
           ]} onDelete={(deletedId) => {
             if (deletedId === schedule.id) navigate("/slides", { replace: true });
           }} />
           <div className="content-wrap slides-overview">
-            <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>
+            {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>}
             <div className="slides-overview-heading">
               <h1 className="detail-title">{schedule.title}</h1>
               {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
@@ -433,6 +485,7 @@ function SlidesPage() {
           {resource.data?.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: resource.data.churchId }]} />}
           <div className="content-wrap">
             <div className="section-heading"><h1>Slides</h1></div>
+            {publishedServices.error && <ResourceMessage error={`Unable to check published services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
             {resource.loading && resource.data && <InlineLoading>Checking for presentation updates…</InlineLoading>}
             {schedules.length ? <div className="results-list">
               {schedules.slice(0, PAGE_SIZE).map((item) => <article className="public-list-entry" key={item.id}>
@@ -455,13 +508,16 @@ function SlidesPage() {
 function PresentationPage() {
   const { scheduleId = "" } = useParams();
   const { user, membership } = useAuth();
+  const isOwner = membership?.role === "owner";
   const [searchParams] = useSearchParams();
   const requested = Number.parseInt(searchParams.get("slide") ?? "0", 10);
   const initialSlide = Number.isFinite(requested) ? requested : 0;
   const loadPresentation = useCallback(async () => {
-    const { data, error } = await createClient().from("schedules")
-    .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
-      .eq("id", scheduleId).eq("church.slug", "incoc-south").maybeSingle();
+    const baseQuery = createClient().from("schedules")
+      .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+      .eq("id", scheduleId).eq("church.slug", "incoc-south");
+    const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
+    const { data, error } = await serviceQuery.maybeSingle();
     if (error) throw new Error(`Unable to load presentation: ${error.message}`);
     if (!data) throw new Error("This presentation is not available.");
     const items = data.schedule_items ?? [];
@@ -471,8 +527,8 @@ function PresentationPage() {
       slides: generateSlides(presentationItems),
       songIds: presentationItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id)),
     };
-  }, [scheduleId]);
-  const resource = useAsyncResource(`presentation:${scheduleId}`, loadPresentation);
+  }, [isOwner, scheduleId]);
+  const resource = useAsyncResource(`presentation:${scheduleId}:${isOwner ? "owner" : "viewer"}`, loadPresentation);
   if (resource.error) return <main className="presentation-page"><p role="alert">{resource.error}</p><Link to="/slides">Return to Slides</Link></main>;
   if (!resource.data) return <main className="presentation-page">
     <InlineLoading>Loading presentation…</InlineLoading>

@@ -215,7 +215,25 @@ export function Presentation({
     : 1;
   const zoomedLyricScale = lyricScale * lyricsZoom;
   return (
-    <main className="presentation-page" aria-label={scheduleTitle}>
+    <main
+      className="presentation-page"
+      aria-label={scheduleTitle}
+      onPointerDown={(event) => {
+        if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+        const target = event.target;
+        if (target instanceof Element && target.closest("button, a, input, textarea, select, video, audio, [contenteditable=true]")) return;
+        swipeStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerUp={(event) => {
+        const start = swipeStart.current;
+        swipeStart.current = null;
+        if (!start || start.pointerId !== event.pointerId) return;
+        const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, event.clientX, event.clientY);
+        if (targetIndex !== null) void moveSlide(targetIndex > currentSlideIndex ? 1 : -1);
+      }}
+      onPointerCancel={() => { swipeStart.current = null; }}
+    >
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "id", value: scheduleId },
         { table: "schedule_items", column: "schedule_id", value: scheduleId },
@@ -232,21 +250,6 @@ export function Presentation({
       <section
         className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}`}
         aria-live="polite"
-        onPointerDown={(event) => {
-          if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
-          const target = event.target;
-          if (target instanceof Element && target.closest("button, a, input, textarea, select, [contenteditable=true]")) return;
-          swipeStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-          event.currentTarget.setPointerCapture(event.pointerId);
-        }}
-        onPointerUp={(event) => {
-          const start = swipeStart.current;
-          swipeStart.current = null;
-          if (!start || start.pointerId !== event.pointerId) return;
-          const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, event.clientX, event.clientY);
-          if (targetIndex !== null) void moveSlide(targetIndex > currentSlideIndex ? 1 : -1);
-        }}
-        onPointerCancel={() => { swipeStart.current = null; }}
       >
         {current && fullscreenImageUrl
           ? <img className="presentation-fullscreen-image" src={fullscreenImageUrl} alt={current.itemTitle} />

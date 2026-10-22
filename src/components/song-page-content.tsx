@@ -87,22 +87,24 @@ export function SongPageContent({
         <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }} className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
         {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
         {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
-        <h1 className="detail-title">{song.title}</h1>
-        {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
-          <section className="lyrics-section" key={`${section.id}-${index}`}>
-            <h2>[{label}]</h2>
-            <p className="lyrics-text">{section.lyrics}</p>
-          </section>
-        )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
-        {translatedSections.length > 0 && <hr className="song-reading-divider" />}
-        {translatedSections.length > 0 && <section className="song-translation-section" aria-label="Song translation">
-          <h2>Translation</h2>
-          {translatedSections.map(({ section, label }, index) => <div className="translation-entry" key={`${section.id}-${index}`}>
-            <h3>[{label}]</h3>
-            {section.translation_language && <p className="translation-language">{section.translation_language}</p>}
-            <p className="lyrics-text">{section.translation}</p>
-          </div>)}
-        </section>}
+        <div className="song-lyrics-display">
+          <h1 className="detail-title">{song.title}</h1>
+          {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
+            <section className="lyrics-section" key={`${section.id}-${index}`}>
+              <h2>[{label}]</h2>
+              <p className="lyrics-text">{section.lyrics}</p>
+            </section>
+          )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
+          {translatedSections.length > 0 && <hr className="song-reading-divider" />}
+          {translatedSections.length > 0 && <section className="song-translation-section" aria-label="Song translation">
+            <h2>Translation</h2>
+            {translatedSections.map(({ section, label }, index) => <div className="translation-entry" key={`${section.id}-${index}`}>
+              <h3>[{label}]</h3>
+              {section.translation_language && <p className="translation-language">{section.translation_language}</p>}
+              <p className="lyrics-text">{section.translation}</p>
+            </div>)}
+          </section>}
+        </div>
         {isOwner && <div id="owner-edit" className="inline-owner-area">
           <details className="inline-owner-editor" open={editOpen}>
             <summary>Edit song sections and translations</summary>

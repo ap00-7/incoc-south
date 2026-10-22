@@ -581,6 +581,10 @@ html { color-scheme: dark; }
   --focus: #d8bc7a;
   --shadow: 0 18px 32px rgb(0 0 0 / 26%);
   --gold-line: rgb(198 161 91 / 32%);
+  --presentation-background: #000;
+  --presentation-text: #fffaf3;
+  --presentation-muted: #f4e9da;
+  --presentation-accent: #e0b878;
 }
 
 html { background: var(--paper); color-scheme: dark; }
@@ -1203,30 +1207,116 @@ code, kbd, pre { font-family: var(--font-mono); }
 
   .legacy-section { border-color: var(--border); }
 
-  .presentation-page,
-  .slide-stage {
-    color: var(--ink);
-    background: var(--paper);
-  }
-
-  .slide-title,
-  .slide-content,
-  .slide-lyrics,
-  .slide-empty,
-  .slide-translation,
-  .presentation-bottom-controls,
-  .presentation-bottom-controls button,
-  .presentation-slide-counter {
-    color: var(--ink);
-  }
-
-  .slide-section { color: var(--gold); }
-  .slide-translation span { color: var(--muted); }
-
-  .presentation-bottom-controls button:hover:not(:disabled) {
-    background: var(--surface-soft);
-  }
-
-  .presentation-bottom-controls button:focus-visible { outline-color: var(--focus); }
-  .presentation-slide-counter { text-shadow: none; }
 }
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.site-header,
+.site-footer {
+  flex: 0 0 auto;
+}
+
+.page-main,
+.page-main-headerless {
+  min-height: 0;
+  flex: 1 1 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 16px;
+}
+
+.site-footer {
+  min-height: 58px;
+  padding: 12px var(--page-gutter) max(12px, env(safe-area-inset-bottom));
+}
+
+.song-lyrics-display {
+  margin-top: 20px;
+  padding: clamp(20px, 4vw, 40px);
+  color: var(--presentation-text);
+  background: var(--presentation-background);
+  border-radius: 10px;
+}
+
+.song-lyrics-display .detail-title,
+.song-lyrics-display .lyrics-text,
+.song-lyrics-display .lyrics-section h2,
+.song-lyrics-display .song-translation-section > h2,
+.song-lyrics-display .translation-entry h3,
+.song-lyrics-display .translation-language {
+  color: var(--presentation-text);
+}
+
+.song-lyrics-display .lyrics-section h2,
+.song-lyrics-display .translation-entry h3,
+.song-lyrics-display .translation-language {
+  color: var(--presentation-muted);
+}
+
+.song-lyrics-display .empty-state {
+  color: var(--presentation-text);
+  background: transparent;
+  border-color: #39332b;
+}
+
+.song-lyrics-display .song-reading-divider {
+  background: #39332b;
+}
+
+.presentation-page,
+.slide-stage {
+  color: var(--presentation-text);
+  background: var(--presentation-background);
+  touch-action: pan-y;
+}
+
+.presentation-page {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.presentation-page .muted { color: var(--presentation-muted); }
+
+.slide-stage {
+  background: var(--presentation-background);
+}
+
+.slide-title,
+.slide-content,
+.slide-lyrics {
+  color: var(--presentation-text);
+}
+
+.slide-section { color: var(--presentation-accent); }
+.slide-empty { color: var(--presentation-muted); }
+.slide-translation { color: var(--presentation-text); }
+.slide-translation span { color: var(--presentation-muted); }
+
+.presentation-bottom-controls,
+.presentation-bottom-controls button,
+.presentation-slide-counter {
+  color: var(--presentation-muted);
+}
+
+.presentation-bottom-controls button:hover:not(:disabled) {
+  background: rgb(73 54 39 / 78%);
+}
+
+.presentation-slide-counter { text-shadow: 0 1px 6px #000; }
+.presentation-bottom-controls button:focus-visible { outline-color: var(--presentation-accent); }
