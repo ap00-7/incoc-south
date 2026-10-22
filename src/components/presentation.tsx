@@ -50,6 +50,7 @@ export function Presentation({
   const initialPosition = getPresentationPosition(groups, initialSlide);
   const [selectedItemIndex, setSelectedItemIndex] = useState(initialPosition.itemIndex);
   const [slideIndex, setSlideIndex] = useState(initialPosition.slideIndex);
+  const [lyricsZoom, setLyricsZoom] = useState(1);
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
   const swipeStart = useRef<{ pointerId: number; x: number; y: number } | null>(null);
@@ -172,9 +173,26 @@ export function Presentation({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName))) return;
+      if (event.ctrlKey && !event.metaKey && !event.altKey) {
+        const zoomDirection = event.key === "+" || event.key === "="
+          ? 1
+          : event.key === "-" || event.key === "_"
+            ? -1
+            : 0;
+        if (zoomDirection || event.key === "0") {
+          event.preventDefault();
+          if (event.repeat) return;
+          if (event.key === "0") {
+            setLyricsZoom(1);
+          } else {
+            setLyricsZoom((zoom) => Math.min(2.5, Math.max(0.5, Math.round((zoom + zoomDirection * 0.1) * 10) / 10)));
+          }
+          return;
+        }
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === "ArrowRight" || event.key === " ") {
         event.preventDefault();
         void moveSlide(1);
@@ -195,6 +213,7 @@ export function Presentation({
   const lyricScale = current
     ? Math.min(current.fontScale, Math.min(1, 7 / Math.max(7, totalLyricLines)))
     : 1;
+  const zoomedLyricScale = lyricScale * lyricsZoom;
   return (
     <main className="presentation-page" aria-label={scheduleTitle}>
       <RealtimeRefresh subscriptions={[
@@ -236,11 +255,13 @@ export function Presentation({
               {current.mediaUrl && (isVideo
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
                 : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
-              {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * lyricScale}rem, ${3 * lyricScale}vw, ${2.5 * lyricScale}rem)` }}>{current.lines.join("\n")}</div>}
-              {current.translationLines?.length ? <div className="slide-translation">
-                {current.translationLabel && <span>{current.translationLabel}</span>}
-                <p style={{ fontSize: `clamp(${1.125 * lyricScale}rem, ${2.25 * lyricScale}vw, ${1.75 * lyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
-              </div> : null}
+              {hasLyrics && <div className="slide-lyric-area">
+                {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * zoomedLyricScale}rem, ${3 * zoomedLyricScale}vw, ${2.5 * zoomedLyricScale}rem)` }}>{current.lines.join("\n")}</div>}
+                {current.translationLines?.length ? <div className="slide-translation">
+                  {current.translationLabel && <span>{current.translationLabel}</span>}
+                  <p style={{ fontSize: `clamp(${1.125 * zoomedLyricScale}rem, ${2.25 * zoomedLyricScale}vw, ${1.75 * zoomedLyricScale}rem)` }}>{current.translationLines.join("\n")}</p>
+                </div> : null}
+              </div>}
               {!current.lines.length && !current.translationLines?.length && !current.mediaUrl && <p className="slide-empty">No display content was added for this programme item.</p>}
             </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
