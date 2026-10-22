@@ -298,6 +298,7 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
 
   const viewerContext = await browser.newContext();
   const viewerPage = await viewerContext.newPage();
+  await viewerPage.emulateMedia({ colorScheme: "dark" });
   await signIn(viewerPage, viewerEmail!, viewerPassword!);
   await expect(viewerPage).toHaveURL(/\/songbook$/);
   await viewerPage.goto("/admin");

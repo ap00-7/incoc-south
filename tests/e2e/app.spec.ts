@@ -19,8 +19,6 @@ test("About page explains the app and keeps header navigation focused", async ({
   await expect(primaryNavigation.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/schedule");
   await expect(primaryNavigation.getByRole("link", { name: "Slides" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
 });
 
 test("About page and feature grid fit mobile, tablet, and laptop widths", async ({ page }) => {
@@ -62,13 +60,18 @@ test("public and owner route shells avoid horizontal overflow across viewport si
   }
 });
 
-test("dark theme is fixed and no light-theme switcher is exposed", async ({ page }) => {
+test("theme follows the system preference without a manual switcher", async ({ page }) => {
   await page.goto("/");
   const root = page.locator("html");
-  await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
-  await page.reload();
-  await expect(root).toHaveAttribute("data-theme", "dark");
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(root).toHaveCSS("color-scheme", "dark");
+  await expect.poll(() => root.evaluate((element) => getComputedStyle(element).getPropertyValue("--paper").trim())).toBe("#0b0b0a");
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(root).toHaveCSS("color-scheme", "light");
+  await expect.poll(() => root.evaluate((element) => getComputedStyle(element).getPropertyValue("--paper").trim())).toBe("#faf8f4");
 });
 
 test("section footers provide sign-in links only on landing pages and preserve the destination", async ({ page }) => {
@@ -92,6 +95,7 @@ test("section footers provide sign-in links only on landing pages and preserve t
 });
 
 test("custom dropdown supports keyboard selection and stays inside the viewport", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
   await page.setViewportSize({ width: 320, height: 240 });
   await page.goto("/tests/fixtures/dropdown.html");
   const languageDropdown = page.getByRole("combobox", { name: "Language" });

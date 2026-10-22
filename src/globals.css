@@ -1006,3 +1006,227 @@ code, kbd, pre { font-family: var(--font-mono); }
   .slides-preview-grid { grid-template-columns: minmax(0, 1fr); }
   .member-actions form > .dropdown { min-width: 0; }
 }
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --navy: #30231c;
+    --navy-soft: #f4ece2;
+    --gold: #805823;
+    --gold-bright: #8d6227;
+    --action: #b44e33;
+    --action-text: #fffaf4;
+    --paper: #faf8f4;
+    --white: #fff;
+    --ink: #30231c;
+    --muted: #62584f;
+    --border: #ded6cb;
+    --danger: #b42332;
+    --surface-soft: #f2ede6;
+    --focus: #805823;
+    --shadow: 0 18px 32px rgb(48 35 28 / 12%);
+    --gold-line: rgb(128 88 35 / 32%);
+  }
+
+  html {
+    color-scheme: light;
+    background: var(--paper);
+  }
+
+  body {
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse at 68% -10%, rgb(128 88 35 / 4.5%), transparent 42%),
+      linear-gradient(135deg, #faf8f4 0%, #f6f3ee 58%, #f2ede6 100%);
+  }
+
+  :focus-visible { outline-color: var(--focus); }
+
+  .header-login,
+  .owner-session-label,
+  .header-session-action,
+  .header-session-neutral,
+  .button-quiet,
+  .song-ending-control,
+  .translation-language,
+  .translation-entry h3,
+  .section-admin-summary h3,
+  .section-preview {
+    color: var(--ink);
+  }
+
+  .session-error { color: var(--danger); }
+
+  .header-login,
+  .header-session-action,
+  .button-quiet {
+    border-color: var(--border);
+  }
+
+  .header-login:hover,
+  .text-link:hover,
+  .owner-session-label:hover,
+  .header-session-action:hover {
+    color: var(--navy);
+  }
+
+  .header-session-action:hover,
+  .button-quiet:hover:not(:disabled) {
+    background: var(--surface-soft);
+  }
+
+  .loading-line { background: var(--surface-soft); }
+
+  .home-main h1,
+  .home-option-copy strong {
+    color: var(--navy);
+  }
+
+  .home-option {
+    background: var(--white);
+    border-color: var(--border);
+  }
+
+  .home-option:hover {
+    background: var(--surface-soft);
+    border-color: var(--gold);
+  }
+
+  .home-option-icon {
+    color: var(--gold);
+    background: var(--surface-soft);
+  }
+
+  .home-option-copy > span { color: var(--muted); }
+
+  .search-input,
+  .form-stack input,
+  .form-stack select,
+  .form-stack textarea,
+  .toolbar select,
+  .member-actions select {
+    color: var(--ink);
+    background: var(--white);
+    border-color: var(--border);
+  }
+
+  .search-input::placeholder,
+  .form-stack input::placeholder,
+  .form-stack textarea::placeholder {
+    color: var(--muted);
+  }
+
+  .result-card,
+  .auth-card,
+  .admin-nav,
+  .admin-link-card,
+  .admin-stats > div,
+  .admin-form,
+  .schedule-edit-form,
+  .member-row,
+  .settings-list,
+  .empty-state,
+  .notice {
+    color: var(--ink);
+    background: var(--white);
+    border-color: var(--border);
+  }
+
+  .notice-warning {
+    color: var(--ink);
+    background: #f8f1e4;
+    border-color: #d8c29c;
+  }
+
+  .meta-tag {
+    color: var(--ink);
+    background: var(--surface-soft);
+  }
+
+  .inline-owner-editor,
+  .inline-programme-item,
+  .programme-public-preview {
+    color: var(--ink);
+    background: var(--surface-soft);
+    border-color: var(--border);
+  }
+
+  .inline-owner-editor > summary,
+  .inline-add-item > summary,
+  .inline-programme-actions,
+  .inline-owner-heading,
+  .inline-programme-heading,
+  .schedule-items-editor > h2 {
+    color: var(--ink);
+  }
+
+  .inline-item-feedback { color: var(--gold); }
+  .internal-note { color: var(--ink); }
+
+  .admin-nav-button { color: var(--muted); }
+  .admin-nav-button:hover { color: var(--navy); background: var(--surface-soft); }
+
+  .icon-button {
+    color: var(--muted);
+    background: var(--white);
+    border-color: var(--border);
+  }
+
+  .icon-button:hover:not(:disabled) {
+    color: var(--navy);
+    background: var(--surface-soft);
+  }
+
+  .song-options,
+  .song-editor .verse-row,
+  .song-part,
+  .verse-dialog,
+  .verse-close {
+    color: var(--ink);
+    background: var(--white);
+    border-color: var(--border);
+  }
+
+  .song-editor .verse-number,
+  .song-editor .verse-actions .icon-button {
+    color: var(--ink);
+    background: var(--surface-soft);
+    border-color: var(--border);
+  }
+
+  .song-editor .verse-row-copy strong,
+  .song-editor .legacy-section h3,
+  .song-editor-section-heading h2,
+  .verse-dialog-header h2 {
+    color: var(--navy);
+  }
+
+  .legacy-section { border-color: var(--border); }
+
+  .presentation-page,
+  .slide-stage {
+    color: var(--ink);
+    background: var(--paper);
+  }
+
+  .slide-title,
+  .slide-content,
+  .slide-lyrics,
+  .slide-empty,
+  .slide-translation,
+  .presentation-bottom-controls,
+  .presentation-bottom-controls button,
+  .presentation-slide-counter {
+    color: var(--ink);
+  }
+
+  .slide-section { color: var(--gold); }
+  .slide-translation span { color: var(--muted); }
+
+  .presentation-bottom-controls button:hover:not(:disabled) {
+    background: var(--surface-soft);
+  }
+
+  .presentation-bottom-controls button:focus-visible { outline-color: var(--focus); }
+  .presentation-slide-counter { text-shadow: none; }
+}
