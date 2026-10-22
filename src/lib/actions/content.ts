@@ -392,24 +392,37 @@ export async function saveSong(formData: FormData) {
       if (error) throw new Error(`Unable to prepare lyric section ordering: ${error.message}`);
     }
   }
-  const rows = sections.map((section, position) => ({
-    ...(section.id ? { id: section.id } : {}),
-    song_id: songId,
-    section_type: section.section_type,
-    label: section.section_label || null,
-    position,
-    lyrics: section.lyrics,
-    translation: section.translation.trim() || null,
-    translation_language: section.translation.trim() ? section.translation_language || null : null,
-    is_hidden: section.is_hidden,
+  const sectionRows = sections.map((section, position) => ({
+    section,
+    values: {
+      song_id: songId,
+      section_type: section.section_type,
+      label: section.section_label || null,
+      position,
+      lyrics: section.lyrics,
+      translation: section.translation.trim() || null,
+      translation_language: section.translation.trim() ? section.translation_language || null : null,
+      is_hidden: section.is_hidden,
+    },
   }));
-  const { error: saveSectionsError } = await supabase.from("song_sections").upsert(rows, { onConflict: "id" });
-  if (saveSectionsError) throw new Error(`Unable to save lyric sections: ${saveSectionsError.message}`);
+  for (const { section, values } of sectionRows) {
+    if (!section.id) continue;
+    const { data, error } = await supabase.from("song_sections").update(values)
+      .eq("id", section.id).eq("song_id", songId).select("id").maybeSingle();
+    if (error) throw new Error(`Unable to update lyric section: ${error.message}`);
+    if (!data) throw new Error("A lyric section could not be updated. Reload and review the latest version.");
+  }
   const removedSectionIds = [...existingIds].filter((id) => !retainedSectionIds.has(id));
   if (removedSectionIds.length > 0) {
     const { error: deleteSectionsError } = await supabase.from("song_sections").delete()
       .in("id", removedSectionIds).eq("song_id", songId);
     if (deleteSectionsError) throw new Error(`Unable to delete removed lyric sections: ${deleteSectionsError.message}`);
+  }
+  const newSectionRows = sectionRows.filter(({ section }) => !section.id).map(({ values }) => values);
+  if (newSectionRows.length > 0) {
+    const { error } = await supabase.from("song_sections")
+      .upsert(newSectionRows, { onConflict: "song_id,position" });
+    if (error) throw new Error(`Unable to save new lyric sections: ${error.message}`);
   }
   invalidateRouteData("/song");
   invalidateRouteData(`/song/${songId}`);
