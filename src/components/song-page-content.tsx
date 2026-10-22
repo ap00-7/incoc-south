@@ -88,13 +88,13 @@ export function SongPageContent({
         {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
         {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
         <h1 className="detail-title">{song.title}</h1>
-        <hr className="song-reading-divider" />
         {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
           <section className="lyrics-section" key={`${section.id}-${index}`}>
             <h2>[{label}]</h2>
             <p className="lyrics-text">{section.lyrics}</p>
           </section>
         )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
+        {translatedSections.length > 0 && <hr className="song-reading-divider" />}
         {translatedSections.length > 0 && <section className="song-translation-section" aria-label="Song translation">
           <h2>Translation</h2>
           {translatedSections.map(({ section, label }, index) => <div className="translation-entry" key={`${section.id}-${index}`}>

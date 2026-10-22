@@ -397,7 +397,7 @@ html { color-scheme: dark; }
 .translation-display { margin-top: 18px; padding-top: 16px; border-top: 1px solid #303030; }
 .song-translation-section { margin-top: 36px; padding: 0; border: 0; border-radius: 0; }
 .song-translation-section > h2 { margin: 0 0 16px; color: #ccc; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
-.translation-entry + .translation-entry { margin-top: 22px; padding-top: 19px; border-top: 1px solid #303030; }
+.translation-entry + .translation-entry { margin-top: 22px; }
 .translation-entry h3 { margin: 0 0 8px; color: #ddd; font-size: 12px; font-weight: 600; text-transform: none; }
 .song-ending-control { display: grid; gap: 8px; max-width: 420px; margin-top: 14px; color: #c7c7c7; font-size: 12px; font-weight: 600; }
 .session-error { max-width: min(300px, 60vw); color: #ff9b9b; font-size: 11px; }
@@ -539,7 +539,7 @@ html { color-scheme: dark; }
 .song-reading .lyrics-section { margin-top: 20px; }
 .song-reading .lyrics-section h2 { margin-bottom: 7px; color: #e0e0e0; font-size: 13px; }
 .song-reading .lyrics-text { color: #f0f0f0; font-size: clamp(16px, 1.45vw, 18px); line-height: 1.8; text-align: center; white-space: pre-wrap; overflow-wrap: anywhere; }
-.song-reading .song-translation-section { margin-top: 36px; padding-top: 19px; border-top: 1px solid #303030; }
+.song-reading .song-translation-section { margin-top: 0; padding-top: 0; border-top: 0; }
 .song-reading .song-translation-section > h2, .song-reading .translation-entry h3 { text-align: center; }
 
 @media (max-width: 600px) {
