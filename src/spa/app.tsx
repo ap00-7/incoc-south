@@ -235,7 +235,7 @@ function SongbookPage() {
             </details>}
             <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
             {visibleSongs.length ? <div className="results-list songbook-results-list">
-              {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink>)}
+              {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at} state={{ songOrigin: "songbook" }}>{song.title}</CachedSongLink>)}
             </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
             {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
               {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
@@ -367,7 +367,7 @@ function ScheduleDetailPage() {
             {schedule.schedule_items.map((item) => {
               const song = Array.isArray(item.song) ? item.song[0] : item.song;
               const primary = song
-                ? <><span>Song: </span><CachedSongLink className="song-title-link" songId={song.id} updatedAt={song.updated_at}>{song.title}</CachedSongLink></>
+                ? <><span>Song: </span><CachedSongLink className="song-title-link" songId={song.id} updatedAt={song.updated_at} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</CachedSongLink></>
                 : item.leader_name && item.public_content
                   ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
                   : item.leader_name

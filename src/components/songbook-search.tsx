@@ -127,6 +127,7 @@ export function SongbookSearch({
               className="song-suggestion-link"
               songId={song.id}
               updatedAt={song.updated_at}
+              state={{ songOrigin: "songbook" }}
               onClick={() => {
                 if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
                 setOpen(false);

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, type LinkProps } from "react-router-dom";
 import { type ReactNode } from "react";
 import { loadSong } from "@/lib/song-cache";
 
@@ -8,6 +8,7 @@ export function CachedSongLink({
   updatedAt,
   className,
   href,
+  state,
   onClick,
 }: {
   songId: string;
@@ -15,6 +16,7 @@ export function CachedSongLink({
   updatedAt: string;
   className?: string;
   href?: string;
+  state?: LinkProps["state"];
   onClick?: () => void;
 }) {
   const prefetchSong = () => {
@@ -27,6 +29,7 @@ export function CachedSongLink({
     <Link
       className={className}
       to={href ?? `/song/${songId}`}
+      state={state}
       onMouseEnter={prefetchSong}
       onFocus={prefetchSong}
       onTouchStart={prefetchSong}

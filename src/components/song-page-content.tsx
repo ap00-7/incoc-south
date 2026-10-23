@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
@@ -20,6 +21,15 @@ export function SongPageContent({
   updatedAt?: string;
   editOpen: boolean;
 }) {
+  const location = useLocation();
+  const navigationState = location.state as { songOrigin?: string; scheduleId?: string } | null;
+  const scheduleId = navigationState?.songOrigin === "schedule" && typeof navigationState.scheduleId === "string" && navigationState.scheduleId
+    ? navigationState.scheduleId
+    : undefined;
+  const backHref = scheduleId ? `/schedule/${encodeURIComponent(scheduleId)}` : "/song";
+  const backState = scheduleId ? undefined : { restoreSongbook: true };
+  const backLabel = scheduleId ? "Back to Schedule" : "Back to Songbook";
+  const returnLabel = scheduleId ? "Return to Schedule" : "Return to Songbook";
   const [result, setResult] = useState<{ songId: string; updatedAt?: string; song: CachedSong | null; error: string } | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,15 +68,15 @@ export function SongPageContent({
   const error = currentResult?.error ?? "";
   if (error && !song) return <article className="content-wrap">
     <p className="notice notice-warning" role="alert">{error}</p>
-    <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }}>Return to the Songbook</IntentPrefetchLink>
+    <IntentPrefetchLink href={backHref} state={backState}>{returnLabel}</IntentPrefetchLink>
   </article>;
   if (currentResult && !currentResult.song) return <article className="content-wrap">
-    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }}>Return to the Songbook</IntentPrefetchLink></p>
+    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href={backHref} state={backState}>{returnLabel}</IntentPrefetchLink></p>
   </article>;
   if (!song || (updatedAt && song.updated_at !== updatedAt)) {
     const summary = updatedAt ? getCachedSongSummary(songId, updatedAt) : null;
     return <article className="content-wrap song-reading" role="status" aria-busy="true">
-      <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }} className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
+      <IntentPrefetchLink href={backHref} state={backState} className="back-link"><ArrowLeft size={15} /> {backLabel}</IntentPrefetchLink>
       <p className="muted">Loading song…</p>
       {summary && <h1 className="detail-title">{summary.title}</h1>}
     </article>;
@@ -84,7 +94,7 @@ export function SongPageContent({
         onChange={refreshSong}
       />
       <article className="content-wrap song-reading">
-        <IntentPrefetchLink href="/song" state={{ restoreSongbook: true }} className="back-link"><ArrowLeft size={15} /> Back to Songbook</IntentPrefetchLink>
+        <IntentPrefetchLink href={backHref} state={backState} className="back-link"><ArrowLeft size={15} /> {backLabel}</IntentPrefetchLink>
         {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
         {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
         <div className="song-lyrics-display">
