@@ -113,13 +113,13 @@ function ScrollPositionRestoration() {
   return null;
 }
 
-function PageShell({ children, owner = false }: { children: ReactNode; owner?: boolean }) {
+function PageShell({ children, owner = false, hideFooter = false }: { children: ReactNode; owner?: boolean; hideFooter?: boolean }) {
   const { pathname } = useLocation();
   const showHeader = pathname === "/";
   return <>
     {showHeader && <SiteHeader owner={owner} showNavigation />}
     <main className={`page-main${showHeader ? "" : " page-main-headerless"}`}>{children}</main>
-    <SiteFooter />
+    {!hideFooter && <SiteFooter />}
   </>;
 }
 
@@ -251,7 +251,7 @@ function SongDetailPage() {
   const { songId = "" } = useParams();
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
-  return <PageShell owner={membership?.role === "owner"}>
+  return <PageShell owner={membership?.role === "owner"} hideFooter>
     <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
       <SongPageContent songId={songId} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
     </Suspense>

@@ -97,7 +97,6 @@ export function SongPageContent({
           )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
           {translatedSections.length > 0 && <hr className="song-reading-divider" />}
           {translatedSections.length > 0 && <section className="song-translation-section" aria-label="Song translation">
-            <h2>Translation</h2>
             {translatedSections.map(({ section, label }, index) => <div className="translation-entry" key={`${section.id}-${index}`}>
               <h3>[{label}]</h3>
               {section.translation_language && <p className="translation-language">{section.translation_language}</p>}

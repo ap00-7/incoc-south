@@ -1257,34 +1257,7 @@ body {
 .song-lyrics-display {
   margin-top: 20px;
   padding: clamp(20px, 4vw, 40px);
-  color: var(--presentation-text);
-  background: var(--presentation-background);
   border-radius: 10px;
-}
-
-.song-lyrics-display .detail-title,
-.song-lyrics-display .lyrics-text,
-.song-lyrics-display .lyrics-section h2,
-.song-lyrics-display .song-translation-section > h2,
-.song-lyrics-display .translation-entry h3,
-.song-lyrics-display .translation-language {
-  color: var(--presentation-text);
-}
-
-.song-lyrics-display .lyrics-section h2,
-.song-lyrics-display .translation-entry h3,
-.song-lyrics-display .translation-language {
-  color: var(--presentation-muted);
-}
-
-.song-lyrics-display .empty-state {
-  color: var(--presentation-text);
-  background: transparent;
-  border-color: #39332b;
-}
-
-.song-lyrics-display .song-reading-divider {
-  background: #39332b;
 }
 
 .presentation-page,
