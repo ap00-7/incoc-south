@@ -707,6 +707,7 @@ export async function addScheduleItem(formData: FormData) {
     leader_name: leaderName || null,
     duration_minutes: duration,
     public_content: publicContent || null,
+    show_in_slides: true,
     show_in_schedule: true,
   }).select("id").single();
   if (error) throw new Error(`Unable to add programme item: ${error.message}`);

@@ -175,7 +175,9 @@ async function loadSharedContent(isOwner: boolean) {
     })),
     schedules: schedules.map((schedule) => ({
       ...schedule,
-      schedule_items: [...(schedule.schedule_items ?? [])].sort((first, second) => first.position - second.position),
+      schedule_items: [...(schedule.schedule_items ?? [])]
+        .map((item) => ({ ...item, show_in_schedule: item.show_in_schedule !== false }))
+        .sort((first, second) => first.position - second.position),
     })),
     churchId: churchResult.data.id,
   };
@@ -333,7 +335,7 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
   const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
   const schedule = schedules.find((item) => item.id === scheduleId);
-  const visibleScheduleItems = schedule?.schedule_items.filter((item) => item.show_in_schedule !== false) ?? [];
+  const visibleScheduleItems = schedule?.schedule_items.filter((item) => item.show_in_schedule) ?? [];
   const publishedSchedules = schedules.filter((item) => item.status === "published");
   const songById = useMemo(() => new Map(songs.map((song) => [song.id, song])), [songs]);
   return <PageShell owner={isOwner}>
@@ -390,7 +392,11 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
                   : null}
               </div></li>;
             })}
-          </ol> : <div className="empty-state" style={{ marginTop: 22 }}>The programme has not been added yet.</div>}
+          </ol> : <div className="empty-state" style={{ marginTop: 22 }}>
+            {schedule.schedule_items.length
+              ? "No programme items are set to display on the Schedule."
+              : "The programme has not been added yet."}
+          </div>}
         </article>
       </>}
   </PageShell>;

@@ -130,7 +130,7 @@ function emptyDraft(itemType: string): Draft {
     notes: "",
     media_url: "",
     background_image_url: "",
-    show_in_slides: false,
+    show_in_slides: true,
     show_in_schedule: true,
   };
 }
@@ -490,14 +490,17 @@ export function InlineScheduleManager({
               <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
               <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
             </>}
-            <label className="check-row">
-              <input type="checkbox" checked={draft.show_in_slides} onChange={(event) => setDraft({ ...draft, show_in_slides: event.target.checked })} />
-              Display in Slides
-            </label>
-            <label className="check-row">
-              <input type="checkbox" checked={draft.show_in_schedule} onChange={(event) => setDraft({ ...draft, show_in_schedule: event.target.checked })} />
-              Display in Schedule
-            </label>
+            <fieldset className="schedule-visibility-options">
+              <legend>Display options</legend>
+              <label className="schedule-visibility-option">
+                <input type="checkbox" checked={draft.show_in_slides} disabled={saving} onChange={(event) => setDraft({ ...draft, show_in_slides: event.target.checked })} />
+                <span>Display in Slides</span>
+              </label>
+              <label className="schedule-visibility-option">
+                <input type="checkbox" checked={draft.show_in_schedule} disabled={saving} onChange={(event) => setDraft({ ...draft, show_in_schedule: event.target.checked })} />
+                <span>Display in Schedule</span>
+              </label>
+            </fieldset>
             <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
             <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
 

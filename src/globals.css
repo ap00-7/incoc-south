@@ -393,6 +393,17 @@ html { color-scheme: dark; }
 
 .check-row { display: flex; align-items: center; gap: 10px; }
 .check-row input { width: 18px !important; min-height: 18px !important; margin: 0 !important; accent-color: #f2f2f2; }
+.schedule-visibility-options { display: grid; gap: 8px; margin: 12px 0 6px; padding: 11px 13px 13px; border: 1px solid #444; border-radius: 8px; background: #191919; }
+.schedule-visibility-options legend { padding: 0 5px; color: #c7c7c7; font-size: 12px; font-weight: 650; }
+.schedule-visibility-option { min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 8px 10px; color: #eee; border-radius: 6px; font-size: 14px; font-weight: 650; cursor: pointer; }
+.schedule-visibility-option:hover { background: #242424; }
+.item-modal-form .schedule-visibility-option input[type="checkbox"] { appearance: none; width: 23px; height: 23px; min-height: 23px; flex: 0 0 23px; display: grid; place-content: center; margin: 0; padding: 0; border: 2px solid #888; border-radius: 4px; background: #111; cursor: pointer; }
+.schedule-visibility-option input[type="checkbox"]::before { width: 6px; height: 11px; border: solid #171717; border-width: 0 2px 2px 0; content: ""; transform: rotate(45deg) scale(0); }
+.schedule-visibility-option input[type="checkbox"]:checked { border-color: #d4b66e; background: #d4b66e; }
+.schedule-visibility-option input[type="checkbox"]:checked::before { transform: rotate(45deg) scale(1); }
+.schedule-visibility-option input:focus-visible { outline: 2px solid #e6c779; outline-offset: 3px; }
+.schedule-visibility-option input:disabled { cursor: not-allowed; opacity: .55; }
+.schedule-visibility-option:has(input:disabled) { cursor: not-allowed; opacity: .7; }
 .song-editor { max-width: 760px; }
 .song-section-editor { display: grid; gap: 12px; margin: 12px 0; }
 .song-section-editor-card, .section-admin-card { color: var(--ink); background: #111; border: 1px solid #303030; border-radius: 9px; }
