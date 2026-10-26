@@ -65,6 +65,8 @@ const scheduleItemInputSchema = z.object({
   schedule_id: z.string().uuid(),
   item_id: z.string().uuid().optional(),
   expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  insert_relative_item_id: z.string().uuid().optional(),
+  insert_before: z.boolean().optional(),
   item_type: scheduleItemTypeSchema,
   title: z.string().trim().min(1, "Enter an item title.").max(200),
   song_id: z.string().uuid().or(z.literal("")),
@@ -74,7 +76,7 @@ const scheduleItemInputSchema = z.object({
   translation_language: itemTranslationLanguageSchema,
   link_title: z.string().trim().max(200),
   link_url: z.string().trim().max(2048),
-  public_content: z.string().trim().max(5000),
+  public_content: z.string().max(20000),
   notes: z.string().trim().max(2000),
   media_url: z.string().trim().max(2048),
   background_image_url: z.string().trim().max(2048),
@@ -83,6 +85,10 @@ const scheduleItemInputSchema = z.object({
 }).superRefine((item, context) => {
   if (Boolean(item.item_id) !== Boolean(item.expected_updated_at)) {
     context.addIssue({ code: "custom", message: "Reload this schedule item and try again." });
+  }
+  const hasInsertionTarget = Boolean(item.insert_relative_item_id);
+  if (hasInsertionTarget !== (item.insert_before !== undefined) || (item.item_id && hasInsertionTarget)) {
+    context.addIssue({ code: "custom", message: "The insertion position is invalid. Reopen the item and try again." });
   }
   for (const field of ["link_url", "media_url", "background_image_url"] as const) {
     const value = item[field];
@@ -125,29 +131,32 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     if (songError) return { ok: false, message: `Unable to verify the selected song: ${songError.message}` };
     if (!song) return { ok: false, message: "Select a song from this church's Songbook." };
   }
-  if (parsed.data.item_type === "prayer" || parsed.data.item_type === "scripture_reading") {
-    if (!parsed.data.item_id) return { ok: false, message: "This item type is only available on existing legacy items." };
+  if (parsed.data.item_type === "prayer" || (parsed.data.item_type === "scripture_reading" && parsed.data.item_id)) {
+    if (!parsed.data.item_id) return { ok: false, message: "Prayer items are only available on existing legacy items." };
     const { data: existingItem, error: existingItemError } = await supabase.from("schedule_items")
       .select("item_type").eq("id", parsed.data.item_id).eq("schedule_id", schedule.id)
       .eq("church_id", member.churchId).maybeSingle();
-    if (existingItemError) return { ok: false, message: `Unable to verify this legacy item: ${existingItemError.message}` };
+    if (existingItemError) return { ok: false, message: `Unable to verify this schedule item: ${existingItemError.message}` };
     if (existingItem?.item_type !== parsed.data.item_type) {
-      return { ok: false, message: "Prayer and scripture reading are no longer available for new schedule items." };
+      return { ok: false, message: "This legacy item is no longer available." };
     }
   }
 
+  const isScripture = parsed.data.item_type === "scripture_reading";
   const row = {
     item_type: parsed.data.item_type,
-    title: parsed.data.title,
+    title: isScripture ? "Scripture" : parsed.data.title,
     song_id: parsed.data.item_type === "song" ? parsed.data.song_id || null : null,
-    leader_name: parsed.data.leader_name || null,
-    translator_name: parsed.data.translator_name || null,
-    translation_language: parsed.data.translation_language || null,
-    duration_minutes: duration,
-    public_content: parsed.data.public_content || null,
-    link_title: parsed.data.link_title || null,
-    link_url: parsed.data.link_url || null,
-    media_url: parsed.data.media_url || null,
+    leader_name: isScripture ? null : parsed.data.leader_name || null,
+    translator_name: isScripture ? null : parsed.data.translator_name || null,
+    translation_language: isScripture ? null : parsed.data.translation_language || null,
+    duration_minutes: isScripture ? null : duration,
+    public_content: isScripture
+      ? parsed.data.public_content || null
+      : parsed.data.public_content.trim() || null,
+    link_title: isScripture ? null : parsed.data.link_title || null,
+    link_url: isScripture ? null : parsed.data.link_url || null,
+    media_url: isScripture ? null : parsed.data.media_url || null,
     background_image_url: parsed.data.background_image_url || null,
     show_in_slides: parsed.data.show_in_slides,
     show_in_schedule: parsed.data.show_in_schedule,
@@ -169,14 +178,20 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
       return { ok: false, message: "The item was saved, but its Schedule visibility could not be confirmed. Reload and try again." };
     }
   } else {
-    const { data: lastItems, error: positionError } = await supabase.from("schedule_items")
-      .select("position").eq("schedule_id", schedule.id).order("position", { ascending: false }).limit(1);
+    const { data: scheduleItems, error: positionError } = await supabase.from("schedule_items")
+      .select("id, position").eq("schedule_id", schedule.id).order("position");
     if (positionError) return { ok: false, message: `Unable to determine item order: ${positionError.message}` };
+    const insertionTargetIndex = parsed.data.insert_relative_item_id
+      ? scheduleItems?.findIndex(({ id }) => id === parsed.data.insert_relative_item_id) ?? -1
+      : -1;
+    if (parsed.data.insert_relative_item_id && insertionTargetIndex < 0) {
+      return { ok: false, message: "The selected insertion point is no longer available. Reload the schedule and try again." };
+    }
     const { data, error } = await supabase.from("schedule_items").insert({
       ...row,
       schedule_id: schedule.id,
       church_id: schedule.church_id,
-      position: (lastItems?.[0]?.position ?? -1) + 1,
+      position: (scheduleItems?.[scheduleItems.length - 1]?.position ?? -1) + 1,
     }).select("id, show_in_slides, show_in_schedule").single();
     if (error) return { ok: false, message: `Unable to add the item: ${error.message}` };
     if (data.show_in_slides !== parsed.data.show_in_slides) {
@@ -186,6 +201,23 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
       return { ok: false, message: "The item was added, but its Schedule visibility could not be confirmed. Reload and try again." };
     }
     itemId = data.id;
+    if (insertionTargetIndex >= 0 && parsed.data.insert_before !== undefined) {
+      const desiredIndex = insertionTargetIndex + (parsed.data.insert_before ? 0 : 1);
+      const movesBefore = (scheduleItems?.length ?? 0) - desiredIndex;
+      for (let move = 0; move < movesBefore; move += 1) {
+        const { error: moveError } = await supabase.rpc("move_schedule_item", { target_item: itemId, direction: -1 });
+        if (moveError) {
+          const { error: cleanupError } = await supabase.from("schedule_items").delete()
+            .eq("id", itemId).eq("schedule_id", schedule.id).eq("church_id", member.churchId);
+          return {
+            ok: false,
+            message: cleanupError
+              ? `The item could not be placed at the selected position (${moveError.message}), and cleanup failed (${cleanupError.message}). Review the schedule before continuing.`
+              : `The item could not be placed at the selected position and was removed: ${moveError.message}`,
+          };
+        }
+      }
+    }
   }
 
   if (!itemId) return { ok: false, message: "The item was saved, but could not be identified for its private note." };
@@ -229,7 +261,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     schedule_id: source.schedule_id,
     church_id: source.church_id,
     item_type: source.item_type,
-    title: `${source.title} (copy)`,
+    title: source.item_type === "scripture_reading" ? "Scripture" : `${source.title} (copy)`,
     song_id: source.song_id,
     leader_name: source.leader_name,
     translator_name: source.translator_name,
@@ -771,7 +803,7 @@ export async function updateScheduleItem(formData: FormData) {
   }
   const { data, error } = await supabase.from("schedule_items").update({
     item_type: itemType,
-    title,
+    title: itemType === "scripture_reading" ? "Scripture" : title,
     song_id: itemType === "song" ? songId : null,
     leader_name: leaderName || null,
     duration_minutes: duration,

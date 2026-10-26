@@ -9,6 +9,7 @@ import {
   Link2,
   LoaderCircle,
   MoreHorizontal,
+  MoreVertical,
   Plus,
   Search,
   Trash2,
@@ -73,7 +74,15 @@ const titleOptions = [
   ...itemTitles.map(([title, type]) => ({ label: title, value: title, disabled: type === "song" })),
   { label: "Other / Custom title", value: customTitleOption },
 ];
-function itemTypeForTitle(title: string, fallback: string) {
+const insertionActions: Array<[string, ScheduleItemInput["item_type"], boolean]> = [
+  ["Add Item Before", "other", true],
+  ["Add Item After", "other", false],
+  ["Add Song Before", "song", true],
+  ["Add Song After", "song", false],
+  ["Add Scripture Before", "scripture_reading", true],
+  ["Add Scripture After", "scripture_reading", false],
+];
+function itemTypeForTitle(title: string, fallback: ScheduleItemInput["item_type"]): ScheduleItemInput["item_type"] {
   return itemTitles.find(([option]) => option === title)?.[1] ?? fallback;
 }
 
@@ -91,10 +100,12 @@ type Draft = {
   id?: string;
   tempId: string;
   expectedUpdatedAt?: string;
+  insert_relative_item_id?: string;
+  insert_before?: boolean;
   song_title: string;
   customTitle: boolean;
   customTitleValue: string;
-  item_type: string;
+  item_type: ScheduleItemInput["item_type"];
   title: string;
   song_id: string;
   duration_minutes: string;
@@ -111,14 +122,19 @@ type Draft = {
   show_in_schedule: boolean;
 };
 
-function emptyDraft(itemType: string): Draft {
+function emptyDraft(
+  itemType: ScheduleItemInput["item_type"],
+  insertion?: { itemId: string; before: boolean },
+): Draft {
   return {
     tempId: crypto.randomUUID(),
+    insert_relative_item_id: insertion?.itemId,
+    insert_before: insertion?.before,
     song_title: "",
     customTitle: false,
     customTitleValue: "",
     item_type: itemType,
-    title: itemType === "song" ? "Communion Song" : "",
+    title: itemType === "scripture_reading" ? "Scripture" : itemType === "song" ? "Communion Song" : "",
     song_id: "",
     duration_minutes: "",
     leader_name: "",
@@ -137,15 +153,16 @@ function emptyDraft(itemType: string): Draft {
 
 function draftFromItem(item: ScheduleItem): Draft {
   const song = Array.isArray(item.song) ? item.song[0] : item.song;
+  const isScripture = item.item_type === "scripture_reading";
   return {
     id: item.id,
     tempId: item.id,
     expectedUpdatedAt: item.updated_at,
     song_title: song?.title ?? "",
-    customTitle: !itemTitles.some(([title]) => title === item.title),
-    customTitleValue: !itemTitles.some(([title]) => title === item.title) ? item.title : "",
-    item_type: itemTypeForTitle(item.title, item.item_type),
-    title: item.title,
+    customTitle: !isScripture && !itemTitles.some(([title]) => title === item.title),
+    customTitleValue: !isScripture && !itemTitles.some(([title]) => title === item.title) ? item.title : "",
+    item_type: item.item_type,
+    title: isScripture ? "Scripture" : item.title,
     song_id: item.song_id ?? "",
     duration_minutes: item.duration_minutes?.toString() ?? "",
     leader_name: item.leader_name ?? "",
@@ -197,9 +214,11 @@ export function InlineScheduleManager({
   const [feedback, setFeedback] = useState("");
   const [mediaValidation, setMediaValidation] = useState("");
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
 
-  function openAdd(itemType = "other") {
-    setDraft(emptyDraft(itemType));
+  function openAdd(itemType: ScheduleItemInput["item_type"] = "other", insertion?: { itemId: string; before: boolean }) {
+    setDraft(emptyDraft(itemType, insertion));
+    setContextMenuItemId(null);
     setSelectedMedia(null);
     setSelectedBackground(null);
     setError("");
@@ -208,6 +227,7 @@ export function InlineScheduleManager({
 
   function openEdit(item: ScheduleItem) {
     setDraft(draftFromItem(item));
+    setContextMenuItemId(null);
     setSelectedMedia(null);
     setSelectedBackground(null);
     setError("");
@@ -217,6 +237,7 @@ export function InlineScheduleManager({
   const closeModal = useCallback(() => {
     if (saving) return;
     setDraft(null);
+    setContextMenuItemId(null);
     setSelectedMedia(null);
     setSelectedBackground(null);
     setError("");
@@ -281,8 +302,11 @@ export function InlineScheduleManager({
       const result = await saveScheduleItem({
         schedule_id: schedule.id,
         ...(draft.id ? { item_id: draft.id, expected_updated_at: draft.expectedUpdatedAt } : {}),
-        item_type: draft.item_type as ScheduleItemInput["item_type"],
-        title: draft.title,
+        ...(!draft.id && draft.insert_relative_item_id && draft.insert_before !== undefined
+          ? { insert_relative_item_id: draft.insert_relative_item_id, insert_before: draft.insert_before }
+          : {}),
+        item_type: draft.item_type,
+        title: draft.item_type === "scripture_reading" ? "Scripture" : draft.title,
         song_id: draft.song_id,
         duration_minutes: draft.duration_minutes,
         leader_name: draft.leader_name,
@@ -342,6 +366,9 @@ export function InlineScheduleManager({
         <button className="button button-secondary" type="button" onClick={() => openAdd("song")} disabled={!songsReady}>
           <Plus size={15} /> Add Song
         </button>
+        <button className="button button-secondary" type="button" onClick={() => openAdd("scripture_reading")}>
+          <Plus size={15} /> Add Scripture
+        </button>
       </div>
       {!privateNotesReady && <p className="muted" role="status">Loading private schedule notes; existing items cannot be edited until they are ready.</p>}
       {privateNotesReady && !songsReady && <p className="muted" role="status">Loading Songbook options…</p>}
@@ -349,15 +376,34 @@ export function InlineScheduleManager({
       {items.length ? <ol className="inline-programme-list">
         {items.map((item, index) => {
           const relatedSong = Array.isArray(item.song) ? item.song[0] : item.song;
+          const displayTitle = item.item_type === "scripture_reading" ? "Scripture" : item.title;
           return <li className="inline-programme-item" key={item.id}>
             <div className="inline-programme-actions">
               <div>
-                <strong>{item.title}</strong>
+                <strong>{displayTitle}</strong>
                 {relatedSong && <p className="muted">{relatedSong.title}</p>}
               </div>
               <div className="mini-actions">
+                <div className="schedule-item-context">
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label={`Insertion options for ${displayTitle}`}
+                    aria-expanded={contextMenuItemId === item.id}
+                    onClick={() => setContextMenuItemId(contextMenuItemId === item.id ? null : item.id)}
+                  ><MoreVertical size={18} /></button>
+                  {contextMenuItemId === item.id && <div className="schedule-item-context-menu" role="menu">
+                    {insertionActions.map(([label, itemType, before]) => <button
+                      type="button"
+                      role="menuitem"
+                      key={label}
+                      disabled={itemType === "song" && !songsReady}
+                      onClick={() => openAdd(itemType, { itemId: item.id, before })}
+                    >{label}</button>)}
+                  </div>}
+                </div>
                 <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)} disabled={!privateNotesReady}>Edit</button>
-                <button className="icon-button" type="button" aria-label={`Duplicate ${item.title}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
+                <button className="icon-button" type="button" aria-label={`Duplicate ${displayTitle}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
                 <MoveScheduleItemForm itemId={item.id} direction={-1} returnTo={returnTo} disabled={index === 0} />
                 <MoveScheduleItemForm itemId={item.id} direction={1} returnTo={returnTo} disabled={index === items.length - 1} />
                 <form>
@@ -366,7 +412,7 @@ export function InlineScheduleManager({
                   <ConfirmButton
                     action={deleteScheduleItem}
                     title="Delete schedule item?"
-                    message={`Delete “${item.title}” from this schedule? The selected Songbook entry will remain.`}
+                    message={`Delete “${displayTitle}” from this schedule? The selected Songbook entry will remain.`}
                     className="icon-button danger"
                   ><Trash2 size={15} /></ConfirmButton>
                 </form>
@@ -381,114 +427,140 @@ export function InlineScheduleManager({
       }}>
         <section className="item-modal" role="dialog" aria-modal="true" aria-labelledby="item-modal-title">
           <header className="item-modal-header">
-            <div><p className="eyebrow">SCHEDULE ITEM</p><h2 id="item-modal-title">{draft.id ? "Edit item" : "Add item"}</h2></div>
+            <div><p className="eyebrow">SCHEDULE ITEM</p><h2 id="item-modal-title">
+              {draft.item_type === "scripture_reading"
+                ? draft.id ? "Edit Scripture" : "Add Scripture"
+                : draft.id ? "Edit item" : "Add item"}
+            </h2></div>
             <button type="button" className="icon-button" aria-label="Close" onClick={closeModal}><X size={19} /></button>
           </header>
           <form className="item-modal-form" onSubmit={(event) => void saveItem(event)}>
-            <label htmlFor="schedule-item-title">Title <span aria-hidden="true">*</span></label>
-            <Dropdown
-              id="schedule-item-title"
-              value={draft.customTitle ? customTitleOption : draft.title}
-              required
-              options={titleOptions.map((option) => ({
-                ...option,
-                disabled: option.value !== customTitleOption && "disabled" in option && option.disabled && !songsReady,
-              }))}
-              autoFocus={!draft.customTitle}
-              onValueChange={(selection) => {
-                if (selection === customTitleOption) {
-                  setDraft({
-                    ...draft,
-                    customTitle: true,
-                    title: draft.customTitle ? draft.title : draft.customTitleValue,
-                    item_type: draft.customTitle ? draft.item_type : "other",
-                  });
-                  return;
-                }
-                const itemType = itemTypeForTitle(selection, draft.item_type);
-                setDraft({ ...draft, title: selection, item_type: itemType, customTitle: false });
-              }}
-              placeholder="Select a title"
-            />
-            {draft.customTitle && <>
-              <label htmlFor="schedule-item-custom-title">Custom title <span aria-hidden="true">*</span></label>
-              <input
-                id="schedule-item-custom-title"
-                value={draft.title}
-                maxLength={200}
-                required
-                autoFocus
-                onChange={(event) => setDraft({
-                  ...draft,
-                  title: event.currentTarget.value,
-                  customTitleValue: event.currentTarget.value,
-                })}
+            {draft.item_type === "scripture_reading" ? <>
+              <div className="scripture-fixed-title"><span>Title</span><strong>Scripture</strong></div>
+              <label htmlFor="schedule-scripture-text">Scripture text</label>
+              <textarea
+                id="schedule-scripture-text"
+                className="scripture-text-input"
+                rows={12}
+                maxLength={20000}
+                value={draft.public_content}
+                onChange={(event) => setDraft({ ...draft, public_content: event.target.value })}
               />
-            </>}
+              <MediaPicker
+                label="Background image"
+                value={draft.background_image_url}
+                file={selectedBackground}
+                imageOnly
+                onValue={(background_image_url) => setDraft({ ...draft, background_image_url })}
+                onFile={setSelectedBackground}
+                onValidation={setMediaValidation}
+              />
+            </> : <>
+              <label htmlFor="schedule-item-title">Title <span aria-hidden="true">*</span></label>
+              <Dropdown
+                id="schedule-item-title"
+                value={draft.customTitle ? customTitleOption : draft.title}
+                required
+                options={titleOptions.map((option) => ({
+                  ...option,
+                  disabled: option.value !== customTitleOption && "disabled" in option && option.disabled && !songsReady,
+                }))}
+                autoFocus={!draft.customTitle}
+                onValueChange={(selection) => {
+                  if (selection === customTitleOption) {
+                    setDraft({
+                      ...draft,
+                      customTitle: true,
+                      title: draft.customTitle ? draft.title : draft.customTitleValue,
+                      item_type: draft.customTitle ? draft.item_type : "other",
+                    });
+                    return;
+                  }
+                  const itemType = itemTypeForTitle(selection, draft.item_type);
+                  setDraft({ ...draft, title: selection, item_type: itemType, customTitle: false });
+                }}
+                placeholder="Select a title"
+              />
+              {draft.customTitle && <>
+                <label htmlFor="schedule-item-custom-title">Custom title <span aria-hidden="true">*</span></label>
+                <input
+                  id="schedule-item-custom-title"
+                  value={draft.title}
+                  maxLength={200}
+                  required
+                  autoFocus
+                  onChange={(event) => setDraft({
+                    ...draft,
+                    title: event.currentTarget.value,
+                    customTitleValue: event.currentTarget.value,
+                  })}
+                />
+              </>}
 
-            {draft.item_type === "song" && <SongPicker
-              songs={songs}
-              value={draft.song_id}
-              selectedTitle={draft.song_title}
-              onChange={(songId) => setDraft({
-                ...draft,
-                song_id: songId,
-                song_title: songs.find(({ id }) => id === songId)?.title ?? "",
-              })}
-              onCreate={() => window.open("/songs?create=1", "_blank", "noopener,noreferrer")}
-            />}
+              {draft.item_type === "song" && <SongPicker
+                songs={songs}
+                value={draft.song_id}
+                selectedTitle={draft.song_title}
+                onChange={(songId) => setDraft({
+                  ...draft,
+                  song_id: songId,
+                  song_title: songs.find(({ id }) => id === songId)?.title ?? "",
+                })}
+                onCreate={() => window.open("/songs?create=1", "_blank", "noopener,noreferrer")}
+              />}
 
-            {draft.item_type !== "song" && <>
-              <label htmlFor="schedule-item-duration">Duration <span className="muted">(minutes)</span></label>
-              <input id="schedule-item-duration" type="number" min="0" max="1440" step="1" value={draft.duration_minutes} onChange={(event) => setDraft({ ...draft, duration_minutes: event.target.value })} />
-            </>}
+              {draft.item_type !== "song" && <>
+                <label htmlFor="schedule-item-duration">Duration <span className="muted">(minutes)</span></label>
+                <input id="schedule-item-duration" type="number" min="0" max="1440" step="1" value={draft.duration_minutes} onChange={(event) => setDraft({ ...draft, duration_minutes: event.target.value })} />
+              </>}
 
-            <label htmlFor="schedule-item-leader">{draft.item_type === "song" ? "Song leader" : "Responsible"}</label>
-            <input id="schedule-item-leader" value={draft.leader_name} maxLength={200} onChange={(event) => setDraft({ ...draft, leader_name: event.target.value })} />
+              <label htmlFor="schedule-item-leader">{draft.item_type === "song" ? "Song leader" : "Responsible"}</label>
+              <input id="schedule-item-leader" value={draft.leader_name} maxLength={200} onChange={(event) => setDraft({ ...draft, leader_name: event.target.value })} />
 
-            {draft.item_type !== "song" && <>
-              <label htmlFor="schedule-item-translator">Translator</label>
-              <input id="schedule-item-translator" value={draft.translator_name} maxLength={200} onChange={(event) => setDraft({ ...draft, translator_name: event.target.value })} />
-              <label htmlFor="schedule-item-language">Translation in</label>
-              <Dropdown id="schedule-item-language" value={draft.translation_language} options={[
-                { label: "Select a language", value: "" },
-                { label: "Kannada", value: "Kannada" },
-                { label: "Tamil", value: "Tamil" },
-                { label: "English", value: "English" },
-              ]} onValueChange={(language) => {
-                setDraft({ ...draft, translation_language: language === "Kannada" || language === "Tamil" || language === "English" ? language : "" });
-              }} />
-              <fieldset className="item-link-fields">
-                <legend><Link2 size={14} /> URL</legend>
-                <label htmlFor="schedule-item-link-title">Link Title</label>
-                <input id="schedule-item-link-title" value={draft.link_title} maxLength={200} onChange={(event) => setDraft({ ...draft, link_title: event.target.value })} />
-                <label htmlFor="schedule-item-link">Link</label>
-                <input id="schedule-item-link" type="url" value={draft.link_url} maxLength={2048} onChange={(event) => setDraft({ ...draft, link_url: event.target.value })} />
-              </fieldset>
-            </>}
+              {draft.item_type !== "song" && <>
+                <label htmlFor="schedule-item-translator">Translator</label>
+                <input id="schedule-item-translator" value={draft.translator_name} maxLength={200} onChange={(event) => setDraft({ ...draft, translator_name: event.target.value })} />
+                <label htmlFor="schedule-item-language">Translation in</label>
+                <Dropdown id="schedule-item-language" value={draft.translation_language} options={[
+                  { label: "Select a language", value: "" },
+                  { label: "Kannada", value: "Kannada" },
+                  { label: "Tamil", value: "Tamil" },
+                  { label: "English", value: "English" },
+                ]} onValueChange={(language) => {
+                  setDraft({ ...draft, translation_language: language === "Kannada" || language === "Tamil" || language === "English" ? language : "" });
+                }} />
+                <fieldset className="item-link-fields">
+                  <legend><Link2 size={14} /> URL</legend>
+                  <label htmlFor="schedule-item-link-title">Link Title</label>
+                  <input id="schedule-item-link-title" value={draft.link_title} maxLength={200} onChange={(event) => setDraft({ ...draft, link_title: event.target.value })} />
+                  <label htmlFor="schedule-item-link">Link</label>
+                  <input id="schedule-item-link" type="url" value={draft.link_url} maxLength={2048} onChange={(event) => setDraft({ ...draft, link_url: event.target.value })} />
+                </fieldset>
+              </>}
 
-            {draft.item_type === "song" && <MediaPicker
-              label="Background Image"
-              value={draft.background_image_url}
-              file={selectedBackground}
-              imageOnly
-              onValue={(background_image_url) => setDraft({ ...draft, background_image_url })}
-              onFile={setSelectedBackground}
-              onValidation={setMediaValidation}
-            />}
+              {draft.item_type === "song" && <MediaPicker
+                label="Background Image"
+                value={draft.background_image_url}
+                file={selectedBackground}
+                imageOnly
+                onValue={(background_image_url) => setDraft({ ...draft, background_image_url })}
+                onFile={setSelectedBackground}
+                onValidation={setMediaValidation}
+              />}
 
-            {draft.item_type !== "song" && <MediaPicker
-              label="Media"
-              value={draft.media_url}
-              file={selectedMedia}
-              onValue={(media_url) => setDraft({ ...draft, media_url })}
-              onFile={setSelectedMedia}
-              onValidation={setMediaValidation}
-            />}
+              {draft.item_type !== "song" && <MediaPicker
+                label="Media"
+                value={draft.media_url}
+                file={selectedMedia}
+                onValue={(media_url) => setDraft({ ...draft, media_url })}
+                onFile={setSelectedMedia}
+                onValidation={setMediaValidation}
+              />}
 
-            {draft.item_type !== "song" && <>
-              <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
-              <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
+              {draft.item_type !== "song" && <>
+                <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
+                <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
+              </>}
             </>}
             <fieldset className="schedule-visibility-options">
               <legend>Display options</legend>
@@ -501,8 +573,10 @@ export function InlineScheduleManager({
                 <span>Display in Schedule</span>
               </label>
             </fieldset>
-            <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
-            <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+            {draft.item_type !== "scripture_reading" && <>
+              <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
+              <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+            </>}
 
             {error && <p className="item-modal-error" role="alert">{error}</p>}
             <footer className="item-modal-footer">

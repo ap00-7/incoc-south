@@ -58,7 +58,8 @@ export function Presentation({
   const currentSlideIndex = clampSlideIndex(slideIndex, currentGroup?.slides.length ?? 0);
   const current = currentGroup?.slides[currentSlideIndex];
   const isVideo = Boolean(current?.mediaUrl && /\.(mp4|webm)(?:$|\?)/i.test(current.mediaUrl));
-  const fullscreenImageUrl = current && !isVideo
+  const isScripture = current?.itemType === "scripture_reading";
+  const fullscreenImageUrl = current && !isVideo && !isScripture
     ? current.mediaUrl || current.backgroundImageUrl
     : null;
 
@@ -242,11 +243,23 @@ export function Presentation({
       {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section
-        className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}`}
+        className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}${isScripture ? " slide-stage-scripture" : ""}`}
         aria-live="polite"
       >
         {current && fullscreenImageUrl
           ? <img className="presentation-fullscreen-image" src={fullscreenImageUrl} alt={current.itemTitle} />
+          : current && isScripture ? <>
+            {current.backgroundImageUrl && <img className="scripture-slide-background" src={current.backgroundImageUrl} alt="" />}
+            {current.backgroundImageUrl && <div className="scripture-slide-overlay" />}
+            <h1 className="slide-title">Scripture</h1>
+            <div className="scripture-slide-content">
+              {current.lines.length
+                ? <p className="scripture-slide-text" style={{
+                  fontSize: `clamp(${1.35 * current.fontScale}rem, ${3.1 * current.fontScale}vw, ${2.8 * current.fontScale}rem)`,
+                }}>{current.lines.join("\n")}</p>
+                : <p className="slide-empty">No scripture text has been added.</p>}
+            </div>
+          </>
           : current ? <>
             {current.backgroundImageUrl && !hasLyrics && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
             <h1 className="slide-title">{current.itemTitle}</h1>

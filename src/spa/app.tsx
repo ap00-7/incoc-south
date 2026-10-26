@@ -385,7 +385,7 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
                 item.translation_language,
               ].filter(Boolean);
               return <li className="programme-item" key={item.id}><div>
-                <h2>{item.title}</h2><p>{primary}</p>
+                <h2>{item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2><p>{primary}</p>
                 {(details.length > 0 || item.link_url) && <p>{details.join(" · ")}{item.link_url && <>{details.length > 0 && " · "}<a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></>}</p>}
                 {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
                   ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />

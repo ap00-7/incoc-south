@@ -231,11 +231,51 @@ function splitSlideLines(text: string) {
   return chunks;
 }
 
+function wrapScriptureLines(lines: string[], maxLength = 64) {
+  return lines.flatMap((line) => {
+    const wrapped: string[] = [];
+    let remaining = line;
+    while (remaining.length > maxLength) {
+      let breakAt = remaining.lastIndexOf(" ", maxLength);
+      if (breakAt < 1) breakAt = maxLength;
+      wrapped.push(remaining.slice(0, breakAt));
+      remaining = remaining.slice(breakAt).trimStart();
+    }
+    wrapped.push(remaining);
+    return wrapped;
+  });
+}
+
 export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
   const slides: PresentationSlide[] = [];
   for (const item of filterPresentationItems(items)) {
     const itemSlideStart = slides.length;
-    if (item.song) {
+    if (item.item_type === "scripture_reading") {
+      const passageLines = wrapScriptureLines((item.public_content ?? "").replace(/\r\n/g, "\n").split("\n"));
+      const chunks: string[][] = [];
+      for (let index = 0; index < passageLines.length; index += 8) {
+        chunks.push(passageLines.slice(index, index + 8));
+      }
+      for (const lines of chunks.length ? chunks : [[]]) {
+        const longest = Math.max(0, ...lines.map((line) => [...line].length));
+        const lineScale = 8 / Math.max(8, lines.length);
+        const textScale = 64 / Math.max(64, longest);
+        slides.push({
+          itemId: item.id,
+          itemType: item.item_type,
+          itemTitle: "Scripture",
+          itemHeader: null,
+          itemSubtitle: null,
+          backgroundImageUrl: item.background_image_url ?? null,
+          mediaUrl: null,
+          sectionLabel: null,
+          lines,
+          translationLines: null,
+          translationLabel: null,
+          fontScale: Math.max(0.45, Math.min(1, lineScale, textScale)),
+        });
+      }
+    } else if (item.song) {
       const songTitle = item.song.title;
       const sections = sequenceSongSections(
         item.song.song_sections,
