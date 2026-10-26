@@ -2,7 +2,7 @@ import { Component, type ErrorInfo, type ReactNode, lazy, Suspense, useCallback,
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { clampSlideIndex, getTouchSwipeSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
+import { clampSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 const PresentationDocumentViewer = lazy(() => import("@/components/presentation-document-viewer")
@@ -97,6 +97,10 @@ export function Presentation({
   const currentSlideIndex = clampSlideIndex(slideIndex, visibleSlideCount);
   const current = currentGroup?.slides[isDocument ? 0 : currentSlideIndex];
   const previousDocumentSource = useRef({ itemId: isDocument ? currentGroup.itemId : "", sourceKey: documentSourceKey });
+
+  useEffect(() => () => {
+    swipeStart.current = null;
+  }, [currentGroup?.itemId]);
 
   useLayoutEffect(() => {
     if (previousItemIndex.current !== selectedItemIndex) {
@@ -216,7 +220,7 @@ export function Presentation({
     if (error) setSyncError(`Item changed locally, but could not update the shared presentation: ${error.message}`);
   }, [groups, isOwner, scheduleId, syncActive, userId]);
 
-  const moveSlide = useCallback(async (direction: -1 | 1) => {
+  const moveWithinItem = useCallback(async (direction: -1 | 1) => {
     if (syncActive && !isOwner) return;
     const currentPosition = positionRef.current;
     const itemIndex = clampSlideIndex(currentPosition.itemIndex, groups.length);
@@ -228,10 +232,7 @@ export function Presentation({
       : isCurrentDocument ? 0 : group.slides.length;
     if (isCurrentDocument && pageCount === 0) return;
     const safeIndex = clampSlideIndex(currentPosition.slideIndex + direction, pageCount);
-    if (safeIndex === currentPosition.slideIndex) {
-      if (isCurrentDocument && direction > 0 && currentPosition.slideIndex >= pageCount - 1) await moveItem(1);
-      return;
-    }
+    if (safeIndex === currentPosition.slideIndex) return;
     const nextPosition = { itemIndex, slideIndex: safeIndex };
     positionRef.current = nextPosition;
     setSlideIndex(safeIndex);
@@ -250,7 +251,18 @@ export function Presentation({
       })
       .eq("schedule_id", scheduleId);
     if (error) setSyncError(`Slide changed locally, but could not update the shared presentation: ${error.message}`);
-  }, [documentPageInfo, groups, isOwner, moveItem, scheduleId, syncActive, userId]);
+  }, [documentPageInfo, groups, isOwner, scheduleId, syncActive, userId]);
+
+  const moveSlide = useCallback(async (direction: -1 | 1) => {
+    const currentPosition = positionRef.current;
+    const currentItem = groups[clampSlideIndex(currentPosition.itemIndex, groups.length)];
+    await moveWithinItem(direction);
+    if (direction < 0 || currentItem?.itemType !== "presentation") return;
+    const pageCount = documentPageInfo.sourceKey === `${currentItem.itemId}:${currentItem.slides[0]?.mediaUrl ?? ""}`
+      ? documentPageInfo.count
+      : 0;
+    if (pageCount > 0 && currentPosition.slideIndex >= pageCount - 1) await moveItem(1);
+  }, [documentPageInfo, groups, moveItem, moveWithinItem]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -322,7 +334,7 @@ export function Presentation({
       onPointerDown={(event) => {
         if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
         const target = event.target;
-        if (target instanceof Element && target.closest("button, a, input, textarea, select, video, audio, [contenteditable=true]")) return;
+        if (target instanceof Element && target.closest("button, a, input, textarea, select, video, audio, iframe, summary, [role=button], [role=slider], [contenteditable=true]")) return;
         swipeStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
         event.currentTarget.setPointerCapture(event.pointerId);
       }}
@@ -330,18 +342,14 @@ export function Presentation({
         const start = swipeStart.current;
         swipeStart.current = null;
         if (!start || start.pointerId !== event.pointerId) return;
-        if (isDocument) {
-          const deltaX = event.clientX - start.x;
-          const deltaY = event.clientY - start.y;
-          if (Math.abs(deltaX) >= 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
-            void moveSlide(deltaX < 0 ? 1 : -1);
-          }
-        } else {
-          const targetIndex = getTouchSwipeSlideIndex(currentGroup?.slides ?? [], currentSlideIndex, start.x, start.y, event.clientX, event.clientY);
-          if (targetIndex !== null) void moveSlide(targetIndex > currentSlideIndex ? 1 : -1);
+        const deltaX = event.clientX - start.x;
+        const deltaY = event.clientY - start.y;
+        if (Math.abs(deltaX) >= 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25) {
+          void moveWithinItem(deltaX < 0 ? 1 : -1);
         }
       }}
       onPointerCancel={() => { swipeStart.current = null; }}
+      onLostPointerCapture={() => { swipeStart.current = null; }}
     >
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "id", value: scheduleId },
