@@ -159,7 +159,7 @@ async function loadSharedContent(isOwner: boolean) {
       .eq("church.slug", "incoc-south").order("title").range(from, to), "songs"),
     loadAllPages((from, to) => {
       const query = supabase.from("schedules")
-        .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, song_id, updated_at), church:churches!inner(id, slug)")
+        .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, show_in_schedule, song_id, updated_at), church:churches!inner(id, slug)")
         .eq("church.slug", "incoc-south").order("service_date", { ascending: false });
       return (isOwner ? query : query.eq("status", "published")).range(from, to);
     }, "service schedules"),
@@ -333,6 +333,7 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
   const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
   const schedule = schedules.find((item) => item.id === scheduleId);
+  const visibleScheduleItems = schedule?.schedule_items.filter((item) => item.show_in_schedule !== false) ?? [];
   const publishedSchedules = schedules.filter((item) => item.status === "published");
   const songById = useMemo(() => new Map(songs.map((song) => [song.id, song])), [songs]);
   return <PageShell owner={isOwner}>
@@ -365,8 +366,8 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
             </div>
           </header>
           {schedule.description && <p className="section-description">{schedule.description}</p>}
-          {schedule.schedule_items.length ? <ol className="programme-list">
-            {schedule.schedule_items.map((item) => {
+          {visibleScheduleItems.length ? <ol className="programme-list">
+            {visibleScheduleItems.map((item) => {
               const song = item.song_id ? songById.get(item.song_id) : null;
               const primary = song
                 ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>

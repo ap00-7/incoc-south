@@ -79,6 +79,7 @@ const scheduleItemInputSchema = z.object({
   media_url: z.string().trim().max(2048),
   background_image_url: z.string().trim().max(2048),
   show_in_slides: z.boolean(),
+  show_in_schedule: z.boolean(),
 }).superRefine((item, context) => {
   if (Boolean(item.item_id) !== Boolean(item.expected_updated_at)) {
     context.addIssue({ code: "custom", message: "Reload this schedule item and try again." });
@@ -149,6 +150,7 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     media_url: parsed.data.media_url || null,
     background_image_url: parsed.data.background_image_url || null,
     show_in_slides: parsed.data.show_in_slides,
+    show_in_schedule: parsed.data.show_in_schedule,
   };
 
   let itemId = parsed.data.item_id;
@@ -157,11 +159,14 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     if (!expectedUpdatedAt) return { ok: false, message: "Reload this schedule item and try again." };
     const { data, error } = await supabase.from("schedule_items").update(row)
       .eq("id", itemId).eq("schedule_id", schedule.id).eq("church_id", member.churchId)
-      .eq("updated_at", expectedUpdatedAt).select("id, show_in_slides").maybeSingle();
+      .eq("updated_at", expectedUpdatedAt).select("id, show_in_slides, show_in_schedule").maybeSingle();
     if (error) return { ok: false, message: `Unable to save the item: ${error.message}` };
     if (!data) return { ok: false, message: "This item changed since you opened it. Reload and review the latest version." };
     if (data.show_in_slides !== parsed.data.show_in_slides) {
       return { ok: false, message: "The item was saved, but its Slides visibility could not be confirmed. Reload and try again." };
+    }
+    if (data.show_in_schedule !== parsed.data.show_in_schedule) {
+      return { ok: false, message: "The item was saved, but its Schedule visibility could not be confirmed. Reload and try again." };
     }
   } else {
     const { data: lastItems, error: positionError } = await supabase.from("schedule_items")
@@ -172,10 +177,13 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
       schedule_id: schedule.id,
       church_id: schedule.church_id,
       position: (lastItems?.[0]?.position ?? -1) + 1,
-    }).select("id, show_in_slides").single();
+    }).select("id, show_in_slides, show_in_schedule").single();
     if (error) return { ok: false, message: `Unable to add the item: ${error.message}` };
     if (data.show_in_slides !== parsed.data.show_in_slides) {
       return { ok: false, message: "The item was added, but its Slides visibility could not be confirmed. Reload and try again." };
+    }
+    if (data.show_in_schedule !== parsed.data.show_in_schedule) {
+      return { ok: false, message: "The item was added, but its Schedule visibility could not be confirmed. Reload and try again." };
     }
     itemId = data.id;
   }
@@ -205,7 +213,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
   if (!parsed.success) return { ok: false, message: "The item could not be duplicated." };
   const supabase = await createClient();
   const { data: source, error: sourceError } = await supabase.from("schedule_items")
-    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides")
+    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, show_in_schedule")
     .eq("id", parsed.data.item_id).eq("schedule_id", parsed.data.schedule_id)
     .eq("church_id", member.churchId).maybeSingle();
   if (sourceError) return { ok: false, message: `Unable to load item to duplicate: ${sourceError.message}` };
@@ -233,6 +241,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     media_url: source.media_url,
     background_image_url: source.background_image_url,
     show_in_slides: source.show_in_slides,
+    show_in_schedule: source.show_in_schedule !== false,
     position: (lastItems?.[0]?.position ?? -1) + 1,
   }).select("id").single();
   if (error) return { ok: false, message: `Unable to duplicate item: ${error.message}` };
@@ -698,6 +707,7 @@ export async function addScheduleItem(formData: FormData) {
     leader_name: leaderName || null,
     duration_minutes: duration,
     public_content: publicContent || null,
+    show_in_schedule: true,
   }).select("id").single();
   if (error) throw new Error(`Unable to add programme item: ${error.message}`);
   if (notes) {

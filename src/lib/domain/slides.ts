@@ -16,6 +16,7 @@ export type ProgrammeItem = {
   position: number;
   public_content: string | null;
   show_in_slides?: boolean;
+  show_in_schedule?: boolean | null;
   background_image_url?: string | null;
   media_url?: string | null;
   song?: {

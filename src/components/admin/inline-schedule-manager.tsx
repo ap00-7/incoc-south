@@ -48,6 +48,7 @@ type ScheduleItem = {
   media_url: string | null;
   background_image_url: string | null;
   show_in_slides: boolean;
+  show_in_schedule: boolean | null;
   song_id: string | null;
   updated_at: string;
   song: { title: string } | { title: string }[] | null;
@@ -107,6 +108,7 @@ type Draft = {
   media_url: string;
   background_image_url: string;
   show_in_slides: boolean;
+  show_in_schedule: boolean;
 };
 
 function emptyDraft(itemType: string): Draft {
@@ -129,6 +131,7 @@ function emptyDraft(itemType: string): Draft {
     media_url: "",
     background_image_url: "",
     show_in_slides: false,
+    show_in_schedule: true,
   };
 }
 
@@ -157,6 +160,7 @@ function draftFromItem(item: ScheduleItem): Draft {
     media_url: item.media_url ?? "",
     background_image_url: item.background_image_url ?? "",
     show_in_slides: item.show_in_slides,
+    show_in_schedule: item.show_in_schedule !== false,
   };
 }
 
@@ -291,6 +295,7 @@ export function InlineScheduleManager({
         media_url: mediaUrl,
         background_image_url: backgroundImageUrl,
         show_in_slides: draft.show_in_slides,
+        show_in_schedule: draft.show_in_schedule,
       });
       if (!result.ok) {
         setError(result.message);
@@ -488,6 +493,10 @@ export function InlineScheduleManager({
             <label className="check-row">
               <input type="checkbox" checked={draft.show_in_slides} onChange={(event) => setDraft({ ...draft, show_in_slides: event.target.checked })} />
               Display in Slides
+            </label>
+            <label className="check-row">
+              <input type="checkbox" checked={draft.show_in_schedule} onChange={(event) => setDraft({ ...draft, show_in_schedule: event.target.checked })} />
+              Display in Schedule
             </label>
             <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
             <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
