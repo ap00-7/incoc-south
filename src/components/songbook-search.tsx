@@ -1,6 +1,5 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CachedSongLink } from "@/components/cached-song-link";
 import { Dropdown } from "@/components/dropdown";
 
 export type SongbookResult = {
@@ -123,10 +122,9 @@ export function SongbookSearch({
       {open && suggestions.length > 0 && <ul className="song-suggestions" id="song-title-suggestions" role="listbox" aria-label="Matching songs">
         {suggestions.map((song, index) => (
           <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>
-            <CachedSongLink
+            <Link
               className="song-suggestion-link"
-              songId={song.id}
-              updatedAt={song.updated_at}
+              to={`/song/${song.id}`}
               state={{ songOrigin: "songbook" }}
               onClick={() => {
                 if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
@@ -134,7 +132,7 @@ export function SongbookSearch({
               }}
             >
               {song.title}
-            </CachedSongLink>
+            </Link>
           </li>
         ))}
       </ul>}

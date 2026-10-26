@@ -2,7 +2,6 @@ import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { invalidateSongCache } from "@/lib/song-cache";
 import { clampSlideIndex, getTouchSwipeSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
@@ -34,7 +33,6 @@ export function Presentation({
   isOwner,
   canReadSession,
   userId,
-  songIds,
 }: {
   scheduleId: string;
   scheduleTitle: string;
@@ -44,7 +42,6 @@ export function Presentation({
   isOwner: boolean;
   canReadSession: boolean;
   userId: string | null;
-  songIds: string[];
 }) {
   const navigate = useNavigate();
   const groups = useMemo(() => groupPresentationSlides(slides), [slides]);
@@ -238,14 +235,10 @@ export function Presentation({
       <RealtimeRefresh subscriptions={[
         { table: "schedules", column: "id", value: scheduleId },
         { table: "schedule_items", column: "schedule_id", value: scheduleId },
-        ...songIds.flatMap((songId) => [
-          { table: "songs" as const, column: "id", value: songId },
-          { table: "song_sections" as const, column: "song_id", value: songId },
-        ]),
         ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
       ]} onDelete={(deletedId) => {
         if (deletedId === scheduleId) navigate("/slides", { replace: true });
-      }} onChange={() => songIds.forEach(invalidateSongCache)} />
+      }} />
       {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section

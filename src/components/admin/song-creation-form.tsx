@@ -11,7 +11,6 @@ import { ConfirmationDialog } from "@/components/confirm-button";
 import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
-import { invalidateSongCache } from "@/lib/song-cache";
 
 type SectionInput = {
   id?: string;
@@ -109,7 +108,7 @@ function orderSectionsForEnding(sections: SectionDraft[], ending: SongEnding) {
 export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id}` : "/admin/songs" }: SongEditorFormProps) {
   const navigate = useNavigate();
   const { membership } = useAuth();
-  const { error, formAction } = useFormAction(saveSong, () => invalidateSongCache(song?.id));
+  const { error, formAction } = useFormAction(saveSong);
   const [title, setTitle] = useState(song?.title ?? "");
   const [titleMatches, setTitleMatches] = useState<SongTitleMatch[]>([]);
   const [exactTitleMatch, setExactTitleMatch] = useState<SongTitleMatch | null>(null);

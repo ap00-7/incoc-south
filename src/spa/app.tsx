@@ -1,11 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
-import { CachedSongLink } from "@/components/cached-song-link";
-import { SongCacheSeed } from "@/components/song-cache-seed";
 import { SongbookSearch } from "@/components/songbook-search";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,15 +11,15 @@ import { SiteHeader } from "@/components/site-header";
 import { BrandMark } from "@/components/brand-mark";
 import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
-import { invalidateSongCache, loadSong } from "@/lib/song-cache";
 import { createClient } from "@/lib/supabase/browser";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { filterPresentationItems, generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { notifyDataChanged } from "@/spa/data-events";
 import { useAuth } from "@/spa/auth-provider";
 import { useAsyncResource } from "@/spa/use-async-resource";
 
 const PAGE_SIZE = 50;
-const EMPTY_LIST: never[] = [];
+const LOAD_PAGE_SIZE = 500;
 const dateFormatter = new Intl.DateTimeFormat("en-IN", { dateStyle: "long", timeZone: "Asia/Kolkata" });
 const SongPageContent = lazy(() => import("@/components/song-page-content").then((module) => ({ default: module.SongPageContent })));
 const Presentation = lazy(() => import("@/components/presentation").then((module) => ({ default: module.Presentation })));
@@ -139,6 +137,52 @@ function InlineLoading({ children = "Loading content…" }: { children?: ReactNo
   return <p className="muted" role="status" aria-busy="true">{children}</p>;
 }
 
+async function loadAllPages<T>(
+  loadPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  label: string,
+) {
+  const items: T[] = [];
+  for (let from = 0; ; from += LOAD_PAGE_SIZE) {
+    const { data, error } = await loadPage(from, from + LOAD_PAGE_SIZE - 1);
+    if (error) throw new Error(`Unable to load ${label}: ${error.message}`);
+    const page = data ?? [];
+    items.push(...page);
+    if (page.length < LOAD_PAGE_SIZE) return items;
+  }
+}
+
+async function loadSharedContent(isOwner: boolean) {
+  const supabase = createClient();
+  const [songs, schedules, churchResult] = await Promise.all([
+    loadAllPages((from, to) => supabase.from("songs")
+      .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden), church:churches!inner(id, slug)")
+      .eq("church.slug", "incoc-south").order("title").range(from, to), "songs"),
+    loadAllPages((from, to) => {
+      const query = supabase.from("schedules")
+        .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, song_id, updated_at), church:churches!inner(id, slug)")
+        .eq("church.slug", "incoc-south").order("service_date", { ascending: false });
+      return (isOwner ? query : query.eq("status", "published")).range(from, to);
+    }, "service schedules"),
+    supabase.from("churches").select("id").eq("slug", "incoc-south").maybeSingle(),
+  ]);
+  if (churchResult.error) throw new Error(`Unable to identify the church: ${churchResult.error.message}`);
+  if (!churchResult.data?.id) throw new Error("Unable to identify the church: no INCOC South church record was found.");
+
+  return {
+    songs: songs.map((song) => ({
+      ...song,
+      song_sections: [...(song.song_sections ?? [])].sort((first, second) => first.position - second.position),
+    })),
+    schedules: schedules.map((schedule) => ({
+      ...schedule,
+      schedule_items: [...(schedule.schedule_items ?? [])].sort((first, second) => first.position - second.position),
+    })),
+    churchId: churchResult.data.id,
+  };
+}
+
+type SharedContent = Awaited<ReturnType<typeof loadSharedContent>>;
+
 function safeReturnTo(candidate: string | null) {
   if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/song";
   const target = new URL(candidate, window.location.origin);
@@ -187,32 +231,18 @@ function HomePage() {
   </PageShell>;
 }
 
-function SongbookPage() {
+function SongbookPage({ songs, refreshing }: { songs: SharedContent["songs"]; refreshing: boolean }) {
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q")?.trim() ?? "";
   const language = searchParams.get("language")?.trim() ?? "";
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const loadSongs = useCallback(async () => {
-    const supabase = createClient();
-    let request = supabase.from("songs")
-      .select("id, title, language, author, updated_at, church:churches!inner(id, slug)")
-      .eq("church.slug", "incoc-south").order("title").range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-    if (query) request = request.ilike("title", `%${query}%`);
-    if (language) request = request.eq("language", language);
-    const [{ data: songs, error }, { data: church, error: churchError }] = await Promise.all([
-      request,
-      supabase.from("churches").select("id").eq("slug", "incoc-south").maybeSingle(),
-    ]);
-    if (error) throw new Error(`Unable to load the Songbook: ${error.message}`);
-    if (churchError) throw new Error(`Unable to find the Songbook: ${churchError.message}`);
-    return { songs: songs ?? [], churchId: church?.id ?? "" };
-  }, [language, page, query]);
-  const resource = useAsyncResource(`songbook:${query}:${language}:${page}`, loadSongs);
-  const songs = resource.data?.songs ?? [];
-  const hasNextPage = songs.length > PAGE_SIZE;
-  const visibleSongs = songs.slice(0, PAGE_SIZE);
+  const filteredSongs = songs.filter((song) =>
+    (!query || song.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
+    && (!language || song.language === language));
+  const visibleSongs = filteredSongs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasNextPage = filteredSongs.length > page * PAGE_SIZE;
   const filters = new URLSearchParams();
   if (query) filters.set("q", query);
   if (language) filters.set("language", language);
@@ -223,149 +253,96 @@ function SongbookPage() {
   };
 
   return <PageShell owner={membership?.role === "owner"}>
-    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} />
-      : <>
-        {resource.error && <ResourceMessage error={`The latest Songbook refresh failed: ${resource.error}`} retry={resource.refresh} />}
-        {resource.data?.churchId && <SongCacheSeed songs={visibleSongs} churchId={resource.data.churchId} />}
-        <div className="content-wrap">
-          <div className="section-heading"><h1>Songbook</h1></div>
-          {resource.loading && resource.data && <InlineLoading>Checking for Songbook updates…</InlineLoading>}
-          {resource.loading && !resource.data ? <InlineLoading>Loading songs…</InlineLoading> : <>
-            {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
-              <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/song" /></Suspense>
-            </details>}
-            <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
-            {visibleSongs.length ? <div className="results-list songbook-results-list">
-              {visibleSongs.map((song) => <CachedSongLink className="song-title-result" key={song.id} songId={song.id} updatedAt={song.updated_at} state={{ songOrigin: "songbook" }}>{song.title}</CachedSongLink>)}
-            </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
-            {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
-              {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
-              {hasNextPage && <Link className="button button-secondary" to={pageHref(page + 1)}>More songs</Link>}
-            </nav>}
-          </>}
-        </div>
-      </>}
+    {refreshing && <div className="content-wrap"><InlineLoading>Checking for Songbook updates…</InlineLoading></div>}
+    <div className="content-wrap">
+      <div className="section-heading"><h1>Songbook</h1></div>
+      {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
+        <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/song" /></Suspense>
+      </details>}
+      <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
+      {visibleSongs.length ? <div className="results-list songbook-results-list">
+        {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/song/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
+      </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
+      {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
+        {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
+        {hasNextPage && <Link className="button button-secondary" to={pageHref(page + 1)}>More songs</Link>}
+      </nav>}
+    </div>
   </PageShell>;
 }
 
-function SongDetailPage() {
+function SongDetailPage({ songs }: { songs: SharedContent["songs"] }) {
   const { songId = "" } = useParams();
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
+  const song = songs.find((item) => item.id === songId);
   return <PageShell owner={membership?.role === "owner"} hideFooter>
-    <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
-      <SongPageContent songId={songId} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
-    </Suspense>
+    {song
+      ? <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
+          <SongPageContent song={song} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
+        </Suspense>
+      : <div className="content-wrap"><ResourceMessage error="This song is not available." /></div>}
   </PageShell>;
 }
 
-async function loadPublishedSchedules(page: number) {
-  const { data, error, count } = await createClient().from("schedules")
-    .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
-    .eq("church.slug", "incoc-south").eq("status", "published")
-    .order("service_date", { ascending: false })
-    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  if (error) throw new Error(`Unable to load services: ${error.message}`);
-  return { schedules: data ?? [], count: count ?? 0 };
-}
-
-type SongReference = { id: string; updated_at: string };
-type ProgrammeItemWithSongReference = {
-  song: SongReference | SongReference[] | null;
-};
-
-async function loadProgrammeItemsWithCachedSongs<T extends ProgrammeItemWithSongReference>(items: T[]) {
-  const references = new Map<string, SongReference>();
-  for (const item of items) {
-    const song = Array.isArray(item.song) ? item.song[0] : item.song;
-    if (song) references.set(song.id, song);
-  }
-
-  const loadedSongs = await Promise.all([...references.values()].map(async (song) => [
-    song.id,
-    await loadSong(song.id, song.updated_at),
-  ] as const));
-  const songsById = new Map(loadedSongs);
-
-  return items.map((item) => {
-    const song = Array.isArray(item.song) ? item.song[0] : item.song;
-    return { ...item, song: song ? songsById.get(song.id) ?? null : null };
-  });
-}
-
-function ScheduleListPage() {
+function ScheduleListPage({ schedules, refreshing }: { schedules: SharedContent["schedules"]; refreshing: boolean }) {
   const { membership } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const loadSchedules = useCallback(() => loadPublishedSchedules(page), [page]);
-  const resource = useAsyncResource(`schedules:${page}`, loadSchedules);
-  const schedules = resource.data?.schedules ?? EMPTY_LIST;
   const isOwner = membership?.role === "owner";
+  const visibleSchedules = isOwner ? schedules.filter((schedule) => schedule.status === "published") : schedules;
+  const pageSchedules = visibleSchedules.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasNextPage = visibleSchedules.length > page * PAGE_SIZE;
+  const soleScheduleId = !isOwner && visibleSchedules.length === 1 ? visibleSchedules[0].id : null;
   useEffect(() => {
-    if (!isOwner && resource.data?.count === 1 && schedules[0]) navigate(`/schedule/${schedules[0].id}`, { replace: true });
-  }, [isOwner, navigate, resource.data?.count, schedules]);
-  const churchId = schedules[0]?.church.id ?? membership?.churchId;
-  const hasNextPage = schedules.length > PAGE_SIZE;
+    if (soleScheduleId) navigate(`/schedule/${soleScheduleId}`, { replace: true });
+  }, [navigate, soleScheduleId]);
   return <PageShell owner={isOwner}>
-    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} />
-      : <>
-        {resource.error && <ResourceMessage error={`The latest schedule refresh failed: ${resource.error}`} retry={resource.refresh} />}
-        {churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: churchId }]} />}
-        <div className="content-wrap">
-          {resource.loading && resource.data && <InlineLoading>Checking for schedule updates…</InlineLoading>}
-          <div className="schedule-list-heading">
-            <div className="section-heading"><h1>Sunday Schedule</h1></div>
-            {isOwner && <Link to="/admin/schedules/new" className="button button-primary"><Plus size={15} /> Create schedule</Link>}
-          </div>
-          {resource.loading && !resource.data ? <InlineLoading>Loading services…</InlineLoading> : schedules.length ? <div className="results-list">
-            {schedules.slice(0, PAGE_SIZE).map((schedule) => <article className="public-list-entry" key={schedule.id}>
-              <IntentPrefetchLink className="result-card" href={`/schedule/${schedule.id}`}>
-                <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
-                <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
-              </IntentPrefetchLink>
-              {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
-            </article>)}
-          </div> : <div className="empty-state">There are no services to show yet.</div>}
-          {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">
-            {page > 1 && <Link className="button button-secondary" to={`/schedule?page=${page - 1}`}>Newer services</Link>}
-            {hasNextPage && <Link className="button button-secondary" to={`/schedule?page=${page + 1}`}>Older services</Link>}
-          </nav>}
-        </div>
-      </>}
+    {refreshing && <div className="content-wrap"><InlineLoading>Checking for schedule updates…</InlineLoading></div>}
+    <div className="content-wrap">
+      <div className="schedule-list-heading">
+        <div className="section-heading"><h1>Sunday Schedule</h1></div>
+        {isOwner && <Link to="/admin/schedules/new" className="button button-primary"><Plus size={15} /> Create schedule</Link>}
+      </div>
+      {pageSchedules.length ? <div className="results-list">
+        {pageSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
+          <IntentPrefetchLink className="result-card" href={`/schedule/${schedule.id}`}>
+            <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
+            <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
+          </IntentPrefetchLink>
+          {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
+        </article>)}
+      </div> : <div className="empty-state">There are no services to show yet.</div>}
+      {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">
+        {page > 1 && <Link className="button button-secondary" to={`/schedule?page=${page - 1}`}>Newer services</Link>}
+        {hasNextPage && <Link className="button button-secondary" to={`/schedule?page=${page + 1}`}>Older services</Link>}
+      </nav>}
+    </div>
   </PageShell>;
 }
 
-function ScheduleDetailPage() {
+function ScheduleDetailPage({ schedules, songs, refreshing }: {
+  schedules: SharedContent["schedules"];
+  songs: SharedContent["songs"];
+  refreshing: boolean;
+}) {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
   const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
-  const loadSchedule = useCallback(async () => {
-    const baseQuery = createClient().from("schedules")
-      .select("id, title, service_date, venue, description, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, song:songs(id, title, updated_at)), church:churches!inner(id, slug)")
-      .eq("id", scheduleId).eq("church.slug", "incoc-south");
-    const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
-    const { data, error } = await serviceQuery.maybeSingle();
-    if (error) throw new Error(`Unable to load service: ${error.message}`);
-    if (!data) throw new Error("This service is not available.");
-    return { ...data, schedule_items: [...(data.schedule_items ?? [])].sort((a, b) => a.position - b.position) };
-  }, [isOwner, scheduleId]);
-  const resource = useAsyncResource(`schedule:${scheduleId}:${isOwner ? "owner" : "viewer"}`, loadSchedule);
-  const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
-  const publishedServices = useAsyncResource("schedules:1", loadPublishedServices);
-  const schedule = resource.data;
+  const schedule = schedules.find((item) => item.id === scheduleId);
+  const publishedSchedules = schedules.filter((item) => item.status === "published");
+  const songById = useMemo(() => new Map(songs.map((song) => [song.id, song])), [songs]);
   return <PageShell owner={isOwner}>
-    {resource.error && !schedule ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : !schedule
+    {!schedule
       ? <article className="content-wrap">
-        {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
-        <h1 className="detail-title">Sunday Schedule</h1><InlineLoading>Loading service…</InlineLoading>
+        {publishedSchedules.length > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
+        <h1 className="detail-title">Sunday Schedule</h1><p className="notice notice-warning" role="alert">This service is not available.</p>
       </article>
       : <>
-        {resource.error && <ResourceMessage error={`The latest service refresh failed: ${resource.error}`} retry={resource.refresh} />}
-        {publishedServices.error && <ResourceMessage error={`Unable to check available services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
-        {resource.loading && resource.data && <div className="content-wrap"><InlineLoading>Checking for service updates…</InlineLoading></div>}
+        {refreshing && <div className="content-wrap"><InlineLoading>Checking for service updates…</InlineLoading></div>}
         <RealtimeRefresh subscriptions={[
           { table: "schedules", column: "church_id", value: schedule.church.id },
           { table: "schedule_items", column: "schedule_id", value: schedule.id },
@@ -377,7 +354,7 @@ function ScheduleDetailPage() {
           if (deletedId === schedule.id) navigate("/schedule", { replace: true });
         }} />
         <article className="content-wrap">
-          {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
+          {publishedSchedules.length > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
           <header className={`schedule-detail-heading${isOwner ? " has-edit" : ""}`}>
             {isOwner && <IntentPrefetchLink href={`/admin/schedules/${schedule.id}`} className="schedule-edit-link">Edit schedule</IntentPrefetchLink>}
             <h1 className="detail-title">{schedule.title}</h1>
@@ -390,9 +367,9 @@ function ScheduleDetailPage() {
           {schedule.description && <p className="section-description">{schedule.description}</p>}
           {schedule.schedule_items.length ? <ol className="programme-list">
             {schedule.schedule_items.map((item) => {
-              const song = Array.isArray(item.song) ? item.song[0] : item.song;
+              const song = item.song_id ? songById.get(item.song_id) : null;
               const primary = song
-                ? <><span>Song: </span><CachedSongLink className="song-title-link" songId={song.id} updatedAt={song.updated_at} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</CachedSongLink></>
+                ? <><span>Song: </span><Link className="song-title-link" to={`/song/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>
                 : item.leader_name && item.public_content
                   ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
                   : item.leader_name
@@ -418,7 +395,7 @@ function ScheduleDetailPage() {
   </PageShell>;
 }
 
-function SlidesPage() {
+function SlidesPage({ sharedContent, refreshing }: { sharedContent: SharedContent; refreshing: boolean }) {
   const { membership } = useAuth();
   const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
@@ -426,49 +403,22 @@ function SlidesPage() {
   const scheduleId = searchParams.get("scheduleId");
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const loadSlides = useCallback(async () => {
-    const supabase = createClient();
-    if (scheduleId) {
-      const baseQuery = supabase.from("schedules")
-        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song_id, song:songs(id, updated_at)), church:churches!inner(id, slug)")
-        .eq("id", scheduleId).eq("church.slug", "incoc-south");
-      const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
-      const { data, error } = await serviceQuery.maybeSingle();
-      if (error) throw new Error(`Unable to load slide previews: ${error.message}`);
-      if (!data) throw new Error("This service is not available.");
-      const programmeItems = await loadProgrammeItemsWithCachedSongs(data.schedule_items ?? []);
-      const slides = generateSlides(normalizeProgrammeItems(programmeItems));
-      return { schedule: data, groups: groupPresentationSlides(slides), schedules: [], count: 0, churchId: "" };
-    }
-    const baseQuery = supabase.from("schedules")
-      .select("id, title, service_date, venue, description, updated_at, church:churches!inner(id, slug)", { count: "exact" })
-      .eq("church.slug", "incoc-south");
-    const visibleSchedulesQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
-    const [{ data, error, count }, { data: church, error: churchError }] = await Promise.all([
-      visibleSchedulesQuery.order("service_date", { ascending: false })
-        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-      supabase.from("churches").select("id").eq("slug", "incoc-south").maybeSingle(),
-    ]);
-    if (error) throw new Error(`Unable to load presentations: ${error.message}`);
-    if (churchError) throw new Error(`Unable to identify the church for presentation updates: ${churchError.message}`);
-    return { schedule: null, groups: [], schedules: data ?? [], count: count ?? 0, churchId: data?.[0]?.church.id ?? church?.id ?? membership?.churchId ?? "" };
-  }, [isOwner, membership?.churchId, page, scheduleId]);
-  const resource = useAsyncResource(`slides:${scheduleId ?? "list"}:${page}:${isOwner ? "owner" : "viewer"}`, loadSlides);
-  const schedule = resource.data?.schedule;
-  const scheduleSongIds = [...new Set((schedule?.schedule_items ?? []).flatMap((item) => item.song_id ? [item.song_id] : []))];
-  const schedules = resource.data?.schedules ?? [];
-  const hasNextPage = schedules.length > PAGE_SIZE;
-  const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
-  const publishedServices = useAsyncResource("schedules:1", loadPublishedServices);
-  const soleService = isOwner
-    ? publishedServices.data?.schedules[0]
-    : schedules[0] ?? publishedServices.data?.schedules[0];
-  const serviceCount = isOwner ? publishedServices.data?.count : resource.data?.count;
+  const schedules = sharedContent.schedules;
+  const schedule = schedules.find((item) => item.id === scheduleId);
+  const publishedSchedules = schedules.filter((item) => item.status === "published");
+  const pageSchedules = schedules.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const hasNextPage = schedules.length > page * PAGE_SIZE;
+  const songById = useMemo(() => new Map(sharedContent.songs.map((song) => [song.id, song])), [sharedContent.songs]);
+  const groups = useMemo(() => schedule
+    ? groupPresentationSlides(generateSlides(normalizeProgrammeItems(scheduleItemsWithSongs(schedule, songById))))
+    : [], [schedule, songById]);
+  const soleService = isOwner ? publishedSchedules[0] : schedules[0];
+  const serviceCount = isOwner ? publishedSchedules.length : schedules.length;
   const openingSoleService = !scheduleId && serviceCount === 1;
 
   useEffect(() => {
-    if (resource.error && scheduleId) navigate("/slides", { replace: true });
-  }, [navigate, resource.error, scheduleId]);
+    if (scheduleId && !schedule) navigate("/slides", { replace: true });
+  }, [navigate, schedule, scheduleId]);
   useEffect(() => {
     if (!scheduleId && serviceCount === 1 && soleService) {
       navigate(`/slides?scheduleId=${encodeURIComponent(soleService.id)}`, { replace: true });
@@ -476,33 +426,27 @@ function SlidesPage() {
   }, [navigate, scheduleId, serviceCount, soleService]);
 
   return <PageShell owner={isOwner}>
-    {resource.error && !resource.data ? <ResourceMessage error={resource.error} retry={resource.refresh} /> : (resource.loading && !resource.data) || (!scheduleId && isOwner && !publishedServices.data && !publishedServices.error) || (openingSoleService && !publishedServices.error)
+    {openingSoleService
       ? <div className="content-wrap"><div className="section-heading"><h1>Slides</h1></div><InlineLoading>Loading presentations…</InlineLoading></div>
-      : schedule && resource.data
+      : schedule
         ? <>
-          {resource.error && <ResourceMessage error={`The latest presentation refresh failed: ${resource.error}`} retry={resource.refresh} />}
-          {publishedServices.error && <ResourceMessage error={`Unable to check available services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
-          {resource.loading && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
+          {refreshing && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
-            ...scheduleSongIds.flatMap((songId) => [
-              { table: "songs" as const, column: "id", value: songId },
-              { table: "song_sections" as const, column: "song_id", value: songId },
-            ]),
             ...(schedule.church?.id ? [{ table: "schedules" as const, column: "church_id", value: schedule.church.id }] : []),
-          ]} onChange={() => scheduleSongIds.forEach(invalidateSongCache)} onDelete={(deletedId) => {
+          ]} onDelete={(deletedId) => {
             if (deletedId === schedule.id) navigate("/slides", { replace: true });
           }} />
           <div className="content-wrap slides-overview">
-            {publishedServices.data?.count > 1 && <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>}
+            {publishedSchedules.length > 1 && <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>}
             <div className="slides-overview-heading">
               <h1 className="detail-title">{schedule.title}</h1>
               {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
             </div>
             <p className="slides-overview-meta"><CalendarDays size={15} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>{schedule.venue}</span>}</p>
-            {resource.data.groups.length ? <div className="slides-preview-grid">
-              {resource.data.groups.map((group) => {
+            {groups.length ? <div className="slides-preview-grid">
+              {groups.map((group) => {
                 const media = group.mediaUrl || group.backgroundImageUrl;
                 return <Link className="slides-preview-card" to={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
                   <h2 className="slides-preview-title">{group.itemTitle}</h2>
@@ -520,13 +464,12 @@ function SlidesPage() {
           </div>
         </>
         : <>
-          {resource.data?.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: resource.data.churchId }]} />}
+          {refreshing && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
+          {sharedContent.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: sharedContent.churchId }]} />}
           <div className="content-wrap">
             <div className="section-heading"><h1>Slides</h1></div>
-            {publishedServices.error && <ResourceMessage error={`Unable to check published services: ${publishedServices.error}`} retry={publishedServices.refresh} />}
-            {resource.loading && resource.data && <InlineLoading>Checking for presentation updates…</InlineLoading>}
-            {schedules.length ? <div className="results-list">
-              {schedules.slice(0, PAGE_SIZE).map((item) => <article className="public-list-entry" key={item.id}>
+            {pageSchedules.length ? <div className="results-list">
+              {pageSchedules.map((item) => <article className="public-list-entry" key={item.id}>
                 <IntentPrefetchLink className="result-card" href={`/slides?scheduleId=${item.id}`}>
                   <div><h2>{item.title}</h2><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${item.service_date}T12:00:00+05:30`))}{item.venue ? ` · ${item.venue}` : ""}</p></div>
                   <span className="public-entry-meta"><MonitorPlay size={15} /> View slides <ArrowRight size={15} /></span>
@@ -543,47 +486,41 @@ function SlidesPage() {
   </PageShell>;
 }
 
-function PresentationPage() {
+function scheduleItemsWithSongs(
+  schedule: SharedContent["schedules"][number],
+  songsById: Map<string, SharedContent["songs"][number]>,
+) {
+  return schedule.schedule_items.map((item) => ({
+    ...item,
+    song: item.song_id ? songsById.get(item.song_id) ?? null : null,
+  }));
+}
+
+function PresentationPage({ sharedContent, refreshing }: { sharedContent: SharedContent; refreshing: boolean }) {
   const { scheduleId = "" } = useParams();
   const { user, membership } = useAuth();
   const isOwner = membership?.role === "owner";
   const [searchParams] = useSearchParams();
   const requested = Number.parseInt(searchParams.get("slide") ?? "0", 10);
   const initialSlide = Number.isFinite(requested) ? requested : 0;
-  const loadPresentation = useCallback(async () => {
-    const baseQuery = createClient().from("schedules")
-      .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song_id, song:songs(id, updated_at)), church:churches!inner(slug)")
-      .eq("id", scheduleId).eq("church.slug", "incoc-south");
-    const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
-    const { data, error } = await serviceQuery.maybeSingle();
-    if (error) throw new Error(`Unable to load presentation: ${error.message}`);
-    if (!data) throw new Error("This presentation is not available.");
-    const items = await loadProgrammeItemsWithCachedSongs(data.schedule_items ?? []);
-    const presentationItems = filterPresentationItems(normalizeProgrammeItems(items));
-    return {
-      schedule: data,
-      slides: generateSlides(presentationItems),
-      songIds: [...new Set(presentationItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id)))],
-    };
-  }, [isOwner, scheduleId]);
-  const resource = useAsyncResource(`presentation:${scheduleId}:${isOwner ? "owner" : "viewer"}`, loadPresentation);
-  if (resource.error) return <main className="presentation-page"><p role="alert">{resource.error}</p><Link to="/slides">Return to Slides</Link></main>;
-  if (!resource.data) return <main className="presentation-page">
-    <InlineLoading>Loading presentation…</InlineLoading>
-    <Link to="/slides">Return to Slides</Link>
-  </main>;
+  const schedule = sharedContent.schedules.find((item) => item.id === scheduleId);
+  const songById = useMemo(() => new Map(sharedContent.songs.map((song) => [song.id, song])), [sharedContent.songs]);
+  const presentationItems = useMemo(() => schedule
+    ? filterPresentationItems(normalizeProgrammeItems(scheduleItemsWithSongs(schedule, songById)))
+    : [], [schedule, songById]);
+  const slides = useMemo(() => generateSlides(presentationItems), [presentationItems]);
+  if (!schedule) return <main className="presentation-page"><p role="alert">This presentation is not available.</p><Link to="/slides">Return to Slides</Link></main>;
   return <Suspense fallback={<main className="presentation-page"><InlineLoading>Loading presentation…</InlineLoading></main>}>
     <Presentation
       key={`${scheduleId}-${initialSlide}`}
       scheduleId={scheduleId}
-      scheduleTitle={resource.data.schedule.title}
-      refreshing={resource.loading}
+      scheduleTitle={schedule.title}
+      refreshing={refreshing}
       initialSlide={initialSlide}
-      slides={resource.data.slides}
-      isOwner={membership?.role === "owner"}
+      slides={slides}
+      isOwner={isOwner}
       canReadSession={Boolean(membership)}
       userId={user?.id ?? null}
-      songIds={resource.data.songIds}
     />
   </Suspense>;
 }
@@ -613,25 +550,16 @@ function AdminLayout() {
   </PageShell>;
 }
 
-function AdminSongsPage() {
-  const { membership } = useAuth();
-  const loadSongs = useCallback(async () => {
-    const { data, error } = await createClient().from("songs")
-      .select("id, title, language, author, updated_at")
-      .eq("church_id", membership?.churchId ?? "").order("title").limit(100);
-    if (error) throw new Error(`Unable to load songs: ${error.message}`);
-    return data ?? [];
-  }, [membership?.churchId]);
-  const resource = useAsyncResource("admin:songs", loadSongs);
-  return resource.loading && !resource.data ? <LoadingPage title="Manage songs" /> : resource.error
-    ? <ResourceMessage error={resource.error} retry={resource.refresh} />
-    : <>
-      <p className="eyebrow">LIBRARY</p>
-      <div className="admin-title-row"><h1>Manage songs</h1><Link className="button button-primary" to="/admin/songs/new"><Plus size={16} /> Add a song</Link></div>
-      <p>Each song lives once in the library and can be reused across services.</p>
-      {resource.data?.length ? <div className="results-list admin-results">{resource.data.map((song) => <IntentPrefetchLink className="result-card" href={`/admin/songs/${song.id}`} key={song.id}><div><h2>{song.title}</h2><p>{song.language}{song.author ? ` · ${song.author}` : ""}</p></div><span className="muted">Edit</span></IntentPrefetchLink>)}</div>
-        : <div className="empty-state">No songs yet. Add the first song to begin your library.</div>}
-    </>;
+function AdminSongsPage({ songs }: { songs: SharedContent["songs"] | null }) {
+  if (!songs) return <LoadingPage title="Manage songs" />;
+  const visibleSongs = songs.slice(0, 100);
+  return <>
+    <p className="eyebrow">LIBRARY</p>
+    <div className="admin-title-row"><h1>Manage songs</h1><Link className="button button-primary" to="/admin/songs/new"><Plus size={16} /> Add a song</Link></div>
+    <p>Each song lives once in the library and can be reused across services.</p>
+    {visibleSongs.length ? <div className="results-list admin-results">{visibleSongs.map((song) => <IntentPrefetchLink className="result-card" href={`/admin/songs/${song.id}`} key={song.id}><div><h2>{song.title}</h2><p>{song.language}{song.author ? ` · ${song.author}` : ""}</p></div><span className="muted">Edit</span></IntentPrefetchLink>)}</div>
+      : <div className="empty-state">No songs yet. Add the first song to begin your library.</div>}
+  </>;
 }
 
 function AdminSongCreatePage() {
@@ -643,21 +571,10 @@ function AdminSongCreatePage() {
   </>;
 }
 
-function AdminSongEditPage() {
+function AdminSongEditPage({ songs }: { songs: SharedContent["songs"] | null }) {
   const { songId = "" } = useParams();
-  const { membership } = useAuth();
-  const loadSong = useCallback(async () => {
-    const { data, error } = await createClient().from("songs")
-      .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden)")
-      .eq("id", songId).eq("church_id", membership?.churchId ?? "").maybeSingle();
-    if (error) throw new Error(`Unable to load song: ${error.message}`);
-    if (!data) throw new Error("This song is not available.");
-    return { ...data, song_sections: [...(data.song_sections ?? [])].sort((a, b) => a.position - b.position) };
-  }, [membership?.churchId, songId]);
-  const resource = useAsyncResource(`admin:song:${songId}`, loadSong);
-  const song = resource.data;
-  if (resource.loading && !song) return <LoadingPage title="Edit song" />;
-  if (resource.error) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
+  if (!songs) return <LoadingPage title="Edit song" />;
+  const song = songs.find((item) => item.id === songId);
   if (!song) return <ResourceMessage error="This song is not available." />;
   return <>
     <IntentPrefetchLink href="/admin/songs" className="back-link"><ArrowLeft size={15} /> Back to songs</IntentPrefetchLink>
@@ -678,24 +595,14 @@ function AdminSongEditPage() {
   </>;
 }
 
-function AdminSchedulesPage() {
-  const { membership } = useAuth();
-  const loadSchedules = useCallback(async () => {
-    const { data, error } = await createClient().from("schedules")
-      .select("id, title, service_date, venue").eq("church_id", membership?.churchId ?? "")
-      .order("service_date", { ascending: false }).limit(100);
-    if (error) throw new Error(`Unable to load schedules: ${error.message}`);
-    return data ?? [];
-  }, [membership?.churchId]);
-  const resource = useAsyncResource("admin:schedules", loadSchedules);
-  if (resource.loading && !resource.data) return <LoadingPage title="Schedules" />;
-  if (resource.error) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
+function AdminSchedulesPage({ schedules }: { schedules: SharedContent["schedules"] | null }) {
+  if (!schedules) return <LoadingPage title="Schedules" />;
+  const visibleSchedules = schedules.slice(0, 100);
   return <>
-    {membership?.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: membership.churchId }]} />}
     <p className="eyebrow">SERVICE PLANNING</p>
     <div className="admin-title-row"><h1>Schedules</h1><Link className="button button-primary" to="/admin/schedules/new"><Plus size={16} /> Create schedule</Link></div>
     <p>Each schedule is a dated gathering.</p>
-    {resource.data?.length ? <div className="results-list admin-results">{resource.data.map((schedule) => <IntentPrefetchLink className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
+    {visibleSchedules.length ? <div className="results-list admin-results">{visibleSchedules.map((schedule) => <IntentPrefetchLink className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
       <div><h2>{schedule.title}</h2><p>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div><span className="muted">Edit</span>
     </IntentPrefetchLink>)}</div> : <div className="empty-state">No service schedules yet. Create one to start planning.</div>}
   </>;
@@ -709,28 +616,13 @@ function AdminScheduleCreatePage() {
   </>;
 }
 
-function AdminScheduleEditPage() {
+function AdminScheduleEditPage({ sharedContent }: { sharedContent: SharedContent | null }) {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
   const navigate = useNavigate();
-  const loadSchedule = useCallback(async () => {
-    const { data: schedule, error } = await createClient().from("schedules")
-      .select("id, title, service_date, venue, description, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, song_id, show_in_slides, updated_at, song:songs(id, title))")
-      .eq("id", scheduleId).eq("church_id", membership?.churchId ?? "").maybeSingle();
-    if (error) throw new Error(`Unable to load service: ${error.message}`);
-    if (!schedule) throw new Error("This schedule is not available.");
-    const items = [...(schedule.schedule_items ?? [])].sort((a, b) => a.position - b.position);
-    return { schedule, items };
-  }, [membership?.churchId, scheduleId]);
-  const resource = useAsyncResource(`admin:schedule:${scheduleId}`, loadSchedule);
-  const loadSongs = useCallback(async () => {
-    const { data, error } = await createClient().from("songs").select("id, title, language")
-      .eq("church_id", membership?.churchId ?? "").order("title").limit(1000);
-    if (error) throw new Error(`Unable to load Songbook: ${error.message}`);
-    return data ?? [];
-  }, [membership?.churchId]);
-  const songsResource = useAsyncResource(`admin:schedule-songs:${membership?.churchId ?? ""}`, loadSongs);
-  const itemIds = resource.data?.items.map(({ id }) => id).join(",") ?? "";
+  const schedule = sharedContent?.schedules.find((item) => item.id === scheduleId);
+  const songs = sharedContent?.songs ?? [];
+  const itemIds = schedule?.schedule_items.map(({ id }) => id).join(",") ?? "";
   const loadNotes = useCallback(async () => {
     if (!itemIds) return {};
     const { data, error } = await createClient().from("schedule_item_notes")
@@ -739,44 +631,44 @@ function AdminScheduleEditPage() {
     return Object.fromEntries((data ?? []).map(({ schedule_item_id, notes }) => [schedule_item_id, notes]));
   }, [itemIds]);
   const notesResource = useAsyncResource(`admin:schedule-notes:${scheduleId}:${itemIds}`, loadNotes);
-  if (resource.error && !resource.data) return <ResourceMessage error={resource.error} retry={resource.refresh} />;
-  if (!resource.data) return <>
+  if (!sharedContent) return <>
     <IntentPrefetchLink href="/admin/schedules" className="back-link"><ArrowLeft size={15} /> Back to schedules</IntentPrefetchLink>
     <h1 className="detail-title">Edit schedule</h1>
     <InlineLoading>Loading schedule details…</InlineLoading>
   </>;
-  const scheduleItems = resource.data.items.map((item) => ({
+  if (!schedule) return <ResourceMessage error="This schedule is not available." />;
+  const songById = new Map(songs.map((song) => [song.id, song]));
+  const scheduleItems = schedule.schedule_items.map((item) => ({
     ...item,
+    song: item.song_id ? songById.get(item.song_id) ?? null : null,
     notes: notesResource.data?.[item.id] ?? "",
   }));
   return <>
-    {resource.error && <ResourceMessage error={`The latest schedule refresh failed: ${resource.error}`} retry={resource.refresh} />}
     <RealtimeRefresh
-      subscriptions={[{ table: "schedules", column: "id", value: resource.data.schedule.id }]}
+      subscriptions={[{ table: "schedules", column: "id", value: schedule.id }]}
       onDelete={(deletedId) => {
-        if (deletedId === resource.data?.schedule.id) navigate("/admin/schedules", { replace: true });
+        if (deletedId === schedule.id) navigate("/admin/schedules", { replace: true });
       }}
     />
     <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
-    <h1 className="detail-title">{resource.data.schedule.title}</h1>
+    <h1 className="detail-title">{schedule.title}</h1>
     <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
-      <InlineScheduleDetails schedule={resource.data.schedule} />
+      <InlineScheduleDetails schedule={schedule} />
       {notesResource.error && <ResourceMessage error={notesResource.error} retry={notesResource.refresh} />}
-      {songsResource.error && <ResourceMessage error={songsResource.error} retry={songsResource.refresh} />}
-      {(resource.loading || notesResource.loading || songsResource.loading) && <InlineLoading>Loading schedule options…</InlineLoading>}
+      {notesResource.loading && <InlineLoading>Loading schedule options…</InlineLoading>}
       <section className="schedule-items-editor" aria-label="Schedule Items">
         <h2>Schedule Items</h2>
         <InlineScheduleManager
-          schedule={resource.data.schedule}
+          schedule={schedule}
           items={scheduleItems}
-          songs={songsResource.data ?? []}
+          songs={songs.slice(0, 1000).map(({ id, title, language }) => ({ id, title, language }))}
           privateNotesReady={Boolean(notesResource.data) && !notesResource.error}
-          songsReady={Boolean(songsResource.data)}
-          returnTo={`/admin/schedules/${resource.data.schedule.id}`}
+          songsReady
+          returnTo={`/admin/schedules/${schedule.id}`}
           churchId={membership?.churchId ?? ""}
         />
       </section>
-      <ScheduleActions schedule={resource.data.schedule} />
+      <ScheduleActions schedule={schedule} />
     </Suspense>
   </>;
 }
@@ -900,32 +792,121 @@ function NotFoundPage() {
 }
 
 export function App() {
+  const { configured, loading: authLoading, membership } = useAuth();
+  const location = useLocation();
+  const isOwner = membership?.role === "owner";
+  const [snapshot, setSnapshot] = useState<{ isOwner: boolean; content: SharedContent } | null>(null);
+  const [sharedLoading, setSharedLoading] = useState(true);
+  const [sharedRefreshing, setSharedRefreshing] = useState(false);
+  const [sharedError, setSharedError] = useState("");
+  const [retryCount, setRetryCount] = useState(0);
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
+
+  useEffect(() => {
+    if (authLoading) return;
+    let active = true;
+    let hasConnected = false;
+    let refreshInFlight: Promise<void> | null = null;
+    let refreshQueued = false;
+
+    const refreshShared = (): Promise<void> => {
+      if (refreshInFlight) {
+        refreshQueued = true;
+        return refreshInFlight;
+      }
+      const hasCurrentSnapshot = snapshotRef.current?.isOwner === isOwner;
+      setSharedLoading(!hasCurrentSnapshot);
+      setSharedRefreshing(hasCurrentSnapshot);
+      refreshInFlight = loadSharedContent(isOwner).then((content) => {
+        if (!active) return;
+        const nextSnapshot = { isOwner, content };
+        snapshotRef.current = nextSnapshot;
+        setSnapshot(nextSnapshot);
+        setSharedError("");
+      }).catch((loadError: unknown) => {
+        if (active) setSharedError(loadError instanceof Error ? loadError.message : "Unable to load shared content.");
+      }).finally(() => {
+        refreshInFlight = null;
+        if (!active) return;
+        setSharedLoading(false);
+        setSharedRefreshing(false);
+        if (refreshQueued) {
+          refreshQueued = false;
+          void refreshShared();
+        }
+      });
+      return refreshInFlight;
+    };
+
+    const onDataChanged = () => { void refreshShared(); };
+    window.addEventListener("incoc:data-changed", onDataChanged);
+    if (configured) {
+      const supabase = createClient();
+      const channel = supabase.channel("incoc-shared-content")
+        .on("postgres_changes", { event: "*", schema: "public", table: "songs" }, () => notifyDataChanged())
+        .on("postgres_changes", { event: "*", schema: "public", table: "song_sections" }, () => notifyDataChanged())
+        .on("postgres_changes", { event: "*", schema: "public", table: "schedules" }, () => notifyDataChanged())
+        .on("postgres_changes", { event: "*", schema: "public", table: "schedule_items" }, () => notifyDataChanged())
+        .subscribe((status) => {
+          if (status !== "SUBSCRIBED") return;
+          if (hasConnected) notifyDataChanged();
+          hasConnected = true;
+        });
+      void refreshShared();
+      return () => {
+        active = false;
+        window.removeEventListener("incoc:data-changed", onDataChanged);
+        void supabase.removeChannel(channel);
+      };
+    }
+
+    setSharedError("Supabase is not configured. Add the required public project settings to load shared content.");
+    setSharedLoading(false);
+    return () => {
+      active = false;
+      window.removeEventListener("incoc:data-changed", onDataChanged);
+    };
+  }, [authLoading, configured, isOwner, retryCount]);
+
+  const sharedContent = snapshot?.isOwner === isOwner ? snapshot.content : null;
+  const needsSharedContent = /^\/(song|songbook|schedule|slides|present)(\/|$)/.test(location.pathname);
+
+  if (needsSharedContent && (authLoading || sharedLoading || (!sharedContent && !sharedError))) {
+    return <LoadingPage title="Loading shared worship content" />;
+  }
+
+  if (needsSharedContent && !sharedContent) {
+    return <PageShell owner={isOwner}><ResourceMessage error={sharedError || "Shared content is unavailable."} retry={() => setRetryCount((count) => count + 1)} /></PageShell>;
+  }
+
   return <>
     <ScrollPositionRestoration />
     <Suspense fallback={<main className="route-loading" role="status">Loading INCOC South…</main>}>
+    {sharedError && sharedContent && <ResourceMessage error={`The latest shared content refresh failed: ${sharedError}`} retry={() => setRetryCount((count) => count + 1)} />}
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/song" element={<SongbookPage />} />
-      <Route path="/song/:songId" element={<SongDetailPage />} />
+      <Route path="/song" element={sharedContent && <SongbookPage songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
+      <Route path="/song/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} />} />
       <Route path="/songbook" element={<Navigate to="/song" replace />} />
       <Route path="/songbook/:songId" element={<SongbookSongRedirect />} />
-      <Route path="/schedule" element={<ScheduleListPage />} />
-      <Route path="/schedule/:scheduleId" element={<ScheduleDetailPage />} />
+      <Route path="/schedule" element={sharedContent && <ScheduleListPage schedules={sharedContent.schedules} refreshing={sharedRefreshing} />} />
+      <Route path="/schedule/:scheduleId" element={sharedContent && <ScheduleDetailPage schedules={sharedContent.schedules} songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
       <Route path="/schedule/:scheduleId/slides" element={<ScheduleSlidesRedirect />} />
-      <Route path="/slides" element={<SlidesPage />} />
-      <Route path="/present/:scheduleId" element={<PresentationPage />} />
+      <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} refreshing={sharedRefreshing} />} />
+      <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} refreshing={sharedRefreshing} />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
       <Route path="/admin" element={<OwnerOnly />}>
         <Route index element={<Navigate to="/admin/songs" replace />} />
-        <Route path="songs" element={<AdminSongsPage />} />
+        <Route path="songs" element={<AdminSongsPage songs={sharedContent?.songs ?? null} />} />
         <Route path="songs/new" element={<AdminSongCreatePage />} />
-        <Route path="songs/:songId" element={<AdminSongEditPage />} />
-        <Route path="schedules" element={<AdminSchedulesPage />} />
+        <Route path="songs/:songId" element={<AdminSongEditPage songs={sharedContent?.songs ?? null} />} />
+        <Route path="schedules" element={<AdminSchedulesPage schedules={sharedContent?.schedules ?? null} />} />
         <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
-        <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage />} />
+        <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
         <Route path="members" element={<AdminMembersPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>

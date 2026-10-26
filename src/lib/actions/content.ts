@@ -3,7 +3,6 @@ import { requireOwner } from "@/lib/auth-client";
 import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
 import { songEditorLanguageValues, songLanguageValues, songSectionValues } from "@/lib/domain/songs";
-import { invalidateSongCache } from "@/lib/song-cache";
 import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 function invalidateRouteData(path: string) {
@@ -603,7 +602,6 @@ export async function deleteSong(formData: FormData) {
     if (error.code === "23503") throw new Error("This song is used by a service schedule and cannot be deleted.");
     throw new Error(`Unable to delete song: ${error.message}`);
   }
-  invalidateSongCache(songId);
   invalidateRouteData("/admin/songs");
   invalidateRouteData("/song");
   const returnTo = getReturnPath(formData, "/admin/songs");

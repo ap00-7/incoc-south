@@ -1,24 +1,41 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense } from "react";
 import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
-import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { deleteSong } from "@/lib/actions/content";
-import { getCachedSong, getCachedSongSummary, invalidateSongCache, loadSong, type CachedSong } from "@/lib/song-cache";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 
 const SongEditorForm = lazy(() => import("@/components/admin/song-creation-form").then((module) => ({ default: module.SongEditorForm })));
 
+type SongForReading = {
+  id: string;
+  updated_at: string;
+  title: string;
+  language: string;
+  author: string | null;
+  source: string | null;
+  has_translation: boolean;
+  start_with_chorus: boolean;
+  song_sections: Array<{
+    id: string;
+    section_type: string;
+    label: string | null;
+    position: number;
+    lyrics: string;
+    translation: string | null;
+    translation_language: string | null;
+    is_hidden: boolean;
+  }>;
+};
+
 export function SongPageContent({
-  songId,
+  song,
   isOwner,
-  updatedAt,
   editOpen,
 }: {
-  songId: string;
+  song: SongForReading;
   isOwner: boolean;
-  updatedAt?: string;
   editOpen: boolean;
 }) {
   const location = useLocation();
@@ -30,73 +47,13 @@ export function SongPageContent({
   const backState = scheduleId ? undefined : { restoreSongbook: true };
   const backLabel = scheduleId ? "Back to Schedule" : "Back to Songbook";
   const returnLabel = scheduleId ? "Return to Schedule" : "Return to Songbook";
-  const [result, setResult] = useState<{ songId: string; updatedAt?: string; song: CachedSong | null; error: string } | null>(null);
-  const [refreshVersion, setRefreshVersion] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const refreshSong = useCallback(() => {
-    invalidateSongCache(songId);
-    setRefreshing(true);
-    setRefreshVersion((current) => current + 1);
-  }, [songId]);
-
-  useEffect(() => {
-    const cachedSong = getCachedSong(songId, updatedAt);
-    if (cachedSong) return;
-    let active = true;
-    void loadSong(songId, updatedAt).then((result) => {
-      if (active) {
-        setResult({ songId, updatedAt, song: result, error: "" });
-        setRefreshing(false);
-      }
-    }).catch((loadError: unknown) => {
-      if (active) {
-        setResult((current) => ({
-          songId,
-          updatedAt,
-          song: current?.songId === songId && current.updatedAt === updatedAt ? current.song : null,
-          error: loadError instanceof Error ? loadError.message : "Unable to load song.",
-        }));
-        setRefreshing(false);
-      }
-    });
-    return () => { active = false; };
-  }, [songId, isOwner, updatedAt, refreshVersion]);
-
-  const cachedSong = getCachedSong(songId, updatedAt);
-  const currentResult = result?.songId === songId && result.updatedAt === updatedAt ? result : null;
-  const song = cachedSong ?? currentResult?.song ?? null;
-  const error = currentResult?.error ?? "";
-  if (error && !song) return <article className="content-wrap">
-    <p className="notice notice-warning" role="alert">{error}</p>
-    <IntentPrefetchLink href={backHref} state={backState}>{returnLabel}</IntentPrefetchLink>
-  </article>;
-  if (currentResult && !currentResult.song) return <article className="content-wrap">
-    <p className="empty-state" role="status">This song is no longer available. <IntentPrefetchLink href={backHref} state={backState}>{returnLabel}</IntentPrefetchLink></p>
-  </article>;
-  if (!song || (updatedAt && song.updated_at !== updatedAt)) {
-    const summary = updatedAt ? getCachedSongSummary(songId, updatedAt) : null;
-    return <article className="content-wrap song-reading" role="status" aria-busy="true">
-      <IntentPrefetchLink href={backHref} state={backState} className="back-link"><ArrowLeft size={15} /> {backLabel}</IntentPrefetchLink>
-      <p className="muted">Loading song…</p>
-      {summary && <h1 className="detail-title">{summary.title}</h1>}
-    </article>;
-  }
 
   const labeledSections = labelSongSections(sequenceSongSections(song.song_sections ?? [], song.start_with_chorus));
   const translatedSections = song.has_translation ? labeledSections.filter(({ section }) => section.translation?.trim()) : [];
   return (
     <>
-      <RealtimeRefresh
-        subscriptions={[
-          { table: "songs", column: "id", value: songId },
-          { table: "song_sections", column: "song_id", value: songId },
-        ]}
-        onChange={refreshSong}
-      />
       <article className="content-wrap song-reading">
         <IntentPrefetchLink href={backHref} state={backState} className="back-link"><ArrowLeft size={15} /> {backLabel}</IntentPrefetchLink>
-        {error && <p className="notice notice-warning" role="alert">The latest song refresh failed. This content may be out of date. {error}</p>}
-        {refreshing && <p className="muted" role="status" aria-busy="true">Checking for song updates…</p>}
         <div className="song-lyrics-display">
           <h1 className="detail-title">{song.title}</h1>
           {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
@@ -129,7 +86,7 @@ export function SongPageContent({
                   source: song.source,
                   has_translation: song.has_translation,
                   start_with_chorus: song.start_with_chorus,
-                  sections: (song.song_sections ?? []).sort((first, second) => first.position - second.position).map((section) => ({
+                  sections: song.song_sections.map((section) => ({
                     id: section.id,
                     section_type: section.section_type,
                     label: section.label ?? "",
@@ -151,7 +108,6 @@ export function SongPageContent({
               message="This permanently deletes the song from the Songbook. A song used by a schedule cannot be deleted."
               className="button button-danger"
               pendingLabel="Deleting…"
-              onActionSuccess={() => invalidateSongCache(song.id)}
             >
               Delete song
             </ConfirmButton>
