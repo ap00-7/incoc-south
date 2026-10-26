@@ -13,6 +13,7 @@ import { SiteHeader } from "@/components/site-header";
 import { BrandMark } from "@/components/brand-mark";
 import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
+import { invalidateSongCache, loadSong } from "@/lib/song-cache";
 import { createClient } from "@/lib/supabase/browser";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { filterPresentationItems, generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
@@ -268,6 +269,30 @@ async function loadPublishedSchedules(page: number) {
   return { schedules: data ?? [], count: count ?? 0 };
 }
 
+type SongReference = { id: string; updated_at: string };
+type ProgrammeItemWithSongReference = {
+  song: SongReference | SongReference[] | null;
+};
+
+async function loadProgrammeItemsWithCachedSongs<T extends ProgrammeItemWithSongReference>(items: T[]) {
+  const references = new Map<string, SongReference>();
+  for (const item of items) {
+    const song = Array.isArray(item.song) ? item.song[0] : item.song;
+    if (song) references.set(song.id, song);
+  }
+
+  const loadedSongs = await Promise.all([...references.values()].map(async (song) => [
+    song.id,
+    await loadSong(song.id, song.updated_at),
+  ] as const));
+  const songsById = new Map(loadedSongs);
+
+  return items.map((item) => {
+    const song = Array.isArray(item.song) ? item.song[0] : item.song;
+    return { ...item, song: song ? songsById.get(song.id) ?? null : null };
+  });
+}
+
 function ScheduleListPage() {
   const { membership } = useAuth();
   const navigate = useNavigate();
@@ -405,13 +430,14 @@ function SlidesPage() {
     const supabase = createClient();
     if (scheduleId) {
       const baseQuery = supabase.from("schedules")
-        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(id, slug)")
+        .select("id, title, service_date, venue, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song_id, song:songs(id, updated_at)), church:churches!inner(id, slug)")
         .eq("id", scheduleId).eq("church.slug", "incoc-south");
       const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
       const { data, error } = await serviceQuery.maybeSingle();
       if (error) throw new Error(`Unable to load slide previews: ${error.message}`);
       if (!data) throw new Error("This service is not available.");
-      const slides = generateSlides(normalizeProgrammeItems(data.schedule_items ?? []));
+      const programmeItems = await loadProgrammeItemsWithCachedSongs(data.schedule_items ?? []);
+      const slides = generateSlides(normalizeProgrammeItems(programmeItems));
       return { schedule: data, groups: groupPresentationSlides(slides), schedules: [], count: 0, churchId: "" };
     }
     const baseQuery = supabase.from("schedules")
@@ -429,6 +455,7 @@ function SlidesPage() {
   }, [isOwner, membership?.churchId, page, scheduleId]);
   const resource = useAsyncResource(`slides:${scheduleId ?? "list"}:${page}:${isOwner ? "owner" : "viewer"}`, loadSlides);
   const schedule = resource.data?.schedule;
+  const scheduleSongIds = [...new Set((schedule?.schedule_items ?? []).flatMap((item) => item.song_id ? [item.song_id] : []))];
   const schedules = resource.data?.schedules ?? [];
   const hasNextPage = schedules.length > PAGE_SIZE;
   const loadPublishedServices = useCallback(() => loadPublishedSchedules(1), []);
@@ -459,8 +486,12 @@ function SlidesPage() {
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
+            ...scheduleSongIds.flatMap((songId) => [
+              { table: "songs" as const, column: "id", value: songId },
+              { table: "song_sections" as const, column: "song_id", value: songId },
+            ]),
             ...(schedule.church?.id ? [{ table: "schedules" as const, column: "church_id", value: schedule.church.id }] : []),
-          ]} onDelete={(deletedId) => {
+          ]} onChange={() => scheduleSongIds.forEach(invalidateSongCache)} onDelete={(deletedId) => {
             if (deletedId === schedule.id) navigate("/slides", { replace: true });
           }} />
           <div className="content-wrap slides-overview">
@@ -521,18 +552,18 @@ function PresentationPage() {
   const initialSlide = Number.isFinite(requested) ? requested : 0;
   const loadPresentation = useCallback(async () => {
     const baseQuery = createClient().from("schedules")
-      .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song:songs(id, title, has_translation, start_with_chorus, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden))), church:churches!inner(slug)")
+      .select("id, title, schedule_items(id, item_type, title, position, public_content, background_image_url, media_url, show_in_slides, song_id, song:songs(id, updated_at)), church:churches!inner(slug)")
       .eq("id", scheduleId).eq("church.slug", "incoc-south");
     const serviceQuery = isOwner ? baseQuery : baseQuery.eq("status", "published");
     const { data, error } = await serviceQuery.maybeSingle();
     if (error) throw new Error(`Unable to load presentation: ${error.message}`);
     if (!data) throw new Error("This presentation is not available.");
-    const items = data.schedule_items ?? [];
+    const items = await loadProgrammeItemsWithCachedSongs(data.schedule_items ?? []);
     const presentationItems = filterPresentationItems(normalizeProgrammeItems(items));
     return {
       schedule: data,
       slides: generateSlides(presentationItems),
-      songIds: presentationItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id)),
+      songIds: [...new Set(presentationItems.map((item) => item.song?.id).filter((id): id is string => Boolean(id)))],
     };
   }, [isOwner, scheduleId]);
   const resource = useAsyncResource(`presentation:${scheduleId}:${isOwner ? "owner" : "viewer"}`, loadPresentation);

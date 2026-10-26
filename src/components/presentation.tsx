@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
+import { invalidateSongCache } from "@/lib/song-cache";
 import { clampSlideIndex, getTouchSwipeSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
@@ -244,7 +245,7 @@ export function Presentation({
         ...(userId ? [{ table: "church_members" as const, column: "user_id", value: userId }] : []),
       ]} onDelete={(deletedId) => {
         if (deletedId === scheduleId) navigate("/slides", { replace: true });
-      }} />
+      }} onChange={() => songIds.forEach(invalidateSongCache)} />
       {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section
