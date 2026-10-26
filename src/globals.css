@@ -872,6 +872,18 @@ code, kbd, pre { font-family: var(--font-mono); }
 .presentation-document-viewer > * { max-width: 100%; max-height: 100%; }
 .presentation-document-viewer canvas { display: block; max-width: 100%; max-height: calc(100dvh - 160px); object-fit: contain; }
 .presentation-canvas-mount { position: absolute; inset: clamp(58px, 8vh, 88px) 5vw 88px; overflow: auto; background: #000; }
+:root:has(.presentation-page),
+body:has(.presentation-page),
+.presentation-page,
+.presentation-page .slide-stage,
+.presentation-page .presentation-document-viewer,
+.presentation-page .presentation-canvas-mount { scrollbar-width: none; -ms-overflow-style: none; }
+:root:has(.presentation-page)::-webkit-scrollbar,
+body:has(.presentation-page)::-webkit-scrollbar,
+.presentation-page::-webkit-scrollbar,
+.presentation-page .slide-stage::-webkit-scrollbar,
+.presentation-page .presentation-document-viewer::-webkit-scrollbar,
+.presentation-page .presentation-canvas-mount::-webkit-scrollbar { display: none; }
 .presentation-canvas-frame { display: grid; place-items: center; background: #000; }
 .presentation-cached-slide { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; background: #000; }
 .presentation-document-viewer .presentation-pdf-preload-page { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
