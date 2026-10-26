@@ -317,7 +317,8 @@ export function Presentation({
                   ));
                 }}
               />
-            </>
+            </Suspense>
+          </>
           : current && isScripture ? <>
             {current.backgroundImageUrl && <img className="scripture-slide-background" src={current.backgroundImageUrl} alt="" />}
             {current.backgroundImageUrl && <div className="scripture-slide-overlay" />}
