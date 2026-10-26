@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, type ErrorInfo, type ReactNode, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
@@ -77,10 +77,17 @@ export function Presentation({
   const [syncError, setSyncError] = useState("");
   const [documentPageInfo, setDocumentPageInfo] = useState<{ sourceKey: string; count: number }>({ sourceKey: "", count: 0 });
   const swipeStart = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const navigationRef = useRef<HTMLElement>(null);
+  const previousItemIndex = useRef(selectedItemIndex);
   const positionRef = useRef<PresentationPosition>(initialPosition);
   const currentGroupIndex = clampSlideIndex(selectedItemIndex, groups.length);
   const currentGroup = groups[currentGroupIndex];
   const isDocument = currentGroup?.itemType === "presentation";
+  const isPdf = Boolean(currentGroup && (
+    currentGroup.presentationMimeType?.toLowerCase() === "application/pdf"
+    || currentGroup.presentationFileName?.toLowerCase().endsWith(".pdf")
+  ));
+  const isPptx = isDocument && !isPdf;
   const documentSourceKey = isDocument ? `${currentGroup.itemId}:${currentGroup.slides[0]?.mediaUrl ?? ""}` : "";
   const documentSourceKeyRef = useRef(documentSourceKey);
   documentSourceKeyRef.current = documentSourceKey;
@@ -89,6 +96,16 @@ export function Presentation({
   const currentSlideIndex = clampSlideIndex(slideIndex, visibleSlideCount);
   const current = currentGroup?.slides[isDocument ? 0 : currentSlideIndex];
   const previousDocumentSource = useRef({ itemId: isDocument ? currentGroup.itemId : "", sourceKey: documentSourceKey });
+
+  useLayoutEffect(() => {
+    if (previousItemIndex.current !== selectedItemIndex) {
+      const focusedControl = document.activeElement;
+      if (focusedControl instanceof HTMLElement && navigationRef.current?.contains(focusedControl)) {
+        focusedControl.blur();
+      }
+      previousItemIndex.current = selectedItemIndex;
+    }
+  }, [selectedItemIndex]);
 
   useEffect(() => {
     if (!documentSourceKey) return;
@@ -211,7 +228,9 @@ export function Presentation({
     if (isCurrentDocument && pageCount === 0) return;
     const safeIndex = clampSlideIndex(currentPosition.slideIndex + direction, pageCount);
     if (safeIndex === currentPosition.slideIndex) {
-      if (isCurrentDocument) await moveItem(direction);
+      if (isCurrentDocument && !(isPptx && direction < 0 && currentPosition.slideIndex === 0)) {
+        await moveItem(direction);
+      }
       return;
     }
     const nextPosition = { itemIndex, slideIndex: safeIndex };
@@ -232,7 +251,7 @@ export function Presentation({
       })
       .eq("schedule_id", scheduleId);
     if (error) setSyncError(`Slide changed locally, but could not update the shared presentation: ${error.message}`);
-  }, [documentPageInfo, groups, isOwner, moveItem, scheduleId, syncActive, userId]);
+  }, [documentPageInfo, groups, isOwner, isPptx, moveItem, scheduleId, syncActive, userId]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -372,12 +391,12 @@ export function Presentation({
             </div>
           </> : <p className="slide-empty">There are no slides in this service yet.</p>}
       </section>
-      <nav className="presentation-bottom-controls" aria-label="Presentation item navigation">
+      <nav ref={navigationRef} className="presentation-bottom-controls" aria-label="Presentation item navigation">
         <button
           type="button"
           onClick={() => { void (isDocument ? moveSlide(-1) : moveItem(-1)); }}
           disabled={isDocument
-            ? (documentPageCount === 0 || (currentSlideIndex === 0 && currentGroupIndex === 0) || (syncActive && !isOwner))
+            ? (documentPageCount === 0 || (isPptx && currentSlideIndex === 0) || (!isPptx && currentSlideIndex === 0 && currentGroupIndex === 0) || (syncActive && !isOwner))
             : currentGroupIndex === 0 || (syncActive && !isOwner)}
           aria-label={isDocument ? "Previous page" : "Previous item"}
         ><ChevronLeft size={21} /></button>
