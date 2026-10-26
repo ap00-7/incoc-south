@@ -542,7 +542,7 @@ html { color-scheme: dark; }
 .schedule-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .schedule-editor-actions form { margin: 0; }
 .song-reading.content-wrap { max-width: 1120px; padding-top: 24px; }
-.song-reading .back-link { margin-bottom: 12px; }
+.song-reading .back-link { margin-bottom: 6px; }
 .song-reading .detail-title { font-size: clamp(28px, 4vw, 38px); line-height: 1.2; text-align: center; }
 .song-reading-divider { width: min(100%, 900px); margin: 13px auto 21px; background: #363636; }
 .song-reading .lyrics-section, .song-reading .song-translation-section { width: min(100%, 900px); margin-inline: auto; text-align: center; }
@@ -1255,7 +1255,7 @@ body {
 }
 
 .song-lyrics-display {
-  margin-top: 20px;
+  margin-top: 8px;
   padding: clamp(20px, 4vw, 40px);
   border-radius: 10px;
 }
