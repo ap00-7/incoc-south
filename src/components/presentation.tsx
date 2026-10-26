@@ -216,7 +216,7 @@ export function Presentation({
     if (error) setSyncError(`Item changed locally, but could not update the shared presentation: ${error.message}`);
   }, [groups, isOwner, scheduleId, syncActive, userId]);
 
-  const moveSlide = useCallback(async (direction: -1 | 1, allowPreviousDocumentItem = false) => {
+  const moveSlide = useCallback(async (direction: -1 | 1) => {
     if (syncActive && !isOwner) return;
     const currentPosition = positionRef.current;
     const itemIndex = clampSlideIndex(currentPosition.itemIndex, groups.length);
@@ -230,7 +230,6 @@ export function Presentation({
     const safeIndex = clampSlideIndex(currentPosition.slideIndex + direction, pageCount);
     if (safeIndex === currentPosition.slideIndex) {
       if (isCurrentDocument && direction > 0 && currentPosition.slideIndex >= pageCount - 1) await moveItem(1);
-      else if (isCurrentDocument && direction < 0 && allowPreviousDocumentItem) await moveItem(-1);
       return;
     }
     const nextPosition = { itemIndex, slideIndex: safeIndex };
@@ -415,20 +414,16 @@ export function Presentation({
       <nav ref={navigationRef} className="presentation-bottom-controls" aria-label="Presentation item navigation">
         <button
           type="button"
-          onClick={() => { void (isDocument ? moveSlide(-1, true) : moveItem(-1)); }}
-          disabled={isDocument
-            ? (documentPageCount === 0 || (isPptx && currentSlideIndex === 0) || (!isPptx && currentSlideIndex === 0 && currentGroupIndex === 0) || (syncActive && !isOwner))
-            : currentGroupIndex === 0 || (syncActive && !isOwner)}
-          aria-label={isDocument ? "Previous page" : "Previous item"}
+          onClick={() => { void moveItem(-1); }}
+          disabled={currentGroupIndex === 0 || (syncActive && !isOwner)}
+          aria-label="Previous item"
         ><ChevronLeft size={21} /></button>
         <button type="button" onClick={() => navigate(`/slides?scheduleId=${encodeURIComponent(scheduleId)}`)} aria-label="Home: return to slide overview"><Home size={19} /></button>
         <button
           type="button"
-          onClick={() => { void (isDocument ? moveSlide(1) : moveItem(1)); }}
-          disabled={isDocument
-            ? (documentPageCount === 0 || (currentSlideIndex >= documentPageCount - 1 && currentGroupIndex >= groups.length - 1) || (syncActive && !isOwner))
-            : currentGroupIndex >= groups.length - 1 || (syncActive && !isOwner)}
-          aria-label={isDocument ? "Next page" : "Next item"}
+          onClick={() => { void moveItem(1); }}
+          disabled={currentGroupIndex >= groups.length - 1 || (syncActive && !isOwner)}
+          aria-label="Next item"
         ><ChevronRight size={21} /></button>
       </nav>
       <span className="presentation-slide-counter" aria-live="polite">{currentGroup ? `${currentSlideIndex + 1} / ${visibleSlideCount || "…"}` : "0 / 0"}</span>
