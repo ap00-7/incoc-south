@@ -871,8 +871,9 @@ code, kbd, pre { font-family: var(--font-mono); }
 .presentation-document-viewer { position: absolute; inset: 0; display: grid; place-items: center; overflow: auto; padding: clamp(58px, 8vh, 88px) 5vw 88px; }
 .presentation-document-viewer > * { max-width: 100%; max-height: 100%; }
 .presentation-document-viewer canvas { display: block; max-width: 100%; max-height: calc(100dvh - 160px); object-fit: contain; }
-.presentation-canvas-mount { position: absolute; inset: clamp(58px, 8vh, 88px) 5vw 88px; display: grid; place-items: center; overflow: hidden; }
-.presentation-cached-slide { width: 100%; height: 100%; }
+.presentation-canvas-mount { position: absolute; inset: clamp(58px, 8vh, 88px) 5vw 88px; overflow: auto; }
+.presentation-canvas-frame { display: grid; place-items: center; }
+.presentation-cached-slide { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; transform-origin: center; }
 .presentation-document-viewer .presentation-pdf-preload-page { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
 .presentation-document-viewer .react-pdf__Page { max-width: 100%; }
 .presentation-document-error { position: relative; z-index: 2; max-width: min(90vw, 720px); color: #ffb4a8; text-align: center; }

@@ -12,6 +12,7 @@ type PresentationDocumentViewerProps = {
   fileName: string | null;
   mimeType: string | null;
   pageIndex: number;
+  zoom: number;
   onPageCount: (count: number) => void;
 };
 
@@ -20,12 +21,13 @@ export function PresentationDocumentViewer({
   fileName,
   mimeType,
   pageIndex,
+  zoom,
   onPageCount,
 }: PresentationDocumentViewerProps) {
   const isPdf = mimeType === "application/pdf" || fileName?.toLowerCase().endsWith(".pdf");
   return isPdf
     ? <PdfDocumentViewer source={source} pageIndex={pageIndex} onPageCount={onPageCount} />
-    : <PptxDocumentViewer source={source} pageIndex={pageIndex} onPageCount={onPageCount} />;
+    : <PptxDocumentViewer source={source} pageIndex={pageIndex} zoom={zoom} onPageCount={onPageCount} />;
 }
 
 function PdfDocumentViewer({
@@ -81,9 +83,10 @@ function PdfDocumentViewer({
 function PptxDocumentViewer({
   source,
   pageIndex,
+  zoom,
   onPageCount,
-}: Pick<PresentationDocumentViewerProps, "source" | "pageIndex" | "onPageCount">) {
-  const container = useRef<HTMLDivElement>(null);
+}: Pick<PresentationDocumentViewerProps, "source" | "pageIndex" | "zoom" | "onPageCount">) {
+  const frame = useRef<HTMLDivElement>(null);
   const prepareRef = useRef<((startIndex: number) => Promise<void>) | null>(null);
   const pendingAssetCleanup = useRef<(() => void) | null>(null);
   const cachedSlides = useRef<Array<HTMLCanvasElement | undefined>>([]);
@@ -108,7 +111,7 @@ function PptxDocumentViewer({
     setFailedSlide(null);
     setPresentationReady(false);
     setError("");
-    if (container.current) container.current.replaceChildren();
+    if (frame.current) frame.current.replaceChildren();
 
     const prepareFrom = async (deck: PptxPresentation, startIndex: number) => {
       if (!active) return;
@@ -219,26 +222,34 @@ function PptxDocumentViewer({
         canvas.height = 0;
       }
       cachedSlides.current = [];
-      if (container.current) container.current.replaceChildren();
+      if (frame.current) frame.current.replaceChildren();
     };
   }, [retryOpenVersion, source]);
 
   useLayoutEffect(() => {
     const canvas = cachedSlides.current[pageIndex];
-    if (!container.current) return;
+    if (!frame.current) return;
     if (canvas) {
       canvas.className = "presentation-cached-slide";
       canvas.setAttribute("role", "img");
       canvas.setAttribute("aria-label", `Slide ${pageIndex + 1} of ${slideCount}`);
-      if (container.current.firstChild !== canvas) container.current.replaceChildren(canvas);
-    } else if (container.current.childNodes.length > 0) {
-      container.current.replaceChildren();
+      canvas.style.maxWidth = `${100 / zoom}%`;
+      canvas.style.maxHeight = `${100 / zoom}%`;
+      canvas.style.transform = `scale(${zoom})`;
+      if (frame.current.firstChild !== canvas) frame.current.replaceChildren(canvas);
+    } else if (frame.current.childNodes.length > 0) {
+      frame.current.replaceChildren();
     }
-  }, [cacheVersion, pageIndex, slideCount]);
+  }, [cacheVersion, pageIndex, slideCount, zoom]);
 
   return (
     <div className="presentation-document-viewer">
-      <div className="presentation-canvas-mount" ref={container} />
+      <div className="presentation-canvas-mount" ref={container}>
+        <div className="presentation-canvas-frame" ref={frame} style={{
+          width: `${Math.max(1, zoom) * 100}%`,
+          height: `${Math.max(1, zoom) * 100}%`,
+        }} />
+      </div>
       {!cachedSlides.current[pageIndex] && !error && <p className="slide-empty" role="status">
         {slideCount ? `Preparing slide ${pageIndex + 1} of ${slideCount}…` : "Loading PowerPoint presentation…"}
       </p>}

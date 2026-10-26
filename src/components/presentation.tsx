@@ -73,6 +73,7 @@ export function Presentation({
   const [selectedItemIndex, setSelectedItemIndex] = useState(initialPosition.itemIndex);
   const [slideIndex, setSlideIndex] = useState(initialPosition.slideIndex);
   const [lyricsZoom, setLyricsZoom] = useState(1);
+  const [presentationZoom, setPresentationZoom] = useState(1);
   const [syncActive, setSyncActive] = useState(false);
   const [syncError, setSyncError] = useState("");
   const [documentPageInfo, setDocumentPageInfo] = useState<{ sourceKey: string; count: number }>({ sourceKey: "", count: 0 });
@@ -215,7 +216,7 @@ export function Presentation({
     if (error) setSyncError(`Item changed locally, but could not update the shared presentation: ${error.message}`);
   }, [groups, isOwner, scheduleId, syncActive, userId]);
 
-  const moveSlide = useCallback(async (direction: -1 | 1) => {
+  const moveSlide = useCallback(async (direction: -1 | 1, allowPreviousDocumentItem = false) => {
     if (syncActive && !isOwner) return;
     const currentPosition = positionRef.current;
     const itemIndex = clampSlideIndex(currentPosition.itemIndex, groups.length);
@@ -228,9 +229,8 @@ export function Presentation({
     if (isCurrentDocument && pageCount === 0) return;
     const safeIndex = clampSlideIndex(currentPosition.slideIndex + direction, pageCount);
     if (safeIndex === currentPosition.slideIndex) {
-      if (isCurrentDocument && !(isPptx && direction < 0 && currentPosition.slideIndex === 0)) {
-        await moveItem(direction);
-      }
+      if (isCurrentDocument && direction > 0 && currentPosition.slideIndex >= pageCount - 1) await moveItem(1);
+      else if (isCurrentDocument && direction < 0 && allowPreviousDocumentItem) await moveItem(-1);
       return;
     }
     const nextPosition = { itemIndex, slideIndex: safeIndex };
@@ -251,12 +251,30 @@ export function Presentation({
       })
       .eq("schedule_id", scheduleId);
     if (error) setSyncError(`Slide changed locally, but could not update the shared presentation: ${error.message}`);
-  }, [documentPageInfo, groups, isOwner, isPptx, moveItem, scheduleId, syncActive, userId]);
+  }, [documentPageInfo, groups, isOwner, moveItem, scheduleId, syncActive, userId]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target;
-      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(target.tagName))) return;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      const targetElement = target instanceof Element ? target : null;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && isPptx) {
+        const zoomDirection = event.key === "+" || (event.key === "=" && event.shiftKey)
+          ? 1
+          : event.key === "-" || event.key === "_"
+            ? -1
+            : 0;
+        if (zoomDirection || event.key === "0") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.repeat) return;
+          setPresentationZoom((zoom) => event.key === "0"
+            ? 1
+            : Math.min(2, Math.max(0.5, Math.round((zoom + zoomDirection * 0.1) * 10) / 10)));
+          return;
+        }
+      }
+      if (targetElement?.closest("button, a")) return;
       if (event.ctrlKey && !event.metaKey && !event.altKey) {
         const zoomDirection = event.key === "+" || event.key === "="
           ? 1
@@ -277,9 +295,11 @@ export function Presentation({
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === "ArrowRight" || event.key === " ") {
         event.preventDefault();
+        event.stopPropagation();
         void moveSlide(1);
       } else if (event.key === "ArrowLeft") {
         event.preventDefault();
+        event.stopPropagation();
         void moveSlide(-1);
       } else if (event.key === "Home") {
         event.preventDefault();
@@ -288,7 +308,7 @@ export function Presentation({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [moveSlide, navigate, scheduleId]);
+  }, [isPptx, moveSlide, navigate, scheduleId]);
 
   const hasLyrics = Boolean(current?.lines.length || current?.translationLines?.length);
   const totalLyricLines = (current?.lines.length ?? 0) + (current?.translationLines?.length ?? 0);
@@ -349,6 +369,7 @@ export function Presentation({
                     fileName={current.presentationFileName ?? null}
                     mimeType={current.presentationMimeType ?? null}
                     pageIndex={currentSlideIndex}
+                    zoom={presentationZoom}
                     onPageCount={(count) => {
                       if (documentSourceKeyRef.current !== documentSourceKey) return;
                       setDocumentPageInfo((currentInfo) => (
@@ -394,7 +415,7 @@ export function Presentation({
       <nav ref={navigationRef} className="presentation-bottom-controls" aria-label="Presentation item navigation">
         <button
           type="button"
-          onClick={() => { void (isDocument ? moveSlide(-1) : moveItem(-1)); }}
+          onClick={() => { void (isDocument ? moveSlide(-1, true) : moveItem(-1)); }}
           disabled={isDocument
             ? (documentPageCount === 0 || (isPptx && currentSlideIndex === 0) || (!isPptx && currentSlideIndex === 0 && currentGroupIndex === 0) || (syncActive && !isOwner))
             : currentGroupIndex === 0 || (syncActive && !isOwner)}
