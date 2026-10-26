@@ -346,7 +346,7 @@ export async function saveSong(formData: FormData) {
       if (cleanupError) throw new Error(`Song sections could not be saved (${sectionError.message}), and cleanup failed (${cleanupError.message}). Review the new song before retrying.`);
       throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
     }
-    invalidateRouteData("/song");
+    invalidateRouteData("/songs");
     invalidateRouteData("/admin/songs");
     return { redirectTo: getReturnPath(formData, `/admin/songs/${song.id}`) };
   }
@@ -422,8 +422,8 @@ export async function saveSong(formData: FormData) {
     const { error } = await supabase.from("song_sections").insert(newSectionRows);
     if (error) throw new Error(`Unable to save new lyric sections: ${error.message}`);
   }
-  invalidateRouteData("/song");
-  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData("/songs");
+  invalidateRouteData(`/songs/${songId}`);
   invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: getReturnPath(formData, `/admin/songs/${songId}`) };
 }
@@ -469,7 +469,7 @@ export async function createSong(formData: FormData) {
     }
     throw new Error(`Song sections could not be saved, so the new song was removed: ${sectionError.message}`);
   }
-  invalidateRouteData("/song");
+  invalidateRouteData("/songs");
   invalidateRouteData("/admin/songs");
   return { redirectTo: `/admin/songs/${song.id}` };
 }
@@ -495,8 +495,8 @@ export async function updateSong(formData: FormData) {
   }).eq("id", songId).eq("church_id", member.churchId).eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
   if (error) throw new Error(`Unable to update song: ${error.message}`);
   if (!data) throw new Error("This song was changed by another owner. Reload the page and review the latest version before saving.");
-  invalidateRouteData("/song");
-  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData("/songs");
+  invalidateRouteData(`/songs/${songId}`);
   invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
@@ -531,7 +531,7 @@ export async function updateSongSection(formData: FormData) {
     .select("id").maybeSingle();
   if (error) throw new Error(`Unable to update lyric section: ${error.message}`);
   if (!data) throw new Error("This lyric section was changed by another owner. Reload and review the latest version.");
-  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/songs/${songId}`);
   invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
@@ -561,7 +561,7 @@ export async function addSongSection(formData: FormData) {
     position: (sections?.[0]?.position ?? -1) + 1,
   });
   if (error) throw new Error(`Unable to add lyric section: ${error.message}`);
-  invalidateRouteData(`/song/${songId}`);
+  invalidateRouteData(`/songs/${songId}`);
   invalidateRouteData(`/admin/songs/${songId}`);
   return { redirectTo: `/admin/songs/${songId}` };
 }
@@ -575,7 +575,7 @@ export async function moveSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.rpc("move_song_section", { target_section: sectionId, direction });
   if (error) throw new Error(`Unable to reorder lyric section: ${error.message}`);
-  invalidateRouteData(`/song/${section.song_id}`);
+  invalidateRouteData(`/songs/${section.song_id}`);
   invalidateRouteData(`/admin/songs/${section.song_id}`);
   return { redirectTo: `/admin/songs/${section.song_id}` };
 }
@@ -588,7 +588,7 @@ export async function deleteSongSection(formData: FormData) {
   if (lookupError) throw new Error(`Unable to find lyric section: ${lookupError.message}`);
   const { error } = await supabase.from("song_sections").delete().eq("id", sectionId);
   if (error) throw new Error(`Unable to delete lyric section: ${error.message}`);
-  invalidateRouteData(`/song/${section.song_id}`);
+  invalidateRouteData(`/songs/${section.song_id}`);
   invalidateRouteData(`/admin/songs/${section.song_id}`);
   return { redirectTo: `/admin/songs/${section.song_id}` };
 }
@@ -603,9 +603,9 @@ export async function deleteSong(formData: FormData) {
     throw new Error(`Unable to delete song: ${error.message}`);
   }
   invalidateRouteData("/admin/songs");
-  invalidateRouteData("/song");
+  invalidateRouteData("/songs");
   const returnTo = getReturnPath(formData, "/admin/songs");
-  return { redirectTo: returnTo === "/admin/songs" ? "/song" : returnTo };
+  return { redirectTo: returnTo === "/admin/songs" ? "/songs" : returnTo };
 }
 
 export async function createSchedule(formData: FormData) {

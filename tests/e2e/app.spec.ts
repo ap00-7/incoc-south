@@ -15,7 +15,7 @@ test("About page explains the app and keeps header navigation focused", async ({
   await expect(page.getByText(/supports organized worship and Sunday service preparation/i)).toBeVisible();
   const primaryNavigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(primaryNavigation.getByRole("link")).toHaveCount(2);
-  await expect(primaryNavigation.getByRole("link", { name: "Songbook" })).toHaveAttribute("href", "/song");
+  await expect(primaryNavigation.getByRole("link", { name: "Songbook" })).toHaveAttribute("href", "/songs");
   await expect(primaryNavigation.getByRole("link", { name: "Schedule" })).toHaveAttribute("href", "/schedule");
   await expect(primaryNavigation.getByRole("link", { name: "Slides" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /theme/i })).toHaveCount(0);
@@ -38,8 +38,8 @@ test("public and owner route shells avoid horizontal overflow across viewport si
   test.setTimeout(90_000);
   const routes = [
     "/",
-    "/song",
-    "/song/00000000-0000-0000-0000-000000000001",
+    "/songs",
+    "/songs/00000000-0000-0000-0000-000000000001",
     "/schedule",
     "/schedule/00000000-0000-0000-0000-000000000001",
     "/slides",
@@ -78,7 +78,7 @@ test("section footers provide sign-in links only on landing pages and preserve t
   await page.goto("/");
   await expect(page.locator(".site-footer-auth")).toHaveCount(0);
 
-  for (const path of ["/song", "/schedule", "/slides"]) {
+  for (const path of ["/songs", "/schedule", "/slides"]) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
     const signInLink = page.getByRole("link", { name: "Sign in" });
     await expect(signInLink).toBeVisible();
@@ -88,7 +88,7 @@ test("section footers provide sign-in links only on landing pages and preserve t
     await expect(page.locator(".page-main")).toBeVisible();
   }
 
-  await page.goto("/song/00000000-0000-0000-0000-000000000001");
+  await page.goto("/songs/00000000-0000-0000-0000-000000000001");
   await expect(page.locator(".site-footer-auth")).toHaveCount(0);
   await page.goto("/schedule/00000000-0000-0000-0000-000000000001");
   await expect(page.locator(".site-footer-auth")).toHaveCount(0);
@@ -134,12 +134,12 @@ test("custom dropdown supports keyboard selection and stays inside the viewport"
 });
 
 test("main navigation is home-only across direct visits and browser history", async ({ page }) => {
-  await page.goto("/song");
+  await page.goto("/songs");
   await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation).toBeVisible();
   await navigation.getByRole("link", { name: "Songbook" }).click();
-  await expect(page).toHaveURL(/\/song$/);
+  await expect(page).toHaveURL(/\/songs$/);
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
   await page.goBack();
   await expect(page).toHaveURL("/");
@@ -151,7 +151,7 @@ test("main navigation is home-only across direct visits and browser history", as
   await expect(page).toHaveURL("/");
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(/\/song$/);
+  await expect(page).toHaveURL(/\/songs$/);
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
   await page.goForward();
   await expect(page).toHaveURL("/");
@@ -160,8 +160,8 @@ test("main navigation is home-only across direct visits and browser history", as
   await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
 
   const routes = [
-    "/song",
-    "/song/00000000-0000-0000-0000-000000000001",
+    "/songs",
+    "/songs/00000000-0000-0000-0000-000000000001",
     "/songbook/00000000-0000-0000-0000-000000000001",
     "/schedule",
     "/schedule/00000000-0000-0000-0000-000000000001",
@@ -179,6 +179,17 @@ test("main navigation is home-only across direct visits and browser history", as
     await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
     await expect(page.locator(".site-header")).toHaveCount(0);
   }
+});
+
+test("legacy song routes redirect to /songs and preserve IDs and query parameters", async ({ page }) => {
+  await page.goto("/song?create=1&q=Grace");
+  await expect(page).toHaveURL(/\/songs\?create=1&q=Grace$/);
+
+  await page.goto("/song/00000000-0000-0000-0000-000000000001?edit=1#owner-edit");
+  await expect(page).toHaveURL(/\/songs\/00000000-0000-0000-0000-000000000001\?edit=1#owner-edit$/);
+
+  await page.goto("/songbook/00000000-0000-0000-0000-000000000001?from=legacy");
+  await expect(page).toHaveURL(/\/songs\/00000000-0000-0000-0000-000000000001\?from=legacy$/);
 });
 
 test("the custom cross icon is served", async ({ request }) => {
@@ -201,7 +212,7 @@ test("sign-in page identifies the church and explains membership access", async 
 test("public content routes do not require sign-in", async ({ page }) => {
   test.skip(!disposablePublicContentDatabase, "Use a non-production disposable Supabase test database.");
   for (const [path, heading] of [
-    ["/song", "Songbook"],
+    ["/songs", "Songbook"],
     ["/schedule", "Sunday Schedule"],
     ["/slides", "Slides"],
   ]) {

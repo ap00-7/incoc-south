@@ -34,7 +34,7 @@ export function SongbookSearch({
     const params = new URLSearchParams();
     if (nextTitle.trim()) params.set("q", nextTitle.trim());
     if (nextLanguage) params.set("language", nextLanguage);
-    const href = params.size ? `/song?${params.toString()}` : "/song";
+    const href = params.size ? `/songs?${params.toString()}` : "/songs";
     appliedFiltersRef.current = `${nextTitle.trim()}|${nextLanguage}`;
     navigate(href, { replace });
   }, [navigate]);
@@ -75,7 +75,7 @@ export function SongbookSearch({
     } else if (event.key === "Enter" && open && suggestions.length) {
       event.preventDefault();
       const song = suggestions[activeIndex >= 0 ? activeIndex : 0];
-      navigate(`/song/${song.id}`);
+      navigate(`/songs/${song.id}`);
       setOpen(false);
     } else if (event.key === "Escape") {
       setOpen(false);
@@ -124,7 +124,7 @@ export function SongbookSearch({
           <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>
             <Link
               className="song-suggestion-link"
-              to={`/song/${song.id}`}
+              to={`/songs/${song.id}`}
               state={{ songOrigin: "songbook" }}
               onClick={() => {
                 if (blurTimerRef.current) clearTimeout(blurTimerRef.current);

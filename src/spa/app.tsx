@@ -55,7 +55,7 @@ function ScrollPositionRestoration() {
     let restored = false;
     const savedPosition = navigationType === "POP"
       ? routeScrollPositions.get(location.key)
-      : location.pathname === "/song" && (location.state as { restoreSongbook?: boolean } | null)?.restoreSongbook
+      : location.pathname === "/songs" && (location.state as { restoreSongbook?: boolean } | null)?.restoreSongbook
         ? { x: 0, y: songbookScrollPosition }
         : undefined;
     const restore = () => {
@@ -106,7 +106,7 @@ function ScrollPositionRestoration() {
       mutationObserver?.disconnect();
       const position = readPosition();
       routeScrollPositions.set(location.key, position);
-      if (location.pathname === "/song") songbookScrollPosition = position.y;
+      if (location.pathname === "/songs") songbookScrollPosition = position.y;
     };
   }, [location.key, location.pathname, location.state, navigationType]);
   return null;
@@ -184,9 +184,9 @@ async function loadSharedContent(isOwner: boolean) {
 type SharedContent = Awaited<ReturnType<typeof loadSharedContent>>;
 
 function safeReturnTo(candidate: string | null) {
-  if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/song";
+  if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/songs";
   const target = new URL(candidate, window.location.origin);
-  if (target.origin !== window.location.origin || ["/login", "/auth/callback"].includes(target.pathname)) return "/song";
+  if (target.origin !== window.location.origin || ["/login", "/auth/callback"].includes(target.pathname)) return "/songs";
   return `${target.pathname}${target.search}${target.hash}`;
 }
 
@@ -249,7 +249,7 @@ function SongbookPage({ songs, refreshing }: { songs: SharedContent["songs"]; re
   const pageHref = (targetPage: number) => {
     const params = new URLSearchParams(filters);
     params.set("page", String(targetPage));
-    return `/song?${params.toString()}`;
+    return `/songs?${params.toString()}`;
   };
 
   return <PageShell owner={membership?.role === "owner"}>
@@ -257,11 +257,11 @@ function SongbookPage({ songs, refreshing }: { songs: SharedContent["songs"]; re
     <div className="content-wrap">
       <div className="section-heading"><h1>Songbook</h1></div>
       {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
-        <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/song" /></Suspense>
+        <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/songs" /></Suspense>
       </details>}
       <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
       {visibleSongs.length ? <div className="results-list songbook-results-list">
-        {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/song/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
+        {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/songs/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
       </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
       {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Songbook pages">
         {page > 1 && <Link className="button button-secondary" to={pageHref(page - 1)}>Previous songs</Link>}
@@ -369,7 +369,7 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
             {schedule.schedule_items.map((item) => {
               const song = item.song_id ? songById.get(item.song_id) : null;
               const primary = song
-                ? <><span>Song: </span><Link className="song-title-link" to={`/song/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>
+                ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>
                 : item.leader_name && item.public_content
                   ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
                   : item.leader_name
@@ -784,11 +784,11 @@ function AuthCallbackPage() {
 }
 
 function AccessDeniedPage() {
-  return <PageShell><div className="content-wrap"><p className="eyebrow">ACCESS CONTROL</p><h1>Access restricted</h1><p>You need an active church membership to use owner tools.</p><Link className="button button-secondary" to="/song">Return to the Songbook</Link></div></PageShell>;
+  return <PageShell><div className="content-wrap"><p className="eyebrow">ACCESS CONTROL</p><h1>Access restricted</h1><p>You need an active church membership to use owner tools.</p><Link className="button button-secondary" to="/songs">Return to the Songbook</Link></div></PageShell>;
 }
 
 function NotFoundPage() {
-  return <PageShell><div className="content-wrap"><h1>Page not found</h1><p>The page you requested is not available.</p><Link to="/song">Return to the Songbook</Link></div></PageShell>;
+  return <PageShell><div className="content-wrap"><h1>Page not found</h1><p>The page you requested is not available.</p><Link to="/songs">Return to the Songbook</Link></div></PageShell>;
 }
 
 export function App() {
@@ -870,7 +870,7 @@ export function App() {
   }, [authLoading, configured, isOwner, retryCount]);
 
   const sharedContent = snapshot?.isOwner === isOwner ? snapshot.content : null;
-  const needsSharedContent = /^\/(song|songbook|schedule|slides|present)(\/|$)/.test(location.pathname);
+  const needsSharedContent = /^\/(songs|schedule|slides|present)(\/|$)/.test(location.pathname);
 
   if (needsSharedContent && (authLoading || sharedLoading || (!sharedContent && !sharedError))) {
     return <LoadingPage title="Loading shared worship content" />;
@@ -886,10 +886,12 @@ export function App() {
     {sharedError && sharedContent && <ResourceMessage error={`The latest shared content refresh failed: ${sharedError}`} retry={() => setRetryCount((count) => count + 1)} />}
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/song" element={sharedContent && <SongbookPage songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
-      <Route path="/song/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} />} />
-      <Route path="/songbook" element={<Navigate to="/song" replace />} />
-      <Route path="/songbook/:songId" element={<SongbookSongRedirect />} />
+      <Route path="/songs" element={sharedContent && <SongbookPage songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
+      <Route path="/songs/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} />} />
+      <Route path="/song" element={<LegacySongRouteRedirect />} />
+      <Route path="/song/:songId" element={<LegacySongRouteRedirect />} />
+      <Route path="/songbook" element={<LegacySongRouteRedirect />} />
+      <Route path="/songbook/:songId" element={<LegacySongRouteRedirect />} />
       <Route path="/schedule" element={sharedContent && <ScheduleListPage schedules={sharedContent.schedules} refreshing={sharedRefreshing} />} />
       <Route path="/schedule/:scheduleId" element={sharedContent && <ScheduleDetailPage schedules={sharedContent.schedules} songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
       <Route path="/schedule/:scheduleId/slides" element={<ScheduleSlidesRedirect />} />
@@ -916,9 +918,14 @@ export function App() {
   </>;
 }
 
-function SongbookSongRedirect() {
-  const { songId = "" } = useParams();
-  return <Navigate to={`/song/${songId}`} replace />;
+function LegacySongRouteRedirect() {
+  const { songId } = useParams();
+  const location = useLocation();
+  return <Navigate to={{
+    pathname: songId ? `/songs/${songId}` : "/songs",
+    search: location.search,
+    hash: location.hash,
+  }} replace />;
 }
 
 function ScheduleSlidesRedirect() {

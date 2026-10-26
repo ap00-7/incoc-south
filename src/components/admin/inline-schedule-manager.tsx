@@ -430,7 +430,7 @@ export function InlineScheduleManager({
                 song_id: songId,
                 song_title: songs.find(({ id }) => id === songId)?.title ?? "",
               })}
-              onCreate={() => window.open("/song?create=1", "_blank", "noopener,noreferrer")}
+              onCreate={() => window.open("/songs?create=1", "_blank", "noopener,noreferrer")}
             />}
 
             {draft.item_type !== "song" && <>
@@ -536,7 +536,7 @@ function SongPicker({
             <button type="button" disabled={!selected} onClick={() => { onChange(""); setMenuOpen(false); }}>Clear</button>
             <button type="button" onClick={() => { setOpen(true); setMenuOpen(false); }}>Replace</button>
             {selected
-              ? <Link to={`/song/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
+              ? <Link to={`/songs/${selected.id}`} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>Open in new tab</Link>
               : <button type="button" onClick={() => { onCreate(); setMenuOpen(false); }}>Create in Songbook</button>}
           </div>}
         </div>

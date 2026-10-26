@@ -15,7 +15,7 @@ export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean;
           <span><strong>INCOC South</strong><small>Church in South Sector</small></span>
         </Link>
         {showNavigation && <nav className="primary-nav" aria-label="Main navigation">
-          <Link to="/song"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
+          <Link to="/songs"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
           <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
         </nav>}
         <div className="header-actions">

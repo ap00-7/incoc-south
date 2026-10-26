@@ -8,7 +8,7 @@ export function SiteFooter() {
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const searchParams = new URLSearchParams(search);
-  const footerSection = pathname === "/song"
+  const footerSection = pathname === "/songs"
     ? "songbook"
     : pathname === "/schedule" || /^\/schedule\/[^/]+$/.test(pathname)
       ? "schedule"

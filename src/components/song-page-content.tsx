@@ -43,7 +43,7 @@ export function SongPageContent({
   const scheduleId = navigationState?.songOrigin === "schedule" && typeof navigationState.scheduleId === "string" && navigationState.scheduleId
     ? navigationState.scheduleId
     : undefined;
-  const backHref = scheduleId ? `/schedule/${encodeURIComponent(scheduleId)}` : "/song";
+  const backHref = scheduleId ? `/schedule/${encodeURIComponent(scheduleId)}` : "/songs";
   const backState = scheduleId ? undefined : { restoreSongbook: true };
   const backLabel = scheduleId ? "Back to Schedule" : "Back to Songbook";
   const returnLabel = scheduleId ? "Return to Schedule" : "Return to Songbook";
@@ -76,7 +76,7 @@ export function SongPageContent({
             <summary>Edit song sections and translations</summary>
             <Suspense fallback={<p className="muted" role="status">Loading song editor…</p>}>
               <SongEditorForm
-                returnTo={`/song/${song.id}?edit=1#owner-edit`}
+                returnTo={`/songs/${song.id}?edit=1#owner-edit`}
                 song={{
                   id: song.id,
                   updated_at: song.updated_at,
@@ -101,7 +101,7 @@ export function SongPageContent({
           </details>
           <form className="delete-song-form">
             <input type="hidden" name="song_id" value={song.id} />
-            <input type="hidden" name="return_to" value="/song" />
+            <input type="hidden" name="return_to" value="/songs" />
             <ConfirmButton
               action={deleteSong}
               title="Delete song?"

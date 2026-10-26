@@ -18,5 +18,5 @@ export async function setInitialPassword(formData: FormData) {
   if (!userData.user.email_confirmed_at) throw new Error("Open the invitation link from your email before setting a password.");
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) throw new Error(`Unable to set password: ${error.message}`);
-  return { redirectTo: "/song" };
+  return { redirectTo: "/songs" };
 }
