@@ -72,6 +72,7 @@ function PdfDocumentViewer({
             className={index === pageIndex ? undefined : "presentation-pdf-preload-page"}
             pageNumber={index + 1}
             width={Math.min(width, 1600)}
+            canvasBackground="#000"
             renderTextLayer={false}
             renderAnnotationLayer={false}
           />)}
