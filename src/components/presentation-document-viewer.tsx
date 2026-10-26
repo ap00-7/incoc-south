@@ -59,7 +59,7 @@ function PdfDocumentViewer({
         loading={<p className="slide-empty" role="status">Loading PDF presentation…</p>}
         error={<p className="presentation-document-error" role="alert">{error || "Unable to render this PDF presentation."}</p>}
         onLoadSuccess={onLoadSuccess}
-        onLoadError={(loadError) => setError(`Unable to render this PDF presentation: ${loadError.message}`)}
+        onLoadError={(loadError) => setError(`Unable to render this PDF presentation: ${loadError.message || "The file could not be opened."}`)}
       >
         {width > 0 && <Page
           pageNumber={pageIndex + 1}
@@ -90,8 +90,15 @@ function PptxDocumentViewer({
           fit="contain"
           keyboard={false}
           loading={<p className="slide-empty" role="status">Loading PowerPoint presentation…</p>}
-          onLoad={(info) => onPageCount(info.slideCount)}
-          onError={(renderError) => setError(renderError.message)}
+          onLoad={(info) => {
+            if (info.slideCount < 1) {
+              setError("The PowerPoint file contains no slides.");
+              return;
+            }
+            setError("");
+            onPageCount(info.slideCount);
+          }}
+          onError={(renderError) => setError(renderError.message || "The file could not be opened.")}
         />}
     </div>
   );

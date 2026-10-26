@@ -1,5 +1,5 @@
+import { Component, type ErrorInfo, type ReactNode, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 import { clampSlideIndex, getTouchSwipeSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
@@ -7,6 +7,27 @@ import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 const PresentationDocumentViewer = lazy(() => import("@/components/presentation-document-viewer")
   .then((module) => ({ default: module.PresentationDocumentViewer })));
+
+class PresentationRendererErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("Presentation renderer failed to initialize.", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return <p className="presentation-document-error" role="alert">
+        Unable to initialize the presentation renderer: {this.state.error.message || "An unexpected error occurred."}
+      </p>;
+    }
+    return this.props.children;
+  }
+}
 
 type PresentationPosition = {
   itemIndex: number;
@@ -299,25 +320,28 @@ export function Presentation({
       >
         {current && fullscreenImageUrl
           ? <img className="presentation-fullscreen-image" src={fullscreenImageUrl} alt={current.itemTitle} />
-          : current && isDocument && current.mediaUrl ? <>
+          : current && isDocument ? <>
             <h1 className="slide-title">{current.itemTitle}</h1>
-            <Suspense fallback={<p className="slide-empty" role="status">Loading presentation renderer…</p>}>
-              <PresentationDocumentViewer
-                key={documentSourceKey}
-                source={current.mediaUrl}
-                fileName={current.presentationFileName ?? null}
-                mimeType={current.presentationMimeType ?? null}
-                pageIndex={currentSlideIndex}
-                onPageCount={(count) => {
-                  if (documentSourceKeyRef.current !== documentSourceKey) return;
-                  setDocumentPageInfo((currentInfo) => (
-                    currentInfo.sourceKey === documentSourceKey && currentInfo.count === count
-                      ? currentInfo
-                      : { sourceKey: documentSourceKey, count }
-                  ));
-                }}
-              />
-            </Suspense>
+            {current.mediaUrl
+              ? <PresentationRendererErrorBoundary key={documentSourceKey}>
+                <Suspense fallback={<p className="slide-empty" role="status">Loading presentation renderer…</p>}>
+                  <PresentationDocumentViewer
+                    source={current.mediaUrl}
+                    fileName={current.presentationFileName ?? null}
+                    mimeType={current.presentationMimeType ?? null}
+                    pageIndex={currentSlideIndex}
+                    onPageCount={(count) => {
+                      if (documentSourceKeyRef.current !== documentSourceKey) return;
+                      setDocumentPageInfo((currentInfo) => (
+                        currentInfo.sourceKey === documentSourceKey && currentInfo.count === count
+                          ? currentInfo
+                          : { sourceKey: documentSourceKey, count }
+                      ));
+                    }}
+                  />
+                </Suspense>
+              </PresentationRendererErrorBoundary>
+              : <p className="presentation-document-error" role="alert">This presentation has no file URL. Re-upload the PDF or PowerPoint file.</p>}
           </>
           : current && isScripture ? <>
             {current.backgroundImageUrl && <img className="scripture-slide-background" src={current.backgroundImageUrl} alt="" />}
