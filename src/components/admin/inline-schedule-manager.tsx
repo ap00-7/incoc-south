@@ -4,6 +4,7 @@ import {
   ArrowDown,
   ArrowUp,
   FileText,
+  FileUp,
   Film,
   ImagePlus,
   Link2,
@@ -47,6 +48,8 @@ type ScheduleItem = {
   link_title: string | null;
   link_url: string | null;
   media_url: string | null;
+  presentation_file_name: string | null;
+  presentation_mime_type: string | null;
   background_image_url: string | null;
   show_in_slides: boolean;
   show_in_schedule: boolean | null;
@@ -94,7 +97,23 @@ const mediaTypes: Record<string, string> = {
   "video/mp4": "mp4",
   "video/webm": "webm",
 };
+const presentationTypes: Record<string, { extension: string; mimeType: string }> = {
+  "application/pdf": { extension: "pdf", mimeType: "application/pdf" },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+    extension: "pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  },
+};
 const maxMediaSize = 50 * 1024 * 1024;
+
+function presentationTypeForFile(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension === "pdf"
+    ? presentationTypes["application/pdf"]
+    : extension === "pptx"
+      ? presentationTypes["application/vnd.openxmlformats-officedocument.presentationml.presentation"]
+      : null;
+}
 
 type Draft = {
   id?: string;
@@ -117,6 +136,8 @@ type Draft = {
   public_content: string;
   notes: string;
   media_url: string;
+  presentation_file_name: string;
+  presentation_mime_type: string;
   background_image_url: string;
   show_in_slides: boolean;
   show_in_schedule: boolean;
@@ -134,7 +155,7 @@ function emptyDraft(
     customTitle: false,
     customTitleValue: "",
     item_type: itemType,
-    title: itemType === "scripture_reading" ? "Scripture" : itemType === "song" ? "Communion Song" : "",
+    title: itemType === "scripture_reading" ? "Scripture" : itemType === "presentation" ? "Presentation" : itemType === "song" ? "Communion Song" : "",
     song_id: "",
     duration_minutes: "",
     leader_name: "",
@@ -145,6 +166,8 @@ function emptyDraft(
     public_content: "",
     notes: "",
     media_url: "",
+    presentation_file_name: "",
+    presentation_mime_type: "",
     background_image_url: "",
     show_in_slides: true,
     show_in_schedule: true,
@@ -154,15 +177,16 @@ function emptyDraft(
 function draftFromItem(item: ScheduleItem): Draft {
   const song = Array.isArray(item.song) ? item.song[0] : item.song;
   const isScripture = item.item_type === "scripture_reading";
+  const isPresentation = item.item_type === "presentation";
   return {
     id: item.id,
     tempId: item.id,
     expectedUpdatedAt: item.updated_at,
     song_title: song?.title ?? "",
-    customTitle: !isScripture && !itemTitles.some(([title]) => title === item.title),
-    customTitleValue: !isScripture && !itemTitles.some(([title]) => title === item.title) ? item.title : "",
+    customTitle: !isScripture && !isPresentation && !itemTitles.some(([title]) => title === item.title),
+    customTitleValue: !isScripture && !isPresentation && !itemTitles.some(([title]) => title === item.title) ? item.title : "",
     item_type: item.item_type,
-    title: isScripture ? "Scripture" : item.title,
+    title: isScripture ? "Scripture" : isPresentation ? "Presentation" : item.title,
     song_id: item.song_id ?? "",
     duration_minutes: item.duration_minutes?.toString() ?? "",
     leader_name: item.leader_name ?? "",
@@ -175,6 +199,8 @@ function draftFromItem(item: ScheduleItem): Draft {
     public_content: item.public_content ?? "",
     notes: item.notes ?? "",
     media_url: item.media_url ?? "",
+    presentation_file_name: item.presentation_file_name ?? "",
+    presentation_mime_type: item.presentation_mime_type ?? "",
     background_image_url: item.background_image_url ?? "",
     show_in_slides: item.show_in_slides,
     show_in_schedule: item.show_in_schedule !== false,
@@ -207,6 +233,7 @@ export function InlineScheduleManager({
 }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [selectedMedia, setSelectedMedia] = useState<File | null>(null);
+  const [selectedPresentation, setSelectedPresentation] = useState<File | null>(null);
   const [selectedBackground, setSelectedBackground] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -220,6 +247,7 @@ export function InlineScheduleManager({
     setDraft(emptyDraft(itemType, insertion));
     setContextMenuItemId(null);
     setSelectedMedia(null);
+    setSelectedPresentation(null);
     setSelectedBackground(null);
     setError("");
     setMediaValidation("");
@@ -229,6 +257,7 @@ export function InlineScheduleManager({
     setDraft(draftFromItem(item));
     setContextMenuItemId(null);
     setSelectedMedia(null);
+    setSelectedPresentation(null);
     setSelectedBackground(null);
     setError("");
     setMediaValidation("");
@@ -239,6 +268,7 @@ export function InlineScheduleManager({
     setDraft(null);
     setContextMenuItemId(null);
     setSelectedMedia(null);
+    setSelectedPresentation(null);
     setSelectedBackground(null);
     setError("");
     setMediaValidation("");
@@ -246,15 +276,18 @@ export function InlineScheduleManager({
 
   async function uploadMedia(file: File, itemKey: string, kind: "media" | "background") {
     const supabase = createClient();
-    const extension = mediaTypes[file.type];
+    const presentationType = kind === "media" && draft?.item_type === "presentation"
+      ? presentationTypeForFile(file)
+      : null;
+    const extension = presentationType?.extension ?? mediaTypes[file.type];
     if (!extension) throw new Error("This media format is not supported.");
     const path = `${churchId}/${schedule.id}/${itemKey}/${kind}-${crypto.randomUUID()}.${extension}`;
     const { error: uploadError } = await supabase.storage.from("schedule-media").upload(path, file, {
       cacheControl: "3600",
-      contentType: file.type,
+      contentType: presentationType?.mimeType ?? file.type,
       upsert: false,
     });
-    if (uploadError) throw new Error(`Unable to upload ${kind === "background" ? "background image" : "media"}: ${uploadError.message}`);
+    if (uploadError) throw new Error(`Unable to upload ${kind === "background" ? "background image" : presentationType ? "presentation file" : "media"}: ${uploadError.message}`);
     return supabase.storage.from("schedule-media").getPublicUrl(path).data.publicUrl;
   }
 
@@ -274,7 +307,7 @@ export function InlineScheduleManager({
       setError(mediaValidation);
       return;
     }
-    if (!draft.title.trim()) {
+    if (draft.item_type !== "presentation" && !draft.title.trim()) {
       setError("Enter an item title.");
       return;
     }
@@ -283,11 +316,25 @@ export function InlineScheduleManager({
       return;
     }
     setSaving(true);
-    setUploading(Boolean(selectedMedia || selectedBackground));
+    setUploading(Boolean(selectedMedia || selectedPresentation || selectedBackground));
     setError("");
     try {
       let mediaUrl = draft.media_url;
+      let presentationFileName = draft.presentation_file_name;
+      let presentationMimeType = draft.presentation_mime_type;
       let backgroundImageUrl = draft.background_image_url;
+      if (selectedPresentation) {
+        mediaUrl = await uploadMedia(selectedPresentation, draft.tempId, "media");
+        presentationFileName = selectedPresentation.name;
+        presentationMimeType = presentationTypeForFile(selectedPresentation)?.mimeType ?? "";
+        setDraft((current) => current ? {
+          ...current,
+          media_url: mediaUrl,
+          presentation_file_name: presentationFileName,
+          presentation_mime_type: presentationMimeType,
+        } : current);
+        setSelectedPresentation(null);
+      }
       if (selectedMedia) {
         mediaUrl = await uploadMedia(selectedMedia, draft.tempId, "media");
         setDraft((current) => current ? { ...current, media_url: mediaUrl } : current);
@@ -306,7 +353,7 @@ export function InlineScheduleManager({
           ? { insert_relative_item_id: draft.insert_relative_item_id, insert_before: draft.insert_before }
           : {}),
         item_type: draft.item_type,
-        title: draft.item_type === "scripture_reading" ? "Scripture" : draft.title,
+        title: draft.item_type === "scripture_reading" ? "Scripture" : draft.item_type === "presentation" ? "Presentation" : draft.title,
         song_id: draft.song_id,
         duration_minutes: draft.duration_minutes,
         leader_name: draft.leader_name,
@@ -317,6 +364,8 @@ export function InlineScheduleManager({
         public_content: draft.public_content,
         notes: draft.notes,
         media_url: mediaUrl,
+        presentation_file_name: presentationFileName,
+        presentation_mime_type: presentationMimeType,
         background_image_url: backgroundImageUrl,
         show_in_slides: draft.show_in_slides,
         show_in_schedule: draft.show_in_schedule,
@@ -328,6 +377,7 @@ export function InlineScheduleManager({
       setFeedback(result.message);
       setDraft(null);
       setSelectedMedia(null);
+      setSelectedPresentation(null);
       setSelectedBackground(null);
       notifyDataChanged();
     } catch (uploadError) {
@@ -369,6 +419,9 @@ export function InlineScheduleManager({
         <button className="button button-secondary" type="button" onClick={() => openAdd("scripture_reading")}>
           <Plus size={15} /> Add Scripture
         </button>
+        <button className="button button-secondary" type="button" onClick={() => openAdd("presentation")}>
+          <FileUp size={15} /> Add PPT
+        </button>
       </div>
       {!privateNotesReady && <p className="muted" role="status">Loading private schedule notes; existing items cannot be edited until they are ready.</p>}
       {privateNotesReady && !songsReady && <p className="muted" role="status">Loading Songbook options…</p>}
@@ -376,7 +429,9 @@ export function InlineScheduleManager({
       {items.length ? <ol className="inline-programme-list">
         {items.map((item, index) => {
           const relatedSong = Array.isArray(item.song) ? item.song[0] : item.song;
-          const displayTitle = item.item_type === "scripture_reading" ? "Scripture" : item.title;
+          const displayTitle = item.item_type === "scripture_reading"
+            ? "Scripture"
+            : item.item_type === "presentation" ? "Presentation" : item.title;
           return <li className="inline-programme-item" key={item.id}>
             <div className="inline-programme-actions">
               <div>
@@ -430,12 +485,22 @@ export function InlineScheduleManager({
             <div><p className="eyebrow">SCHEDULE ITEM</p><h2 id="item-modal-title">
               {draft.item_type === "scripture_reading"
                 ? draft.id ? "Edit Scripture" : "Add Scripture"
+                : draft.item_type === "presentation"
+                  ? draft.id ? "Edit Presentation" : "Add PPT"
                 : draft.id ? "Edit item" : "Add item"}
             </h2></div>
             <button type="button" className="icon-button" aria-label="Close" onClick={closeModal}><X size={19} /></button>
           </header>
           <form className="item-modal-form" onSubmit={(event) => void saveItem(event)}>
-            {draft.item_type === "scripture_reading" ? <>
+            {draft.item_type === "presentation" ? <>
+              <div className="scripture-fixed-title"><span>Title</span><strong>Presentation</strong></div>
+              <PresentationFilePicker
+                file={selectedPresentation}
+                existingFileName={draft.presentation_file_name}
+                onFile={setSelectedPresentation}
+                onValidation={setMediaValidation}
+              />
+            </> : draft.item_type === "scripture_reading" ? <>
               <div className="scripture-fixed-title"><span>Title</span><strong>Scripture</strong></div>
               <label htmlFor="schedule-scripture-text">Scripture text</label>
               <textarea
@@ -638,6 +703,97 @@ function SongPicker({
         <button type="button" className="song-picker-create" onClick={onCreate}><Plus size={15} /> Create a song in Songbook</button>
         <button type="button" className="song-picker-close" onClick={() => setOpen(false)}>Close selector</button>
       </div>}
+    </div>
+  );
+}
+
+function PresentationFilePicker({
+  file,
+  existingFileName,
+  onFile,
+  onValidation,
+}: {
+  file: File | null;
+  existingFileName: string;
+  onFile: (file: File | null) => void;
+  onValidation: (message: string) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [validation, setValidation] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  function selectFile(selected: File | undefined) {
+    if (!selected) return;
+    const extension = selected.name.split(".").pop()?.toLowerCase();
+    if (extension === "ppt") {
+      const message = "Legacy .ppt files are not supported. Convert the file to .pptx or PDF.";
+      setValidation(message);
+      onValidation(message);
+      return;
+    }
+    const expectedType = extension === "pdf"
+      ? presentationTypes["application/pdf"]
+      : extension === "pptx"
+        ? presentationTypes["application/vnd.openxmlformats-officedocument.presentationml.presentation"]
+        : null;
+    if (!expectedType) {
+      const message = "Choose a PDF or PPTX presentation file.";
+      setValidation(message);
+      onValidation(message);
+      return;
+    }
+    if (selected.size > maxMediaSize) {
+      const message = "Presentation files must be 50 MB or smaller.";
+      setValidation(message);
+      onValidation(message);
+      return;
+    }
+    if (selected.name.length > 255) {
+      const message = "The presentation filename must be 255 characters or fewer.";
+      setValidation(message);
+      onValidation(message);
+      return;
+    }
+    setValidation("");
+    onValidation("");
+    onFile(selected);
+  }
+
+  function onInputChange(event: ChangeEvent<HTMLInputElement>) {
+    selectFile(event.target.files?.[0]);
+    event.target.value = "";
+  }
+
+  return (
+    <div className="presentation-file-picker">
+      <span className="presentation-file-picker-label">Presentation file</span>
+      <div
+        className={`presentation-file-drop-zone${dragging ? " is-dragging" : ""}`}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          selectFile(event.dataTransfer.files[0]);
+        }}
+      >
+        <input
+          ref={fileInput}
+          type="file"
+          hidden
+          accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
+          onChange={onInputChange}
+        />
+        <FileText size={22} aria-hidden="true" />
+        <div>
+          <strong>{file?.name || existingFileName || "No presentation file selected"}</strong>
+          <span>{file ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` : "PDF or PPTX · up to 50 MB"}</span>
+        </div>
+        <button type="button" className="button button-secondary" onClick={() => fileInput.current?.click()}>
+          {file || existingFileName ? "Replace file" : "Choose file"}
+        </button>
+      </div>
+      {validation && <p className="media-validation" role="alert">{validation}</p>}
     </div>
   );
 }

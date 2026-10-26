@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -159,7 +159,7 @@ async function loadSharedContent(isOwner: boolean) {
       .eq("church.slug", "incoc-south").order("title").range(from, to), "songs"),
     loadAllPages((from, to) => {
       const query = supabase.from("schedules")
-        .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, show_in_schedule, song_id, updated_at), church:churches!inner(id, slug)")
+        .select("id, title, service_date, venue, description, status, updated_at, schedule_items(id, item_type, title, position, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, presentation_file_name, presentation_mime_type, background_image_url, show_in_slides, show_in_schedule, song_id, updated_at), church:churches!inner(id, slug)")
         .eq("church.slug", "incoc-south").order("service_date", { ascending: false });
       return (isOwner ? query : query.eq("status", "published")).range(from, to);
     }, "service schedules"),
@@ -457,7 +457,9 @@ function SlidesPage({ sharedContent, refreshing }: { sharedContent: SharedConten
                 const media = group.mediaUrl || group.backgroundImageUrl;
                 return <Link className="slides-preview-card" to={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
                   <h2 className="slides-preview-title">{group.itemTitle}</h2>
-                  {media
+                  {group.itemType === "presentation"
+                    ? <><FileText size={30} aria-hidden="true" /><p className="slides-preview-subtitle">{group.presentationFileName || "Uploaded presentation"}</p></>
+                    : media
                     ? /\.(mp4|webm)(?:$|\?)/i.test(media)
                       ? <video className="slides-preview-image" src={media} muted autoPlay loop playsInline />
                       : <img className="slides-preview-image" src={media} alt="" loading="lazy" />

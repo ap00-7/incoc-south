@@ -58,9 +58,13 @@ function isCalendarDate(value: string) {
 
 const scheduleItemTypeSchema = z.enum([
   "song", "worship", "sermon", "announcement", "communion", "offering",
-  "other", "welcome", "closing", "prayer", "scripture_reading",
+  "other", "welcome", "closing", "prayer", "scripture_reading", "presentation",
 ]);
 const itemTranslationLanguageSchema = z.enum(["Kannada", "Tamil", "English"]).or(z.literal(""));
+const presentationMimeTypeSchema = z.enum([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]).or(z.literal(""));
 const scheduleItemInputSchema = z.object({
   schedule_id: z.string().uuid(),
   item_id: z.string().uuid().optional(),
@@ -79,6 +83,8 @@ const scheduleItemInputSchema = z.object({
   public_content: z.string().max(20000),
   notes: z.string().trim().max(2000),
   media_url: z.string().trim().max(2048),
+  presentation_file_name: z.string().trim().max(255),
+  presentation_mime_type: presentationMimeTypeSchema,
   background_image_url: z.string().trim().max(2048),
   show_in_slides: z.boolean(),
   show_in_schedule: z.boolean(),
@@ -102,6 +108,23 @@ const scheduleItemInputSchema = z.object({
   }
   if (item.link_url && !item.link_title) {
     context.addIssue({ code: "custom", path: ["link_title"], message: "Enter a title for the link." });
+  }
+  if (item.item_type === "presentation") {
+    const fileName = item.presentation_file_name.toLowerCase();
+    if (fileName.endsWith(".ppt")) {
+      context.addIssue({ code: "custom", path: ["presentation_file_name"], message: "Legacy .ppt files are not supported. Convert the file to .pptx or PDF." });
+    } else {
+      const expectedMimeType = fileName.endsWith(".pdf")
+        ? "application/pdf"
+        : fileName.endsWith(".pptx")
+          ? "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          : "";
+      if (!item.media_url || !expectedMimeType || expectedMimeType !== item.presentation_mime_type) {
+        context.addIssue({ code: "custom", path: ["presentation_file_name"], message: "Choose a PDF or PPTX presentation file." });
+      }
+    }
+  } else if (item.presentation_file_name || item.presentation_mime_type) {
+    context.addIssue({ code: "custom", path: ["presentation_file_name"], message: "Presentation file details are only valid for Presentation items." });
   }
 });
 
@@ -143,9 +166,10 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
   }
 
   const isScripture = parsed.data.item_type === "scripture_reading";
+  const isPresentation = parsed.data.item_type === "presentation";
   const row = {
     item_type: parsed.data.item_type,
-    title: isScripture ? "Scripture" : parsed.data.title,
+    title: isScripture ? "Scripture" : isPresentation ? "Presentation" : parsed.data.title,
     song_id: parsed.data.item_type === "song" ? parsed.data.song_id || null : null,
     leader_name: isScripture ? null : parsed.data.leader_name || null,
     translator_name: isScripture ? null : parsed.data.translator_name || null,
@@ -157,6 +181,8 @@ export async function saveScheduleItem(input: ScheduleItemInput): Promise<Schedu
     link_title: isScripture ? null : parsed.data.link_title || null,
     link_url: isScripture ? null : parsed.data.link_url || null,
     media_url: isScripture ? null : parsed.data.media_url || null,
+    presentation_file_name: isPresentation ? parsed.data.presentation_file_name || null : null,
+    presentation_mime_type: isPresentation ? parsed.data.presentation_mime_type || null : null,
     background_image_url: parsed.data.background_image_url || null,
     show_in_slides: parsed.data.show_in_slides,
     show_in_schedule: parsed.data.show_in_schedule,
@@ -245,7 +271,7 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
   if (!parsed.success) return { ok: false, message: "The item could not be duplicated." };
   const supabase = await createClient();
   const { data: source, error: sourceError } = await supabase.from("schedule_items")
-    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, background_image_url, show_in_slides, show_in_schedule")
+    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, presentation_file_name, presentation_mime_type, background_image_url, show_in_slides, show_in_schedule")
     .eq("id", parsed.data.item_id).eq("schedule_id", parsed.data.schedule_id)
     .eq("church_id", member.churchId).maybeSingle();
   if (sourceError) return { ok: false, message: `Unable to load item to duplicate: ${sourceError.message}` };
@@ -261,7 +287,9 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     schedule_id: source.schedule_id,
     church_id: source.church_id,
     item_type: source.item_type,
-    title: source.item_type === "scripture_reading" ? "Scripture" : `${source.title} (copy)`,
+    title: source.item_type === "scripture_reading"
+      ? "Scripture"
+      : source.item_type === "presentation" ? "Presentation" : `${source.title} (copy)`,
     song_id: source.song_id,
     leader_name: source.leader_name,
     translator_name: source.translator_name,
@@ -271,6 +299,8 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     link_title: source.link_title,
     link_url: source.link_url,
     media_url: source.media_url,
+    presentation_file_name: source.presentation_file_name,
+    presentation_mime_type: source.presentation_mime_type,
     background_image_url: source.background_image_url,
     show_in_slides: source.show_in_slides,
     show_in_schedule: source.show_in_schedule !== false,

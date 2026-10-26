@@ -19,6 +19,8 @@ export type ProgrammeItem = {
   show_in_schedule?: boolean | null;
   background_image_url?: string | null;
   media_url?: string | null;
+  presentation_file_name?: string | null;
+  presentation_mime_type?: string | null;
   song?: {
     id?: string;
     title: string;
@@ -129,6 +131,8 @@ export type PresentationSlide = {
   translationLines: string[] | null;
   translationLabel: string | null;
   fontScale: number;
+  presentationFileName?: string | null;
+  presentationMimeType?: string | null;
 };
 
 export type PresentationSlideGroup = {
@@ -141,6 +145,8 @@ export type PresentationSlideGroup = {
   backgroundImageUrl: string | null;
   firstSlideIndex: number;
   slides: PresentationSlide[];
+  presentationFileName?: string | null;
+  presentationMimeType?: string | null;
 };
 
 export function groupPresentationSlides(slides: PresentationSlide[]): PresentationSlideGroup[] {
@@ -160,6 +166,8 @@ export function groupPresentationSlides(slides: PresentationSlide[]): Presentati
         backgroundImageUrl: slide.backgroundImageUrl,
         firstSlideIndex: index,
         slides: [slide],
+        presentationFileName: slide.presentationFileName ?? null,
+        presentationMimeType: slide.presentationMimeType ?? null,
       });
     }
   });
@@ -250,7 +258,24 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
   const slides: PresentationSlide[] = [];
   for (const item of filterPresentationItems(items)) {
     const itemSlideStart = slides.length;
-    if (item.item_type === "scripture_reading") {
+    if (item.item_type === "presentation") {
+      slides.push({
+        itemId: item.id,
+        itemType: item.item_type,
+        itemTitle: "Presentation",
+        itemHeader: null,
+        itemSubtitle: null,
+        backgroundImageUrl: null,
+        mediaUrl: item.media_url ?? null,
+        sectionLabel: null,
+        lines: [],
+        translationLines: null,
+        translationLabel: null,
+        fontScale: 1,
+        presentationFileName: item.presentation_file_name ?? null,
+        presentationMimeType: item.presentation_mime_type ?? null,
+      });
+    } else if (item.item_type === "scripture_reading") {
       const passageLines = wrapScriptureLines((item.public_content ?? "").replace(/\r\n/g, "\n").split("\n"));
       const chunks: string[][] = [];
       for (let index = 0; index < passageLines.length; index += 8) {
