@@ -549,12 +549,16 @@ export function AnnouncementManagerPage() {
   if (!isOwner) {
     return <section className="announcement-public content-wrap">
       {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
-      {(authLoading || loading) && <p className="muted" role="status">Loading announcements…</p>}
+      <header className="announcement-public-header">
+        <p className="eyebrow">ANNOUNCEMENTS</p>
+      </header>
       {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
-      {!authLoading && !loading && !error && availableCollections.length > 0 && <div className="announcement-public-feed">
-        {availableCollections.flatMap((collection) =>
-          (data?.items.filter((item) => item.collection_id === collection.id) ?? [])
-            .map((item) => <AnnouncementPublicItem key={item.id} item={item} />))}
+      {!authLoading && availableCollections.length > 0 && <div className="announcement-public-feed">
+        {availableCollections.map((collection) => <section className="announcement-public-collection" key={collection.id}>
+          <h1 className="detail-title">{collection.collection_name}</h1>
+          {(data?.items.filter((item) => item.collection_id === collection.id) ?? [])
+            .map((item) => <AnnouncementPublicItem key={item.id} item={item} />)}
+        </section>)}
       </div>}
       {!authLoading && !loading && !error && !availableCollections.length && <div className="empty-state">There are no published announcements.</div>}
     </section>;
@@ -593,9 +597,8 @@ export function AnnouncementManagerPage() {
     </form>}
     {feedback && <p className="announcement-feedback" role="status">{feedback}</p>}
     {actionError && <p className="form-error" role="alert">{actionError}</p>}
-    {loading && <p className="muted" role="status">Loading announcements…</p>}
     {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
-    {!loading && !error && <>
+    {data && <>
       {selectedCollection && <button type="button" className="button button-primary announcement-add-button" onClick={() => setDraft({ collection_id: selectedCollection.id, title: "", image_url: "", body: "" })}>
         <Plus size={16} /> Add item
       </button>}
@@ -788,36 +791,20 @@ export function AnnouncementSlidesPage() {
   >
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} quiet />}
     <header className="announcement-projector-header">
-      <div className="announcement-projector-heading">
-        <h1>Announcements</h1>
-        <p>{selectedCollection?.collection_name ?? "Announcement collections"}</p>
-      </div>
       <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /><span>Back</span></Link>
-      {publishedCollections.length > 1 && <label className="announcement-projector-collection">
-        <span className="sr-only">Announcement collection</span>
-        <select value={selectedCollection?.id ?? ""} onChange={(event) => {
-          setIndex(0);
-          setSearchParams({ collectionId: event.target.value });
-        }}>
-          {publishedCollections.map((collection) => <option value={collection.id} key={collection.id}>{collection.collection_name}</option>)}
-        </select>
-      </label>}
     </header>
-    {loading
-      ? <p className="announcement-projector-message" role="status">Loading announcements…</p>
-      : error
-        ? <p className="announcement-projector-message" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>
-        : currentItem
-          ? <>
-            <section className="announcement-slide-frame" aria-live="polite">
-              <AnnouncementSlide item={currentItem} zoom={zoom} />
-            </section>
-            <nav className="announcement-slide-controls" aria-label="Announcement navigation">
-              <button type="button" onClick={() => move(-1)} disabled={currentIndex === 0} aria-label="Previous announcement"><ArrowLeft size={22} /></button>
-              <span aria-live="polite">{currentIndex + 1} / {items.length}</span>
-              <button type="button" onClick={() => move(1)} disabled={currentIndex >= items.length - 1} aria-label="Next announcement"><ArrowRight size={22} /></button>
-            </nav>
-          </>
-          : <p className="announcement-projector-message">{selectedCollection ? "There are no announcements to display in this collection." : "There are no published announcement collections."}</p>}
+    {error && <p className="announcement-projector-message" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
+    {currentItem
+      ? <>
+        <section className="announcement-slide-frame" aria-live="polite">
+          <AnnouncementSlide item={currentItem} zoom={zoom} />
+        </section>
+        <nav className="announcement-slide-controls" aria-label="Announcement navigation">
+          <button type="button" onClick={() => move(-1)} disabled={currentIndex === 0} aria-label="Previous announcement"><ArrowLeft size={22} /></button>
+          <span aria-live="polite">{currentIndex + 1} / {items.length}</span>
+          <button type="button" onClick={() => move(1)} disabled={currentIndex >= items.length - 1} aria-label="Next announcement"><ArrowRight size={22} /></button>
+        </nav>
+      </>
+      : !loading && !error && <p className="announcement-projector-message">{selectedCollection ? "There are no announcements to display in this collection." : "There are no published announcement collections."}</p>}
   </section>;
 }
