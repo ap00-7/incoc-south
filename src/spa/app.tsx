@@ -907,7 +907,7 @@ export function App() {
       <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} />} />
       <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} />} />
       <Route path="/announcement" element={<PageShell><AnnouncementManagerPage /></PageShell>} />
-      <Route path="/announcement/slides" element={<PageShell><AnnouncementSlidesPage /></PageShell>} />
+      <Route path="/announcement/slides" element={<PageShell hideFooter><AnnouncementSlidesPage /></PageShell>} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />

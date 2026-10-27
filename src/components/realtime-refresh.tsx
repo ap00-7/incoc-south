@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 export type RealtimeFilter = {
-  table: "songs" | "song_sections" | "schedules" | "schedule_items" | "church_members";
+  table: "songs" | "song_sections" | "schedules" | "schedule_items" | "church_members" | "announcement_items" | "announcement_collections";
   column: string;
   value: string;
 };
@@ -12,10 +12,16 @@ export function RealtimeRefresh({
   subscriptions,
   onChange,
   onDelete,
+  refreshOnSubscribe = false,
+  notifyGlobalDataChange = true,
+  showUnavailableMessage = true,
 }: {
   subscriptions: RealtimeFilter[];
   onChange?: () => void;
   onDelete?: (scheduleId: string) => void;
+  refreshOnSubscribe?: boolean;
+  notifyGlobalDataChange?: boolean;
+  showUnavailableMessage?: boolean;
 }) {
   const [unavailable, setUnavailable] = useState(false);
   const onChangeRef = useRef(onChange);
@@ -47,12 +53,26 @@ export function RealtimeRefresh({
       refreshTimer = setTimeout(() => {
         if (!alive) return;
         onChangeRef.current?.();
-        notifyDataChanged();
+        if (notifyGlobalDataChange) notifyDataChanged();
       }, 80);
     };
     let channel = supabase.channel(`content-updates:${filters.map((filter) => `${filter.table}-${filter.value}`).join(":")}`);
     for (const filter of filters) {
-      if (filter.table === "schedules") {
+      if (filter.table === "announcement_items" || filter.table === "announcement_collections") {
+        for (const event of ["INSERT", "UPDATE"] as const) {
+          channel = channel.on("postgres_changes", {
+            event,
+            schema: "public",
+            table: filter.table,
+            filter: `${filter.column}=eq.${filter.value}`,
+          }, refresh);
+        }
+        channel = channel.on("postgres_changes", {
+          event: "DELETE",
+          schema: "public",
+          table: filter.table,
+        }, refresh);
+      } else if (filter.table === "schedules") {
         for (const event of ["INSERT", "UPDATE"] as const) {
           channel = channel.on("postgres_changes", {
             event,
@@ -88,7 +108,7 @@ export function RealtimeRefresh({
       if (status === "SUBSCRIBED") {
         clearFailureTimer();
         setUnavailable(false);
-        if (hasSubscribed) refresh();
+        if (hasSubscribed || refreshOnSubscribe) refresh();
         hasSubscribed = true;
       } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
         if (!failureTimer) {
@@ -104,14 +124,14 @@ export function RealtimeRefresh({
       clearFailureTimer();
       void supabase.removeChannel(channel);
     };
-  }, [serialized]);
+  }, [notifyGlobalDataChange, refreshOnSubscribe, serialized]);
 
-  if (!unavailable) return null;
+  if (!unavailable || !showUnavailableMessage) return null;
   return <p className="realtime-notice" role="status">
     Live updates are temporarily unavailable. Existing content remains available.{" "}
     <button type="button" className="text-link" onClick={() => {
       onChangeRef.current?.();
-      notifyDataChanged();
+      if (notifyGlobalDataChange) notifyDataChanged();
     }}>Refresh content</button>
   </p>;
 }

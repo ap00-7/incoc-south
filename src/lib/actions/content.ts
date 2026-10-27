@@ -3,6 +3,7 @@ import { requireOwner } from "@/lib/auth-client";
 import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
 import { lyricLanguageValues, songEditorLanguageValues, songSectionValues } from "@/lib/domain/songs";
+import { sanitizeAnnouncementBody } from "@/lib/domain/announcement-body";
 import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 function invalidateRouteData(path: string) {
@@ -896,9 +897,10 @@ const announcementCollectionSchema = z.object({
 const announcementItemSchema = z.object({
   id: z.string().uuid().optional(),
   expected_updated_at: z.string().datetime({ offset: true }).optional(),
-  title: z.string().trim().min(1, "Enter an announcement title.").max(200),
+  title: z.string().trim().max(200),
   image_url: z.string().trim().max(2048),
-  body: z.string().max(10000),
+  body: z.string().max(10000).transform(sanitizeAnnouncementBody)
+    .refine((body) => body.length <= 10000, "Announcement body must be 10,000 characters or fewer."),
 }).superRefine((item, context) => {
   if (Boolean(item.id) !== Boolean(item.expected_updated_at)) {
     context.addIssue({ code: "custom", message: "Reload this announcement and try again." });

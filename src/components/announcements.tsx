@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent } from "react";
+import { createElement, Fragment, useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type PointerEvent, type ReactNode } from "react";
 import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Bold,
+  Italic,
   ImagePlus,
   MonitorPlay,
   Pencil,
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ConfirmationDialog } from "@/components/confirm-button";
+import { RealtimeRefresh } from "@/components/realtime-refresh";
 import {
   deleteAnnouncementItem,
   moveAnnouncementItem,
@@ -20,6 +23,12 @@ import {
   saveAnnouncementItem,
 } from "@/lib/actions/content";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  announcementBodyPreview,
+  announcementBodyEditorHtml,
+  richAnnouncementBodyHtml,
+  sanitizeAnnouncementBody,
+} from "@/lib/domain/announcement-body";
 import { useAuth } from "@/spa/auth-provider";
 
 const announcementBucket = "announcement-images";
@@ -54,6 +63,30 @@ type PreparedImage = {
   contentType: string;
   extension: string;
 };
+
+function announcementBodyNodes(value: string): ReactNode {
+  const safeHtml = richAnnouncementBodyHtml(value);
+  if (safeHtml === null) return value;
+  const parsed = new DOMParser().parseFromString(safeHtml, "text/html");
+  function render(node: Node, key: number): ReactNode {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (!(node instanceof Element)) return null;
+    const children = Array.from(node.childNodes, render);
+    const tags: Record<string, string> = {
+      B: "strong",
+      STRONG: "strong",
+      I: "em",
+      EM: "em",
+      P: "p",
+      DIV: "div",
+      BR: "br",
+    };
+    const tag = tags[node.tagName];
+    if (!tag) return createElement(Fragment, { key }, children);
+    return createElement(tag, { key }, ...children);
+  }
+  return Array.from(parsed.body.childNodes, render);
+}
 
 function readAscii(bytes: Uint8Array, start: number, length: number) {
   return String.fromCharCode(...bytes.slice(start, start + length));
@@ -168,6 +201,23 @@ function useAnnouncementData() {
   return { data, loading, error, reload };
 }
 
+function AnnouncementRealtime({ churchId, onChange, quiet = false }: {
+  churchId: string;
+  onChange: () => void;
+  quiet?: boolean;
+}) {
+  return <RealtimeRefresh
+    subscriptions={[
+      { table: "announcement_items", column: "church_id", value: churchId },
+      { table: "announcement_collections", column: "church_id", value: churchId },
+    ]}
+    onChange={onChange}
+    refreshOnSubscribe
+    notifyGlobalDataChange={false}
+    showUnavailableMessage={!quiet}
+  />;
+}
+
 function AnnouncementItemEditor({
   draft,
   churchId,
@@ -188,6 +238,7 @@ function AnnouncementItemEditor({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const bodyEditor = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selectedImage) {
@@ -240,7 +291,7 @@ function AnnouncementItemEditor({
       const notice = await onSave({
         ...(value.id ? { id: value.id, expected_updated_at: value.expected_updated_at } : {}),
         title: value.title,
-        body: value.body,
+        body: sanitizeAnnouncementBody(bodyEditor.current?.innerHTML ?? value.body),
         image_url: imageUrl,
       });
       uploadedPath = null;
@@ -270,7 +321,7 @@ function AnnouncementItemEditor({
       </header>
       <form className="announcement-editor-form" onSubmit={(event) => void save(event)}>
         <label htmlFor="announcement-title">Title</label>
-        <input id="announcement-title" value={value.title} maxLength={200} required onChange={(event) => setValue({ ...value, title: event.target.value })} />
+        <input id="announcement-title" value={value.title} maxLength={200} onChange={(event) => setValue({ ...value, title: event.target.value })} />
         <label htmlFor="announcement-image-file">Image</label>
         <div className="announcement-image-picker">
           {previewUrl
@@ -290,7 +341,31 @@ function AnnouncementItemEditor({
         </div>
         {imageError && <p className="form-error" role="alert">{imageError}</p>}
         <label htmlFor="announcement-body">Body</label>
-        <textarea id="announcement-body" value={value.body} maxLength={10000} rows={9} onChange={(event) => setValue({ ...value, body: event.target.value })} />
+        <div className="announcement-format-toolbar" role="toolbar" aria-label="Body formatting">
+          <button type="button" className="icon-button" aria-label="Bold" title="Bold" onMouseDown={(event) => event.preventDefault()} onClick={() => {
+            bodyEditor.current?.focus();
+            document.execCommand("bold");
+          }}><Bold size={16} /></button>
+          <button type="button" className="icon-button" aria-label="Italic" title="Italic" onMouseDown={(event) => event.preventDefault()} onClick={() => {
+            bodyEditor.current?.focus();
+            document.execCommand("italic");
+          }}><Italic size={16} /></button>
+        </div>
+        <div
+          id="announcement-body"
+          ref={bodyEditor}
+          className="announcement-body-editor"
+          role="textbox"
+          aria-label="Body"
+          aria-multiline="true"
+          contentEditable={!saving}
+          suppressContentEditableWarning
+          dangerouslySetInnerHTML={{ __html: announcementBodyEditorHtml(value.body) }}
+          onPaste={(event) => {
+            event.preventDefault();
+            document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
+          }}
+        />
         {error && <p className="form-error" role="alert">{error}</p>}
         <div className="announcement-editor-actions">
           <button type="button" className="button button-secondary" onClick={onClose} disabled={saving}>Cancel</button>
@@ -378,6 +453,7 @@ export function AnnouncementManagerPage() {
   }
 
   return <section className="announcement-manager content-wrap">
+    {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
     <header className="announcement-manager-header">
       <div>
         <p className="eyebrow">ANNOUNCEMENTS</p>
@@ -406,7 +482,7 @@ export function AnnouncementManagerPage() {
               : <div className="announcement-thumbnail announcement-thumbnail-empty"><ImagePlus size={20} /></div>}
             <div className="announcement-list-copy">
               <strong>{item.title.trim() || "Untitled announcement"}</strong>
-              <span>{item.body.trim() || "No body text"}</span>
+              <span>{announcementBodyPreview(item.body).trim() || "No body text"}</span>
             </div>
             {isOwner && <div className="announcement-list-actions">
               <button type="button" className="icon-button" title="Move up" aria-label={`Move ${item.title || "announcement"} up`} disabled={index === 0 || pendingAction} onClick={() => void reorder(item, -1)}><ArrowUp size={16} /></button>
@@ -447,20 +523,37 @@ export function AnnouncementManagerPage() {
   </section>;
 }
 
-function AnnouncementSlide({ item }: { item: AnnouncementItem }) {
-  return <article className={`announcement-slide${item.image_url && item.body.trim() ? " announcement-slide-split" : ""}`}>
-    {item.title.trim() && <h1>{item.title}</h1>}
-    <div className="announcement-slide-content">
-      {item.image_url && <img src={item.image_url} alt="" />}
-      {item.body.trim() && <p>{item.body}</p>}
-      {!item.image_url && !item.body.trim() && <p className="announcement-slide-empty">No announcement content.</p>}
+function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: number }) {
+  const hasImage = Boolean(item.image_url);
+  const hasBody = Boolean(item.body.trim());
+  const split = hasImage && hasBody;
+  return <>
+    {item.title.trim() && <h1 className="announcement-slide-title">{item.title}</h1>}
+    <div className="announcement-slide-viewport">
+      <div
+        className={`announcement-slide-content${split ? " announcement-slide-split" : ""}`}
+        style={{
+          width: `${zoom * 100}%`,
+          height: `${zoom * 100}%`,
+          gridTemplateColumns: split ? "minmax(0, 1fr) minmax(0, 1fr)" : undefined,
+        }}
+      >
+        {item.image_url && <img src={item.image_url} alt="" />}
+        {hasBody
+          ? <div
+            className="announcement-slide-body"
+            style={{ fontSize: `clamp(${20 * zoom}px, ${3.2 * zoom}vw, ${42 * zoom}px)` }}
+          >{announcementBodyNodes(item.body)}</div>
+          : !hasImage && <p className="announcement-slide-empty">No announcement content.</p>}
+      </div>
     </div>
-  </article>;
+  </>;
 }
 
 export function AnnouncementSlidesPage() {
   const { data, loading, error, reload } = useAnnouncementData();
   const [index, setIndex] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const pointerStart = useRef<{ id: number; x: number; y: number } | null>(null);
   const items = data?.items ?? [];
   const currentIndex = Math.min(index, Math.max(items.length - 1, 0));
@@ -475,6 +568,24 @@ export function AnnouncementSlidesPage() {
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
+      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+        const zoomDirection = event.key === "+" || (event.key === "=" && event.shiftKey)
+          ? 1
+          : event.key === "-" || event.key === "_"
+            ? -1
+            : 0;
+        if (zoomDirection || event.key === "0") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.repeat) return;
+          setZoom((current) => event.key === "0"
+            ? 1
+            : Math.min(2.5, Math.max(0.5, Math.round((current + zoomDirection * 0.1) * 10) / 10)));
+          return;
+        }
+      }
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable=true], a")) return;
       if (event.key === "ArrowLeft") {
@@ -515,6 +626,7 @@ export function AnnouncementSlidesPage() {
     onPointerCancel={() => { pointerStart.current = null; }}
     onLostPointerCapture={() => { pointerStart.current = null; }}
   >
+    {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} quiet />}
     <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /> Announcements</Link>
     {loading
       ? <p className="announcement-projector-message" role="status">Loading announcements…</p>
@@ -523,7 +635,7 @@ export function AnnouncementSlidesPage() {
         : currentItem
           ? <>
             <section className="announcement-slide-frame" aria-live="polite">
-              <AnnouncementSlide item={currentItem} />
+              <AnnouncementSlide item={currentItem} zoom={zoom} />
             </section>
             <nav className="announcement-slide-controls" aria-label="Announcement navigation">
               <button type="button" onClick={() => move(-1)} disabled={currentIndex === 0} aria-label="Previous announcement"><ArrowLeft size={22} /></button>
