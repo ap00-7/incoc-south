@@ -51,7 +51,6 @@ function getPresentationPosition(groups: ReturnType<typeof groupPresentationSlid
 export function Presentation({
   scheduleId,
   scheduleTitle,
-  refreshing,
   initialSlide,
   slides,
   isOwner,
@@ -60,7 +59,6 @@ export function Presentation({
 }: {
   scheduleId: string;
   scheduleTitle: string;
-  refreshing: boolean;
   initialSlide: number;
   slides: PresentationSlide[];
   isOwner: boolean;
@@ -358,7 +356,6 @@ export function Presentation({
       ]} onDelete={(deletedId) => {
         if (deletedId === scheduleId) navigate("/slides", { replace: true });
       }} />
-      {refreshing && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#ccc", background: "#171717", fontSize: 12 }}>Checking for presentation updates…</p>}
       {syncError && <p role="status" style={{ margin: 0, padding: "8px 16px", color: "#f1c97a", background: "#171717", fontSize: 12 }}>{syncError}</p>}
       <section
         className={`slide-stage${fullscreenImageUrl ? " slide-stage-image" : ""}${isScripture ? " slide-stage-scripture" : ""}${isDocument ? " slide-stage-document" : ""}`}

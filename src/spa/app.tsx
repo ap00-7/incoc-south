@@ -233,7 +233,7 @@ function HomePage() {
   </PageShell>;
 }
 
-function SongbookPage({ songs, refreshing }: { songs: SharedContent["songs"]; refreshing: boolean }) {
+function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q")?.trim() ?? "";
@@ -255,7 +255,6 @@ function SongbookPage({ songs, refreshing }: { songs: SharedContent["songs"]; re
   };
 
   return <PageShell owner={membership?.role === "owner"}>
-    {refreshing && <div className="content-wrap"><InlineLoading>Checking for Songbook updates…</InlineLoading></div>}
     <div className="content-wrap">
       <div className="section-heading"><h1>Songbook</h1></div>
       {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
@@ -287,7 +286,7 @@ function SongDetailPage({ songs }: { songs: SharedContent["songs"] }) {
   </PageShell>;
 }
 
-function ScheduleListPage({ schedules, refreshing }: { schedules: SharedContent["schedules"]; refreshing: boolean }) {
+function ScheduleListPage({ schedules }: { schedules: SharedContent["schedules"] }) {
   const { membership } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -302,7 +301,6 @@ function ScheduleListPage({ schedules, refreshing }: { schedules: SharedContent[
     if (soleScheduleId) navigate(`/schedule/${soleScheduleId}`, { replace: true });
   }, [navigate, soleScheduleId]);
   return <PageShell owner={isOwner}>
-    {refreshing && <div className="content-wrap"><InlineLoading>Checking for schedule updates…</InlineLoading></div>}
     <div className="content-wrap">
       <div className="schedule-list-heading">
         <div className="section-heading"><h1>Sunday Schedule</h1></div>
@@ -325,10 +323,9 @@ function ScheduleListPage({ schedules, refreshing }: { schedules: SharedContent[
   </PageShell>;
 }
 
-function ScheduleDetailPage({ schedules, songs, refreshing }: {
+function ScheduleDetailPage({ schedules, songs }: {
   schedules: SharedContent["schedules"];
   songs: SharedContent["songs"];
-  refreshing: boolean;
 }) {
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
@@ -345,7 +342,6 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
         <h1 className="detail-title">Sunday Schedule</h1><p className="notice notice-warning" role="alert">This service is not available.</p>
       </article>
       : <>
-        {refreshing && <div className="content-wrap"><InlineLoading>Checking for service updates…</InlineLoading></div>}
         <RealtimeRefresh subscriptions={[
           { table: "schedules", column: "church_id", value: schedule.church.id },
           { table: "schedule_items", column: "schedule_id", value: schedule.id },
@@ -402,7 +398,7 @@ function ScheduleDetailPage({ schedules, songs, refreshing }: {
   </PageShell>;
 }
 
-function SlidesPage({ sharedContent, refreshing }: { sharedContent: SharedContent; refreshing: boolean }) {
+function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
   const { membership } = useAuth();
   const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
@@ -437,7 +433,6 @@ function SlidesPage({ sharedContent, refreshing }: { sharedContent: SharedConten
       ? <div className="content-wrap"><div className="section-heading"><h1>Slides</h1></div><InlineLoading>Loading presentations…</InlineLoading></div>
       : schedule
         ? <>
-          {refreshing && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
           <RealtimeRefresh subscriptions={[
             { table: "schedules", column: "id", value: schedule.id },
             { table: "schedule_items", column: "schedule_id", value: schedule.id },
@@ -473,7 +468,6 @@ function SlidesPage({ sharedContent, refreshing }: { sharedContent: SharedConten
           </div>
         </>
         : <>
-          {refreshing && <div className="content-wrap"><InlineLoading>Checking for presentation updates…</InlineLoading></div>}
           {sharedContent.churchId && <RealtimeRefresh subscriptions={[{ table: "schedules", column: "church_id", value: sharedContent.churchId }]} />}
           <div className="content-wrap">
             <div className="section-heading"><h1>Slides</h1></div>
@@ -505,7 +499,7 @@ function scheduleItemsWithSongs(
   }));
 }
 
-function PresentationPage({ sharedContent, refreshing }: { sharedContent: SharedContent; refreshing: boolean }) {
+function PresentationPage({ sharedContent }: { sharedContent: SharedContent }) {
   const { scheduleId = "" } = useParams();
   const { user, membership } = useAuth();
   const isOwner = membership?.role === "owner";
@@ -524,7 +518,6 @@ function PresentationPage({ sharedContent, refreshing }: { sharedContent: Shared
       key={`${scheduleId}-${initialSlide}`}
       scheduleId={scheduleId}
       scheduleTitle={schedule.title}
-      refreshing={refreshing}
       initialSlide={initialSlide}
       slides={slides}
       isOwner={isOwner}
@@ -806,7 +799,7 @@ export function App() {
   const isOwner = membership?.role === "owner";
   const [snapshot, setSnapshot] = useState<{ isOwner: boolean; content: SharedContent } | null>(null);
   const [sharedLoading, setSharedLoading] = useState(true);
-  const [sharedRefreshing, setSharedRefreshing] = useState(false);
+  const [, setSharedRefreshing] = useState(false);
   const [sharedError, setSharedError] = useState("");
   const [retryCount, setRetryCount] = useState(0);
   const snapshotRef = useRef(snapshot);
@@ -895,17 +888,17 @@ export function App() {
     {sharedError && sharedContent && <ResourceMessage error={`The latest shared content refresh failed: ${sharedError}`} retry={() => setRetryCount((count) => count + 1)} />}
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/songs" element={sharedContent && <SongbookPage songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
+      <Route path="/songs" element={sharedContent && <SongbookPage songs={sharedContent.songs} />} />
       <Route path="/songs/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} />} />
       <Route path="/song" element={<LegacySongRouteRedirect />} />
       <Route path="/song/:songId" element={<LegacySongRouteRedirect />} />
       <Route path="/songbook" element={<LegacySongRouteRedirect />} />
       <Route path="/songbook/:songId" element={<LegacySongRouteRedirect />} />
-      <Route path="/schedule" element={sharedContent && <ScheduleListPage schedules={sharedContent.schedules} refreshing={sharedRefreshing} />} />
-      <Route path="/schedule/:scheduleId" element={sharedContent && <ScheduleDetailPage schedules={sharedContent.schedules} songs={sharedContent.songs} refreshing={sharedRefreshing} />} />
+      <Route path="/schedule" element={sharedContent && <ScheduleListPage schedules={sharedContent.schedules} />} />
+      <Route path="/schedule/:scheduleId" element={sharedContent && <ScheduleDetailPage schedules={sharedContent.schedules} songs={sharedContent.songs} />} />
       <Route path="/schedule/:scheduleId/slides" element={<ScheduleSlidesRedirect />} />
-      <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} refreshing={sharedRefreshing} />} />
-      <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} refreshing={sharedRefreshing} />} />
+      <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} />} />
+      <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
