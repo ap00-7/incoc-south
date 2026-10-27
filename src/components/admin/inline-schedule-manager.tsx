@@ -31,6 +31,7 @@ import { Dropdown } from "@/components/dropdown";
 import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 import { createClient } from "@/lib/supabase/browser";
+import { getAnnouncementScheduleDestination } from "@/lib/domain/slides";
 import { notifyDataChanged } from "@/spa/data-events";
 
 type SongOption = { id: string; title: string; language: string };
@@ -64,6 +65,7 @@ const itemTitles = [
   ["Pre-service meeting", "other"],
   ["Welcome and Prayer", "welcome"],
   ["Announcements", "announcement"],
+  ["Announcements Slides", "announcement"],
   ["Worship", "song"],
   ["Sermon and Communion", "sermon"],
   ["Communion", "communion"],
@@ -178,6 +180,7 @@ function draftFromItem(item: ScheduleItem): Draft {
   const song = Array.isArray(item.song) ? item.song[0] : item.song;
   const isScripture = item.item_type === "scripture_reading";
   const isPresentation = item.item_type === "presentation";
+  const announcementDestination = getAnnouncementScheduleDestination(item.title);
   return {
     id: item.id,
     tempId: item.id,
@@ -194,8 +197,8 @@ function draftFromItem(item: ScheduleItem): Draft {
     translation_language: item.translation_language === "Kannada" || item.translation_language === "Tamil" || item.translation_language === "English"
       ? item.translation_language
       : "",
-    link_title: item.link_title ?? "",
-    link_url: item.link_url ?? "",
+    link_title: announcementDestination?.linkTitle ?? item.link_title ?? "",
+    link_url: announcementDestination?.url ?? item.link_url ?? "",
     public_content: item.public_content ?? "",
     notes: item.notes ?? "",
     media_url: item.media_url ?? "",
@@ -319,6 +322,7 @@ export function InlineScheduleManager({
     setUploading(Boolean(selectedMedia || selectedPresentation || selectedBackground));
     setError("");
     try {
+      const announcementDestination = getAnnouncementScheduleDestination(draft.title);
       let mediaUrl = draft.media_url;
       let presentationFileName = draft.presentation_file_name;
       let presentationMimeType = draft.presentation_mime_type;
@@ -359,8 +363,8 @@ export function InlineScheduleManager({
         leader_name: draft.leader_name,
         translator_name: draft.translator_name,
         translation_language: draft.translation_language,
-        link_title: draft.link_title,
-        link_url: draft.link_url,
+        link_title: announcementDestination?.linkTitle ?? draft.link_title,
+        link_url: announcementDestination?.url ?? draft.link_url,
         public_content: draft.public_content,
         notes: draft.notes,
         media_url: mediaUrl,
@@ -406,6 +410,8 @@ export function InlineScheduleManager({
       setDuplicatingId(null);
     }
   }
+
+  const isAnnouncementSlidesDraft = draft?.title === "Announcements Slides" && !draft.customTitle;
 
   return (
     <section className="inline-owner-editor">
@@ -542,7 +548,14 @@ export function InlineScheduleManager({
                     return;
                   }
                   const itemType = itemTypeForTitle(selection, draft.item_type);
-                  setDraft({ ...draft, title: selection, item_type: itemType, customTitle: false });
+                  const destination = getAnnouncementScheduleDestination(selection);
+                  setDraft({
+                    ...draft,
+                    title: selection,
+                    item_type: itemType,
+                    customTitle: false,
+                    ...(destination ? { link_title: destination.linkTitle, link_url: destination.url } : {}),
+                  });
                 }}
                 placeholder="Select a title"
               />
@@ -562,6 +575,7 @@ export function InlineScheduleManager({
                 />
               </>}
 
+              {!isAnnouncementSlidesDraft && <>
               {draft.item_type === "song" && <SongPicker
                 songs={songs}
                 value={draft.song_id}
@@ -596,10 +610,19 @@ export function InlineScheduleManager({
                 }} />
                 <fieldset className="item-link-fields">
                   <legend><Link2 size={14} /> URL</legend>
-                  <label htmlFor="schedule-item-link-title">Link Title</label>
-                  <input id="schedule-item-link-title" value={draft.link_title} maxLength={200} onChange={(event) => setDraft({ ...draft, link_title: event.target.value })} />
+                  {!getAnnouncementScheduleDestination(draft.title) && <>
+                    <label htmlFor="schedule-item-link-title">Link Title</label>
+                    <input id="schedule-item-link-title" value={draft.link_title} maxLength={200} onChange={(event) => setDraft({ ...draft, link_title: event.target.value })} />
+                  </>}
                   <label htmlFor="schedule-item-link">Link</label>
-                  <input id="schedule-item-link" type="url" value={draft.link_url} maxLength={2048} onChange={(event) => setDraft({ ...draft, link_url: event.target.value })} />
+                  <input
+                    id="schedule-item-link"
+                    type="url"
+                    value={getAnnouncementScheduleDestination(draft.title)?.url ?? draft.link_url}
+                    maxLength={2048}
+                    readOnly={Boolean(getAnnouncementScheduleDestination(draft.title))}
+                    onChange={(event) => setDraft({ ...draft, link_url: event.target.value })}
+                  />
                 </fieldset>
               </>}
 
@@ -626,6 +649,17 @@ export function InlineScheduleManager({
                 <label htmlFor="schedule-item-content">Display content <span className="muted">(optional)</span></label>
                 <textarea id="schedule-item-content" rows={3} maxLength={5000} value={draft.public_content} onChange={(event) => setDraft({ ...draft, public_content: event.target.value })} />
               </>}
+              </>}
+              {isAnnouncementSlidesDraft && <fieldset className="item-link-fields">
+                <legend><Link2 size={14} /> URL</legend>
+                <label htmlFor="schedule-item-announcement-slides-url">Link</label>
+                <input
+                  id="schedule-item-announcement-slides-url"
+                  type="url"
+                  value={getAnnouncementScheduleDestination(draft.title)?.url ?? ""}
+                  readOnly
+                />
+              </fieldset>}
             </>}
             <fieldset className="schedule-visibility-options">
               <legend>Display options</legend>
@@ -638,7 +672,7 @@ export function InlineScheduleManager({
                 <span>Display in Schedule</span>
               </label>
             </fieldset>
-            {draft.item_type !== "scripture_reading" && <>
+            {draft.item_type !== "scripture_reading" && !isAnnouncementSlidesDraft && <>
               <label htmlFor="schedule-item-notes">Internal note <span className="muted">(owners only)</span></label>
               <textarea id="schedule-item-notes" rows={2} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
             </>}

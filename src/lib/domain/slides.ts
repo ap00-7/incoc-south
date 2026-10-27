@@ -32,6 +32,24 @@ export type ProgrammeItem = {
   } | null;
 };
 
+export function getAnnouncementScheduleDestination(title: string) {
+  if (title === "Announcements") {
+    return {
+      path: "/announcement",
+      url: "https://incoc-south.vercel.app/announcement",
+      linkTitle: "Open announcements",
+    };
+  }
+  if (title === "Announcements Slides") {
+    return {
+      path: "/announcement/slides",
+      url: "https://incoc-south.vercel.app/announcement/slides",
+      linkTitle: "Open announcement slides",
+    };
+  }
+  return null;
+}
+
 export function sequenceSongSections(
   sections: LyricSection[],
   startWithChorus = false,

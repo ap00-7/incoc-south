@@ -1,8 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { clampSlideIndex, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
+import { clampSlideIndex, getAnnouncementScheduleDestination, groupPresentationSlides, type PresentationSlide } from "@/lib/domain/slides";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 
 const PresentationDocumentViewer = lazy(() => import("@/components/presentation-document-viewer")
@@ -81,6 +81,9 @@ export function Presentation({
   const positionRef = useRef<PresentationPosition>(initialPosition);
   const currentGroupIndex = clampSlideIndex(selectedItemIndex, groups.length);
   const currentGroup = groups[currentGroupIndex];
+  const announcementDestination = currentGroup
+    ? getAnnouncementScheduleDestination(currentGroup.itemTitle)
+    : null;
   const isDocument = currentGroup?.itemType === "presentation";
   const isPdf = Boolean(currentGroup && (
     currentGroup.presentationMimeType?.toLowerCase() === "application/pdf"
@@ -401,7 +404,9 @@ export function Presentation({
           </>
           : current ? <>
             {current.backgroundImageUrl && !hasLyrics && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
-            <h1 className="slide-title">{current.itemTitle}</h1>
+            <h1 className="slide-title">{announcementDestination
+              ? <Link className="presentation-announcement-link" to={announcementDestination.path}>{current.itemTitle}</Link>
+              : current.itemTitle}</h1>
             <div className="slide-content">
               {current.mediaUrl && (isVideo
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />

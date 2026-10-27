@@ -14,7 +14,7 @@ import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
 import { getSupabasePublicConfig } from "@/lib/supabase/config";
-import { filterPresentationItems, generateSlides, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { filterPresentationItems, generateSlides, getAnnouncementScheduleDestination, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 import { notifyDataChanged } from "@/spa/data-events";
 import { useAuth } from "@/spa/auth-provider";
 import { useAsyncResource } from "@/spa/use-async-resource";
@@ -374,6 +374,7 @@ function ScheduleDetailPage({ schedules, songs }: {
           {visibleScheduleItems.length ? <ol className="programme-list">
             {visibleScheduleItems.map((item) => {
               const song = item.song_id ? songById.get(item.song_id) : null;
+              const announcementDestination = getAnnouncementScheduleDestination(item.title);
               const primary = song
                 ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>
                 : item.leader_name && item.public_content
@@ -388,8 +389,10 @@ function ScheduleDetailPage({ schedules, songs }: {
                 item.translation_language,
               ].filter(Boolean);
               return <li className="programme-item" key={item.id}><div>
-                <h2>{item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2><p>{primary}</p>
-                {(details.length > 0 || item.link_url) && <p>{details.join(" · ")}{item.link_url && <>{details.length > 0 && " · "}<a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></>}</p>}
+                <h2>{announcementDestination
+                  ? <Link className="song-title-link" to={announcementDestination.path}>{item.title}</Link>
+                  : item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2><p>{primary}</p>
+                {(details.length > 0 || (item.link_url && !announcementDestination)) && <p>{details.join(" · ")}{item.link_url && !announcementDestination && <>{details.length > 0 && " · "}<a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></>}</p>}
                 {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
                   ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
                   : null}
@@ -457,7 +460,8 @@ function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
             {groups.length ? <div className="slides-preview-grid">
               {groups.map((group) => {
                 const media = group.mediaUrl || group.backgroundImageUrl;
-                return <Link className="slides-preview-card" to={`/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
+                const announcementDestination = getAnnouncementScheduleDestination(group.itemTitle);
+                return <Link className="slides-preview-card" to={announcementDestination?.path ?? `/present/${schedule.id}?slide=${group.firstSlideIndex}`} key={group.itemId}>
                   <h2 className="slides-preview-title">{group.itemTitle}</h2>
                   {group.itemType === "presentation"
                     ? <><FileText size={30} aria-hidden="true" /><p className="slides-preview-subtitle">{group.presentationFileName || "Uploaded presentation"}</p></>
