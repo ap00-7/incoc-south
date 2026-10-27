@@ -67,11 +67,13 @@ export function RealtimeRefresh({
             filter: `${filter.column}=eq.${filter.value}`,
           }, refresh);
         }
-        channel = channel.on("postgres_changes", {
-          event: "DELETE",
-          schema: "public",
-          table: filter.table,
-        }, refresh);
+        if (filter.table === "announcement_items") {
+          channel = channel.on("postgres_changes", {
+            event: "DELETE",
+            schema: "public",
+            table: filter.table,
+          }, refresh);
+        }
       } else if (filter.table === "schedules") {
         for (const event of ["INSERT", "UPDATE"] as const) {
           channel = channel.on("postgres_changes", {
