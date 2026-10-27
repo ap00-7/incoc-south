@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
@@ -115,12 +115,30 @@ function ScrollPositionRestoration() {
   return null;
 }
 
-function PageShell({ children, owner = false, hideFooter = false }: { children: ReactNode; owner?: boolean; hideFooter?: boolean }) {
+type PageSwipeHandlers = {
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerCancel: (event: ReactPointerEvent<HTMLElement>) => void;
+  onLostPointerCapture: (event: ReactPointerEvent<HTMLElement>) => void;
+};
+
+function PageShell({ children, owner = false, hideFooter = false, swipeHandlers }: {
+  children: ReactNode;
+  owner?: boolean;
+  hideFooter?: boolean;
+  swipeHandlers?: PageSwipeHandlers;
+}) {
   const { pathname } = useLocation();
   const showHeader = pathname === "/";
   return <>
     {showHeader && <SiteHeader owner={owner} showNavigation />}
-    <main className={`page-main${showHeader ? "" : " page-main-headerless"}`}>{children}</main>
+    <main
+      className={`page-main${showHeader ? "" : " page-main-headerless"}${swipeHandlers ? " page-main-scheduled-song" : ""}`}
+      onPointerDown={swipeHandlers?.onPointerDown}
+      onPointerUp={swipeHandlers?.onPointerUp}
+      onPointerCancel={swipeHandlers?.onPointerCancel}
+      onLostPointerCapture={swipeHandlers?.onLostPointerCapture}
+    >{children}</main>
     {!hideFooter && <SiteFooter />}
   </>;
 }
@@ -279,12 +297,80 @@ function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
   </PageShell>;
 }
 
-function SongDetailPage({ songs }: { songs: SharedContent["songs"] }) {
+function SongDetailPage({ songs, schedules }: {
+  songs: SharedContent["songs"];
+  schedules: SharedContent["schedules"];
+}) {
   const { songId = "" } = useParams();
   const { membership } = useAuth();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const swipeStart = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const song = songs.find((item) => item.id === songId);
-  return <PageShell owner={membership?.role === "owner"} hideFooter>
+  const navigationState = location.state as {
+    songOrigin?: unknown;
+    scheduleId?: unknown;
+    scheduleItemId?: unknown;
+  } | null;
+  const scheduleId = navigationState?.songOrigin === "schedule"
+    && typeof navigationState.scheduleId === "string"
+    && navigationState.scheduleId
+    ? navigationState.scheduleId
+    : undefined;
+  const schedule = scheduleId ? schedules.find((item) => item.id === scheduleId) : undefined;
+  const scheduledSongs = schedule?.schedule_items.flatMap((item) => (
+    item.show_in_schedule
+      && item.item_type === "song"
+      && item.song_id
+      && songs.some((scheduledSong) => scheduledSong.id === item.song_id)
+      ? [{ itemId: item.id, songId: item.song_id }]
+      : []
+  )) ?? [];
+  const scheduleItemId = typeof navigationState?.scheduleItemId === "string"
+    ? navigationState.scheduleItemId
+    : undefined;
+  const currentScheduledSongIndex = scheduledSongs.findIndex((item) => item.itemId === scheduleItemId && item.songId === songId);
+
+  useEffect(() => {
+    swipeStart.current = null;
+    return () => { swipeStart.current = null; };
+  }, [songId, scheduleId, scheduleItemId]);
+
+  const swipeHandlers: PageSwipeHandlers | undefined = currentScheduledSongIndex >= 0 && scheduleId && scheduleItemId
+    ? {
+      onPointerDown: (event) => {
+        if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+        if (swipeStart.current) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest("button, a, input, textarea, select, form, video, audio, iframe, summary, label, [role=button], [role=link], [role=slider], [role=menuitem], [role=checkbox], [role=radio], [role=switch], [role=tab], [role=combobox], [role=option], [contenteditable=true]")) return;
+        swipeStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      },
+      onPointerUp: (event) => {
+        const start = swipeStart.current;
+        if (!start || start.pointerId !== event.pointerId) return;
+        swipeStart.current = null;
+        const deltaX = event.clientX - start.x;
+        const deltaY = event.clientY - start.y;
+        if (Math.abs(deltaX) < 55 || Math.abs(deltaX) <= Math.abs(deltaY) * 1.25) return;
+        const targetSong = scheduledSongs[currentScheduledSongIndex + (deltaX < 0 ? 1 : -1)];
+        if (targetSong) {
+          navigate(`/songs/${encodeURIComponent(targetSong.songId)}`, {
+            state: { songOrigin: "schedule", scheduleId, scheduleItemId: targetSong.itemId },
+          });
+        }
+      },
+      onPointerCancel: (event) => {
+        if (swipeStart.current?.pointerId === event.pointerId) swipeStart.current = null;
+      },
+      onLostPointerCapture: (event) => {
+        if (swipeStart.current?.pointerId === event.pointerId) swipeStart.current = null;
+      },
+    }
+    : undefined;
+
+  return <PageShell owner={membership?.role === "owner"} hideFooter swipeHandlers={swipeHandlers}>
     {song
       ? <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
           <SongPageContent song={song} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
@@ -373,10 +459,10 @@ function ScheduleDetailPage({ schedules, songs }: {
           {schedule.description && <p className="section-description">{schedule.description}</p>}
           {visibleScheduleItems.length ? <ol className="programme-list">
             {visibleScheduleItems.map((item) => {
-              const song = item.song_id ? songById.get(item.song_id) : null;
+              const song = item.item_type === "song" && item.song_id ? songById.get(item.song_id) : null;
               const announcementDestination = getAnnouncementScheduleDestination(item.title);
               const primary = song
-                ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id }}>{song.title}</Link></>
+                ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link></>
                 : item.leader_name && item.public_content
                   ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
                   : item.leader_name
@@ -900,7 +986,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/songs" element={sharedContent && <SongbookPage songs={sharedContent.songs} />} />
-      <Route path="/songs/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} />} />
+      <Route path="/songs/:songId" element={sharedContent && <SongDetailPage songs={sharedContent.songs} schedules={sharedContent.schedules} />} />
       <Route path="/song" element={<LegacySongRouteRedirect />} />
       <Route path="/song/:songId" element={<LegacySongRouteRedirect />} />
       <Route path="/songbook" element={<LegacySongRouteRedirect />} />

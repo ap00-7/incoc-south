@@ -55,6 +55,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .header-session-action:hover { color: #fff; background: #202020; }
 .header-session-neutral { color: #aaa; font-size: 11px; white-space: nowrap; }
 .page-main { min-height: calc(100vh - 140px); }
+.page-main-scheduled-song { touch-action: pan-y; }
 .site-footer { max-width: 1180px; min-height: 64px; margin: auto; padding: 18px 30px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; border-top: 1px solid var(--border); }
 .route-loading { min-height: 100vh; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
 .route-loading-shell { min-height: 62vh; }
