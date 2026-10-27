@@ -5,6 +5,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { deleteSong } from "@/lib/actions/content";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
+import { isMultilingualSong } from "@/lib/domain/songs";
 
 const SongEditorForm = lazy(() => import("@/components/admin/song-creation-form").then((module) => ({ default: module.SongEditorForm })));
 
@@ -23,6 +24,7 @@ type SongForReading = {
     label: string | null;
     position: number;
     lyrics: string;
+    lyrics_language: string | null;
     translation: string | null;
     translation_language: string | null;
     is_hidden: boolean;
@@ -48,7 +50,20 @@ export function SongPageContent({
   const backLabel = scheduleId ? "Back to Schedule" : "Back to Songbook";
   const returnLabel = scheduleId ? "Return to Schedule" : "Return to Songbook";
 
-  const labeledSections = labelSongSections(sequenceSongSections(song.song_sections ?? [], song.start_with_chorus));
+  const isMultilingual = isMultilingualSong(song.language, song.song_sections ?? []);
+  const lyricLanguages = new Set([
+    song.language,
+    ...song.song_sections
+      .filter(({ lyrics }) => lyrics.trim())
+      .map(({ lyrics_language }) => lyrics_language)
+      .filter((language): language is string => Boolean(language)),
+  ]);
+  const preserveSectionOrder = song.language === "Multilingual" || lyricLanguages.size > 1;
+  const labeledSections = labelSongSections(sequenceSongSections(
+    song.song_sections ?? [],
+    song.start_with_chorus,
+    preserveSectionOrder,
+  ));
   const translatedSections = song.has_translation ? labeledSections.filter(({ section }) => section.translation?.trim()) : [];
   return (
     <>
@@ -59,6 +74,7 @@ export function SongPageContent({
           {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
             <section className="lyrics-section" key={`${section.id}-${index}`}>
               <h2>[{label}]</h2>
+              {isMultilingual && <p className="translation-language">{section.lyrics_language || song.language}</p>}
               <p className="lyrics-text">{section.lyrics}</p>
             </section>
           )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
@@ -91,6 +107,7 @@ export function SongPageContent({
                     section_type: section.section_type,
                     label: section.label ?? "",
                     lyrics: section.lyrics,
+                    lyrics_language: section.lyrics_language ?? "",
                     translation: section.translation ?? "",
                     translation_language: section.translation_language ?? "",
                     is_hidden: section.is_hidden,

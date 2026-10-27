@@ -407,6 +407,7 @@ export function Presentation({
                 ? <video className="slide-media" src={current.mediaUrl} controls playsInline />
                 : <img className="slide-media" src={current.mediaUrl} alt={current.itemTitle} />)}
               {hasLyrics && <div className="slide-lyric-area">
+                {current.lyricsLanguage && <p className="slide-section">{current.lyricsLanguage}</p>}
                 {current.lines.length > 0 && <div className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * zoomedLyricScale}rem, ${3 * zoomedLyricScale}vw, ${2.5 * zoomedLyricScale}rem)` }}>{current.lines.join("\n")}</div>}
                 {current.translationLines?.length ? <div className="slide-translation">
                   <p className="slide-lyrics" style={{ fontSize: `clamp(${1.5 * zoomedLyricScale}rem, ${3 * zoomedLyricScale}vw, ${2.5 * zoomedLyricScale}rem)` }}>{current.translationLines.join("\n")}</p>

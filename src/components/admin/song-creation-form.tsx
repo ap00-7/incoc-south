@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowDown, ArrowUp, Copy, Plus, Trash2, X } from "lucide-react";
 import { saveSong } from "@/lib/actions/content";
 import { getSectionDisplayLabel } from "@/lib/domain/slides";
-import { songEditorLanguages, songLanguages, type SongSectionType } from "@/lib/domain/songs";
+import { songEditorLanguages, songLanguages, songSectionTypes, type SongSectionType } from "@/lib/domain/songs";
 import { createClient } from "@/lib/supabase/browser";
 import { useAuth } from "@/spa/auth-provider";
 import { ConfirmationDialog } from "@/components/confirm-button";
@@ -17,6 +17,7 @@ type SectionInput = {
   section_type: SongSectionType;
   label: string;
   lyrics: string;
+  lyrics_language: string;
   translation: string;
   translation_language: string;
   is_hidden: boolean;
@@ -77,7 +78,7 @@ type SongEditorFormProps = {
 };
 
 function blankSection(key: string, type: SongSectionType): SectionDraft {
-  return { key, section_type: type, label: "", lyrics: "", translation: "", translation_language: "", is_hidden: false };
+  return { key, section_type: type, label: "", lyrics: "", lyrics_language: "", translation: "", translation_language: "", is_hidden: false };
 }
 
 function sectionTitle(section: SectionDraft, verseNumber: number) {
@@ -239,13 +240,14 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
     }
   }, [editingKey]);
 
-  const sectionPayload = JSON.stringify(orderSectionsForEnding([...sections], ending).filter((section) =>
+  const sectionPayload = JSON.stringify((language === "Multilingual" ? [...sections] : orderSectionsForEnding([...sections], ending)).filter((section) =>
     section.id || section.section_type === "verse" || section.lyrics.trim() || section.translation.trim(),
   ).map((section) => ({
     ...(section.id ? { id: section.id } : {}),
     section_type: section.section_type,
     section_label: section.label,
     lyrics: section.lyrics,
+    lyrics_language: section.lyrics_language,
     translation: section.translation,
     translation_language: section.translation_language,
     is_hidden: section.is_hidden,
@@ -257,7 +259,11 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
     index,
     number: section.is_hidden ? visibleVerseNumber + 1 : ++visibleVerseNumber,
   }));
-  const versePendingDelete = numberedVerses.find(({ section }) => section.key === deleteVerseKey);
+  const pendingDeleteSection = sections.find((section) => section.key === deleteVerseKey);
+  const pendingDeleteIndex = pendingDeleteSection ? sections.indexOf(pendingDeleteSection) : -1;
+  const pendingDeleteVerseNumber = pendingDeleteSection?.section_type === "verse"
+    ? sections.slice(0, pendingDeleteIndex + 1).filter(({ section_type }) => section_type === "verse").length
+    : undefined;
   const primarySpecialKeys = new Set((["pre_chorus", "chorus", "bridge"] as const)
     .map((type) => sections.find((section) => section.section_type === type)?.key));
   const additionalSections = sections.filter((section) => section.section_type !== "verse" && !primarySpecialKeys.has(section.key));
@@ -296,6 +302,48 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
     setSections((current) => current.map((section) => section.key === key ? { ...section, ...update } : section));
   }
 
+  function changeLanguage(value: string) {
+    if (value === "Multilingual" && language !== "Multilingual") {
+      setSections((current) => current.flatMap((section) => {
+        const original = {
+          ...section,
+          lyrics_language: section.lyrics_language || language,
+        };
+        if (!section.translation.trim() || !section.translation_language) return [original];
+        const translatedSection = { ...section };
+        delete translatedSection.id;
+        return [
+          { ...original, translation: "", translation_language: "" },
+          {
+            ...translatedSection,
+            key: crypto.randomUUID(),
+            lyrics: section.translation,
+            lyrics_language: section.translation_language,
+            translation: "",
+            translation_language: "",
+          },
+        ];
+      }));
+    }
+    setLanguage(value);
+  }
+
+  function addMultilingualSection() {
+    const section = blankSection(crypto.randomUUID(), "verse");
+    setSections((current) => [...current, section]);
+  }
+
+  function moveMultilingualSection(key: string, direction: -1 | 1) {
+    setSections((current) => {
+      const index = current.findIndex((section) => section.key === key);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   function moveVerse(key: string, direction: -1 | 1) {
     setSections((current) => {
       const versesOnly = current.filter((section) => section.section_type === "verse");
@@ -314,6 +362,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       section_type: section.section_type,
       label: section.label,
       lyrics: section.lyrics,
+      lyrics_language: section.lyrics_language,
       translation: section.translation,
       translation_language: section.translation_language,
       is_hidden: section.is_hidden,
@@ -477,7 +526,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           id="language"
           value={songEditorLanguages.some((option) => option.value === language) ? language : "English"}
           options={songEditorLanguages.map((option) => ({ label: option.label, value: option.value }))}
-          onValueChange={setLanguage}
+          onValueChange={changeLanguage}
           required
         />
         {song && !songEditorLanguages.some((option) => option.value === song.language) && <p className="muted legacy-language-note">Existing language “{song.language}” will be retained unless you choose another.</p>}
@@ -486,10 +535,12 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       <fieldset className="song-options">
         <legend>Options</legend>
         <label className="check-row"><input type="checkbox" name="has_translation" checked={hasTranslation} onChange={(event) => setHasTranslation(event.target.checked)} /> Has Translation</label>
-        <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>
+        {language === "Multilingual"
+          ? startWithChorus && <input type="hidden" name="start_with_chorus" value="on" />
+          : <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>}
       </fieldset>
 
-      <label className="song-ending-control" htmlFor="song-ending">
+      {language !== "Multilingual" && <label className="song-ending-control" htmlFor="song-ending">
         <span>Ending</span>
         <Dropdown
           id="song-ending"
@@ -503,8 +554,81 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           ]}
           onValueChange={(value) => setEnding(value as SongEnding)}
         />
-      </label>
+      </label>}
 
+      {language === "Multilingual" ? <section className="song-editor-section" aria-labelledby="multilingual-lyrics-heading">
+        <div className="song-editor-section-heading">
+          <div><p className="eyebrow">LYRICS</p><h2 id="multilingual-lyrics-heading">Ordered lyric sections</h2></div>
+          <button className="button button-secondary" type="button" onClick={addMultilingualSection}><Plus size={16} /> Add lyric section</button>
+        </div>
+        <p className="muted">Choose a language for every lyric entry. Add another section for each language version and arrange them in presentation order.</p>
+        <ol className="multilingual-section-list">
+          {sections.map((section, index) => <li className="multilingual-section-card" key={section.key}>
+            <div className="multilingual-section-heading">
+              <strong>{getSectionDisplayLabel(section, index + 1)}</strong>
+              <div className="verse-actions">
+                <button type="button" className="icon-button" aria-label={`Move lyric section ${index + 1} up`} title="Move up" disabled={index === 0} onClick={() => moveMultilingualSection(section.key, -1)}><ArrowUp size={16} /></button>
+                <button type="button" className="icon-button" aria-label={`Move lyric section ${index + 1} down`} title="Move down" disabled={index === sections.length - 1} onClick={() => moveMultilingualSection(section.key, 1)}><ArrowDown size={16} /></button>
+                <button type="button" className="icon-button danger" aria-label={`Delete ${getSectionDisplayLabel(section, index + 1)}`} title="Delete section" onClick={() => setDeleteVerseKey(section.key)}><Trash2 size={16} /></button>
+              </div>
+            </div>
+            <div className="form-stack">
+              <label htmlFor={`${section.key}-section-type`}>Section type</label>
+              <Dropdown
+                id={`${section.key}-section-type`}
+                value={section.section_type}
+                options={songSectionTypes.map(({ value, label }) => ({ value, label }))}
+                onValueChange={(value) => updateSection(section.key, { section_type: value as SongSectionType })}
+              />
+              <label htmlFor={`${section.key}-section-label`}>Section label (optional)</label>
+              <input
+                id={`${section.key}-section-label`}
+                value={section.label}
+                maxLength={100}
+                onChange={(event) => updateSection(section.key, { label: event.target.value })}
+              />
+              <label className="check-row"><input type="checkbox" checked={section.is_hidden} onChange={(event) => updateSection(section.key, { is_hidden: event.target.checked })} /> Hide section</label>
+              <label htmlFor={`${section.key}-language`}>Lyrics language</label>
+              <Dropdown
+                id={`${section.key}-language`}
+                value={section.lyrics_language}
+                options={[
+                  { value: "", label: "Select a language" },
+                  ...(section.lyrics_language && !songLanguages.some(({ value }) => value === section.lyrics_language)
+                    ? [{ value: section.lyrics_language, label: `${section.lyrics_language} (existing)` }]
+                    : []),
+                  ...songLanguages.map(({ value, label }) => ({ value, label })),
+                ]}
+                onValueChange={(value) => updateSection(section.key, { lyrics_language: value })}
+                required={Boolean(section.lyrics.trim())}
+              />
+              <label htmlFor={`${section.key}-multilingual-lyrics`}>Lyrics</label>
+              <textarea
+                id={`${section.key}-multilingual-lyrics`}
+                value={section.lyrics}
+                maxLength={20000}
+                rows={6}
+                onChange={(event) => updateSection(section.key, { lyrics: event.target.value })}
+              />
+              {(hasTranslation || section.translation.trim()) && <details className="multilingual-legacy-translation">
+                <summary>Legacy translation fields</summary>
+                <label htmlFor={`${section.key}-translation`}>Translation</label>
+                <textarea id={`${section.key}-translation`} value={section.translation} maxLength={20000} rows={5} onChange={(event) => updateSection(section.key, { translation: event.target.value })} />
+                <label htmlFor={`${section.key}-translation-language`}>Translation language</label>
+                <Dropdown
+                  id={`${section.key}-translation-language`}
+                  value={section.translation_language}
+                  options={[
+                    { value: "", label: "Select a language" },
+                    ...songLanguages.map(({ value, label }) => ({ value, label })),
+                  ]}
+                  onValueChange={(value) => updateSection(section.key, { translation_language: value })}
+                />
+              </details>}
+            </div>
+          </li>)}
+        </ol>
+      </section> : <>
       <section className="song-editor-section" aria-labelledby="verses-heading">
         <div className="song-editor-section-heading">
           <div><p className="eyebrow">LYRICS</p><h2 id="verses-heading">Verses</h2></div>
@@ -569,6 +693,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           </div>)}
         </div>
       </details>}
+      </>}
 
       {error && <p className="form-error" role="alert">{error}</p>}
           <PendingSubmitButton
@@ -615,9 +740,9 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
         onConfirm={discardVerse}
         onCancel={() => setConfirmDiscard(false)}
       />}
-      {versePendingDelete && <ConfirmationDialog
-        title="Delete verse?"
-        description={`Delete "${sectionTitle(versePendingDelete.section, versePendingDelete.number)}" from this song? This change will be saved when you save the song.`}
+      {pendingDeleteSection && <ConfirmationDialog
+        title={language === "Multilingual" ? "Delete lyric section?" : "Delete verse?"}
+        description={`Delete "${sectionTitle(pendingDeleteSection, pendingDeleteVerseNumber ?? 1)}" from this song? This change will be saved when you save the song.`}
         onConfirm={deleteVerse}
         onCancel={() => setDeleteVerseKey(null)}
       />}

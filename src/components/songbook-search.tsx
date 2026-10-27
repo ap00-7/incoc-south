@@ -1,16 +1,23 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Dropdown } from "@/components/dropdown";
+import { isMultilingualSong } from "@/lib/domain/songs";
 
 export type SongbookResult = {
   id: string;
   title: string;
   language: string;
+  song_sections?: Array<{
+    lyrics?: string;
+    lyrics_language?: string | null;
+    translation?: string | null;
+    translation_language?: string | null;
+  }>;
   author: string | null;
   updated_at: string;
 };
 
-const languageOptions = ["English", "Hindi", "Kannada", "Tamil"] as const;
+const languageOptions = ["English", "Hindi", "Kannada", "Tamil", "Telugu", "Malayalam", "Multilingual"] as const;
 
 export function SongbookSearch({
   songs,
@@ -53,7 +60,10 @@ export function SongbookSearch({
     if (!normalized) return [];
     return songs.filter((song) =>
       song.title.toLocaleLowerCase().includes(normalized)
-      && (!selectedLanguage || song.language === selectedLanguage),
+      && (!selectedLanguage
+        || (selectedLanguage === "Multilingual"
+          ? isMultilingualSong(song.language, song.song_sections ?? [])
+          : song.language === selectedLanguage)),
     ).slice(0, 8);
   }, [selectedLanguage, songs, title]);
 

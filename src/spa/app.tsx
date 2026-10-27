@@ -5,6 +5,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SongbookSearch } from "@/components/songbook-search";
+import { isMultilingualSong } from "@/lib/domain/songs";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -155,7 +156,7 @@ async function loadSharedContent(isOwner: boolean) {
   const supabase = createClient();
   const [songs, schedules, churchResult] = await Promise.all([
     loadAllPages((from, to) => supabase.from("songs")
-      .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, translation, translation_language, is_hidden), church:churches!inner(id, slug)")
+      .select("id, title, language, author, source, has_translation, start_with_chorus, updated_at, song_sections(id, section_type, label, position, lyrics, lyrics_language, translation, translation_language, is_hidden), church:churches!inner(id, slug)")
       .eq("church.slug", "incoc-south").order("title").range(from, to), "songs"),
     loadAllPages((from, to) => {
       const query = supabase.from("schedules")
@@ -242,7 +243,10 @@ function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
   const filteredSongs = songs.filter((song) =>
     (!query || song.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-    && (!language || song.language === language));
+    && (!language
+      || (language === "Multilingual"
+        ? isMultilingualSong(song.language, song.song_sections ?? [])
+        : song.language === language)));
   const visibleSongs = filteredSongs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasNextPage = filteredSongs.length > page * PAGE_SIZE;
   const filters = new URLSearchParams();
@@ -587,7 +591,7 @@ function AdminSongEditPage({ songs }: { songs: SharedContent["songs"] | null }) 
       start_with_chorus: song.start_with_chorus,
       sections: song.song_sections.map((section) => ({
         id: section.id, section_type: section.section_type, label: section.label ?? "",
-        lyrics: section.lyrics, translation: section.translation ?? "",
+        lyrics: section.lyrics, lyrics_language: section.lyrics_language ?? "", translation: section.translation ?? "",
         translation_language: section.translation_language ?? "", is_hidden: section.is_hidden,
       })),
     }} /></Suspense>

@@ -1,4 +1,4 @@
-export const songLanguageValues = [
+export const lyricLanguageValues = [
   "English",
   "Hindi",
   "Kannada",
@@ -7,27 +7,35 @@ export const songLanguageValues = [
   "Telugu",
 ] as const;
 
+export const songLanguageValues = [...lyricLanguageValues, "Multilingual"] as const;
+
 export const songLanguages = [
-  { value: songLanguageValues[0], label: "English" },
-  { value: songLanguageValues[1], label: "हिन्दी · Hindi" },
-  { value: songLanguageValues[2], label: "ಕನ್ನಡ · Kannada" },
-  { value: songLanguageValues[3], label: "മലയാളം · Malayalam" },
-  { value: songLanguageValues[4], label: "தமிழ் · Tamil" },
-  { value: songLanguageValues[5], label: "తెలుగు · Telugu" },
+  { value: lyricLanguageValues[0], label: "English" },
+  { value: lyricLanguageValues[1], label: "हिन्दी · Hindi" },
+  { value: lyricLanguageValues[2], label: "ಕನ್ನಡ · Kannada" },
+  { value: lyricLanguageValues[3], label: "മലയാളം · Malayalam" },
+  { value: lyricLanguageValues[4], label: "தமிழ் · Tamil" },
+  { value: lyricLanguageValues[5], label: "తెలుగు · Telugu" },
 ] as const;
 
 export const songEditorLanguages = [
-  { value: "English", label: "English" },
-  { value: "Kannada", label: "ಕನ್ನಡ · Kannada" },
-  { value: "Tamil", label: "தமிழ் · Tamil" },
-  { value: "Hindi", label: "हिन्दी · Hindi" },
+  songLanguages[0],
+  songLanguages[2],
+  songLanguages[4],
+  songLanguages[5],
+  songLanguages[1],
+  songLanguages[3],
+  { value: "Multilingual", label: "Multilingual" },
 ] as const;
 
 export const songEditorLanguageValues = songEditorLanguages.map(({ value }) => value) as [
   "English",
   "Kannada",
   "Tamil",
+  "Telugu",
   "Hindi",
+  "Malayalam",
+  "Multilingual",
 ];
 
 export const songSectionValues = [
@@ -52,3 +60,21 @@ export const songSectionTypes = [
 
 export type SongLanguage = (typeof songLanguageValues)[number];
 export type SongSectionType = (typeof songSectionValues)[number];
+
+export function isMultilingualSong(
+  language: string,
+  sections: Array<{
+    lyrics?: string;
+    lyrics_language?: string | null;
+    translation?: string | null;
+    translation_language?: string | null;
+  }>,
+) {
+  if (language === "Multilingual") return true;
+  const languages = new Set([language]);
+  for (const section of sections) {
+    if (section.lyrics?.trim() && section.lyrics_language) languages.add(section.lyrics_language);
+    if (section.translation?.trim() && section.translation_language) languages.add(section.translation_language);
+  }
+  return languages.size > 1;
+}

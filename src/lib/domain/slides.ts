@@ -4,6 +4,7 @@ export type LyricSection = {
   label: string | null;
   position: number;
   lyrics: string;
+  lyrics_language?: string | null;
   is_hidden?: boolean;
   translation?: string | null;
   translation_language?: string | null;
@@ -24,6 +25,7 @@ export type ProgrammeItem = {
   song?: {
     id?: string;
     title: string;
+    language?: string;
     start_with_chorus?: boolean;
     has_translation?: boolean;
     song_sections: LyricSection[];
@@ -33,9 +35,11 @@ export type ProgrammeItem = {
 export function sequenceSongSections(
   sections: LyricSection[],
   startWithChorus = false,
+  preserveOrder = false,
 ): LyricSection[] {
   const ordered = [...sections].filter((section) => !section.is_hidden && (section.lyrics.trim() || section.translation?.trim()))
     .sort((a, b) => a.position - b.position);
+  if (preserveOrder) return ordered;
   const chorus = ordered.find((section) => section.section_type === "chorus");
   const preChorus = ordered.find((section) => section.section_type === "pre_chorus");
   const verses = ordered.filter((section) => section.section_type === "verse");
@@ -127,6 +131,7 @@ export type PresentationSlide = {
   backgroundImageUrl: string | null;
   mediaUrl: string | null;
   sectionLabel: string | null;
+  lyricsLanguage: string | null;
   lines: string[];
   translationLines: string[] | null;
   translationLabel: string | null;
@@ -268,6 +273,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
         backgroundImageUrl: null,
         mediaUrl: item.media_url ?? null,
         sectionLabel: null,
+        lyricsLanguage: null,
         lines: [],
         translationLines: null,
         translationLabel: null,
@@ -294,6 +300,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
           backgroundImageUrl: item.background_image_url ?? null,
           mediaUrl: null,
           sectionLabel: null,
+          lyricsLanguage: null,
           lines,
           translationLines: null,
           translationLabel: null,
@@ -302,9 +309,18 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
       }
     } else if (item.song) {
       const songTitle = item.song.title;
+      const lyricLanguages = new Set([
+        item.song.language,
+        ...item.song.song_sections
+          .filter((section) => section.lyrics.trim())
+          .map((section) => section.lyrics_language)
+          .filter((language): language is string => Boolean(language)),
+      ]);
+      const multilingualLyrics = item.song.language === "Multilingual" || lyricLanguages.size > 1;
       const sections = sequenceSongSections(
         item.song.song_sections,
         item.song.start_with_chorus,
+        multilingualLyrics,
       );
       const labeledSections = labelSongSections(sections);
       const addSectionSlides = (section: LyricSection, label: string) => {
@@ -325,6 +341,9 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
             backgroundImageUrl: item.background_image_url ?? null,
             mediaUrl: item.media_url ?? null,
             sectionLabel: label,
+            lyricsLanguage: multilingualLyrics
+              ? section.lyrics_language || (item.song?.language !== "Multilingual" ? item.song?.language ?? null : null)
+              : null,
             lines,
             translationLines: translationLines.length ? translationLines : null,
             translationLabel: translationLines.length ? section.translation_language || "Translation" : null,
@@ -345,6 +364,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
           backgroundImageUrl: item.background_image_url ?? null,
           mediaUrl: item.media_url ?? null,
           sectionLabel: null,
+          lyricsLanguage: null,
           lines: [],
           translationLines: null,
           translationLabel: null,
@@ -362,6 +382,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
         backgroundImageUrl: item.background_image_url ?? null,
         mediaUrl: item.media_url ?? null,
         sectionLabel: null,
+        lyricsLanguage: null,
         lines: content ? content.replace(/\r\n/g, "\n").split("\n") : [],
         translationLines: null,
         translationLabel: null,

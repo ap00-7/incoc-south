@@ -526,6 +526,17 @@ html { color-scheme: dark; }
 .legacy-section { padding: 12px 0 18px; border-bottom: 1px solid #303030; }
 .legacy-section:last-child { border-bottom: 0; }
 .legacy-section h3 { margin: 3px 0; color: #eee; font-size: 13px; text-transform: capitalize; }
+.multilingual-section-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.multilingual-section-card { display: grid; gap: 14px; padding: 15px; color: var(--ink); background: var(--white); border: 1px solid var(--border); border-radius: 8px; }
+.multilingual-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.multilingual-section-heading > strong { color: var(--navy); font-size: 13px; }
+.multilingual-section-card .verse-actions .icon-button { color: var(--ink); background: var(--surface-soft); border-color: var(--border); }
+.multilingual-section-card .verse-actions .icon-button:disabled { opacity: .35; }
+.multilingual-section-card .verse-actions .icon-button.danger { color: var(--danger); }
+.multilingual-section-card textarea { min-height: 120px; resize: vertical; }
+.multilingual-legacy-translation { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.multilingual-legacy-translation > summary { color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 650; }
+.multilingual-legacy-translation textarea { min-height: 100px; }
 .song-save-button { align-self: flex-start; min-width: 160px; }
 .verse-dialog-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 18px; background: #000b; }
 .verse-dialog { width: min(100%, 620px); max-height: min(92dvh, 860px); display: flex; flex-direction: column; overflow: hidden; background: #111; border: 1px solid #424242; border-radius: 8px; box-shadow: 0 20px 70px #000a; }
@@ -769,6 +780,10 @@ code, kbd, pre { font-family: var(--font-mono); }
 .song-editor .verse-number { color: var(--navy); background: var(--surface-soft); }
 .song-editor .verse-row-copy strong, .song-editor .legacy-section h3 { color: var(--navy); }
 .song-editor .verse-row-copy > span { color: var(--muted); }
+.multilingual-section-card { color: var(--ink); background: var(--white); border-color: var(--border); }
+.multilingual-section-heading > strong { color: var(--navy); }
+.multilingual-section-card .verse-actions .icon-button { color: var(--ink); background: var(--surface-soft); border-color: var(--border); }
+.multilingual-legacy-translation { border-color: var(--border); }
 .song-editor .verse-actions .icon-button, .verse-close { color: var(--ink); background: var(--surface-soft); border-color: var(--border); }
 .song-editor .verse-actions .icon-button.danger { color: var(--danger); }
 .song-options legend, .song-options .check-row { color: var(--muted); }

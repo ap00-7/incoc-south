@@ -2,7 +2,7 @@ import { z } from "zod";
 import { requireOwner } from "@/lib/auth-client";
 import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
-import { songEditorLanguageValues, songLanguageValues, songSectionValues } from "@/lib/domain/songs";
+import { lyricLanguageValues, songEditorLanguageValues, songSectionValues } from "@/lib/domain/songs";
 import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
 
 function invalidateRouteData(path: string) {
@@ -11,7 +11,7 @@ function invalidateRouteData(path: string) {
 
 const songMetadataSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  language: z.enum(songLanguageValues),
+  language: z.enum(lyricLanguageValues),
   author: z.string().trim().max(200),
   source: z.string().trim().max(300),
 });
@@ -25,7 +25,7 @@ const songSectionSchema = z.object({
   section_label: z.string().trim().max(100),
   lyrics: z.string().min(1).max(20000),
   translation: z.string().max(20000),
-  translation_language: z.enum(songLanguageValues).or(z.literal("")),
+  translation_language: z.enum(lyricLanguageValues).or(z.literal("")),
 }).superRefine((section, context) => {
   if (section.translation.trim() && !section.translation_language) {
     context.addIssue({ code: "custom", message: "Choose a translation language." });
@@ -337,6 +337,7 @@ const editorSectionSchema = z.object({
   section_type: z.enum(songSectionValues),
   section_label: z.string().trim().max(100),
   lyrics: z.string().max(20000),
+  lyrics_language: z.string().trim().max(80),
   translation: z.string().max(20000),
   translation_language: z.string().max(80),
   is_hidden: z.boolean(),
@@ -380,6 +381,15 @@ export async function saveSong(formData: FormData) {
   });
   if (!parsedMetadata.success) throw new Error("Enter a title and select one of the supported song languages.");
   const sections = parseEditorSections(formData);
+  if (parsedMetadata.data.language === "Multilingual") {
+    const lyricSections = sections.filter((section) => section.lyrics.trim());
+    if (lyricSections.some((section) => !section.lyrics_language || section.lyrics_language === "Multilingual")) {
+      throw new Error("Choose a language for every multilingual lyric section.");
+    }
+    if (new Set(lyricSections.filter((section) => !section.is_hidden).map((section) => section.lyrics_language)).size < 2) {
+      throw new Error("A multilingual song must contain lyrics in at least two languages.");
+    }
+  }
   const supabase = await createClient();
 
   if (!songId) {
@@ -407,6 +417,7 @@ export async function saveSong(formData: FormData) {
       label: section.section_label || null,
       position,
       lyrics: section.lyrics,
+      lyrics_language: section.lyrics_language || null,
       translation: section.translation.trim() || null,
       translation_language: section.translation.trim() ? section.translation_language || null : null,
       is_hidden: section.is_hidden,
@@ -470,6 +481,7 @@ export async function saveSong(formData: FormData) {
       label: section.section_label || null,
       position,
       lyrics: section.lyrics,
+      lyrics_language: section.lyrics_language || null,
       translation: section.translation.trim() || null,
       translation_language: section.translation.trim() ? section.translation_language || null : null,
       is_hidden: section.is_hidden,
