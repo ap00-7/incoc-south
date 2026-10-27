@@ -39,19 +39,20 @@ export type Database = {
         ];
       };
       announcement_collections: {
-        Row: { church_id: string; collection_name: string; created_at: string; updated_at: string };
-        Insert: { church_id: string; collection_name?: string; created_at?: string; updated_at?: string };
-        Update: { church_id?: string; collection_name?: string; created_at?: string; updated_at?: string };
+        Row: { id: string; church_id: string; collection_name: string; is_published: boolean; created_at: string; updated_at: string };
+        Insert: { id?: string; church_id: string; collection_name?: string; is_published?: boolean; created_at?: string; updated_at?: string };
+        Update: { id?: string; church_id?: string; collection_name?: string; is_published?: boolean; created_at?: string; updated_at?: string };
         Relationships: [
-          { foreignKeyName: "announcement_collections_church_id_fkey"; columns: ["church_id"]; isOneToOne: true; referencedRelation: "churches"; referencedColumns: ["id"] },
+          { foreignKeyName: "announcement_collections_church_id_fkey"; columns: ["church_id"]; isOneToOne: false; referencedRelation: "churches"; referencedColumns: ["id"] },
         ];
       };
       announcement_items: {
-        Row: { id: string; church_id: string; title: string; image_url: string | null; body: string; position: number; created_at: string; updated_at: string };
-        Insert: { id?: string; church_id: string; title: string; image_url?: string | null; body?: string; position: number; created_at?: string; updated_at?: string };
-        Update: { id?: string; church_id?: string; title?: string; image_url?: string | null; body?: string; position?: number; created_at?: string; updated_at?: string };
+        Row: { id: string; church_id: string; collection_id: string; title: string; image_url: string | null; body: string; position: number; created_at: string; updated_at: string };
+        Insert: { id?: string; church_id: string; collection_id: string; title: string; image_url?: string | null; body?: string; position: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; church_id?: string; collection_id?: string; title?: string; image_url?: string | null; body?: string; position?: number; created_at?: string; updated_at?: string };
         Relationships: [
           { foreignKeyName: "announcement_items_church_id_fkey"; columns: ["church_id"]; isOneToOne: false; referencedRelation: "churches"; referencedColumns: ["id"] },
+          { foreignKeyName: "announcement_items_collection_id_fkey"; columns: ["collection_id", "church_id"]; isOneToOne: false; referencedRelation: "announcement_collections"; referencedColumns: ["id", "church_id"] },
         ];
       };
       schedules: {

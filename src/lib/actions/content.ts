@@ -891,10 +891,13 @@ export async function deleteSchedule(formData: FormData) {
 }
 
 const announcementCollectionSchema = z.object({
+  id: z.string().uuid().optional(),
   collection_name: z.string().trim().min(1).max(120),
+  is_published: z.boolean().optional(),
 });
 
 const announcementItemSchema = z.object({
+  collection_id: z.string().uuid(),
   id: z.string().uuid().optional(),
   expected_updated_at: z.string().datetime({ offset: true }).optional(),
   title: z.string().trim().max(200),
@@ -956,18 +959,57 @@ async function requireAnnouncementOwner() {
   return { member, supabase };
 }
 
-export async function saveAnnouncementCollection(input: { collection_name: string }) {
+export async function saveAnnouncementCollection(input: {
+  id?: string;
+  collection_name: string;
+  is_published?: boolean;
+}): Promise<string> {
   const { member, supabase } = await requireAnnouncementOwner();
   const parsed = announcementCollectionSchema.safeParse(input);
   if (!parsed.success) throw new Error("Enter a collection name up to 120 characters.");
-  const { error } = await supabase.from("announcement_collections").upsert({
-    church_id: member.churchId,
-    collection_name: parsed.data.collection_name,
-  }, { onConflict: "church_id" });
+  const { id, ...values } = parsed.data;
+  if (id) {
+    const { data, error } = await supabase.from("announcement_collections").update({
+      collection_name: values.collection_name,
+      ...(values.is_published !== undefined ? { is_published: values.is_published } : {}),
+    }).eq("id", id).eq("church_id", member.churchId).select("id").maybeSingle();
+    if (error) throw new Error(`Unable to save the announcement collection: ${error.message}`);
+    if (!data) throw new Error("This announcement collection is no longer available.");
+    return data.id;
+  }
+  const { data, error } = await supabase.from("announcement_collections").insert({
+      church_id: member.churchId,
+      collection_name: values.collection_name,
+      is_published: values.is_published ?? false,
+    }).select("id").single();
   if (error) throw new Error(`Unable to save the announcement collection: ${error.message}`);
+  return data.id;
+}
+
+export async function deleteAnnouncementCollection(input: { id: string }) {
+  const { member, supabase } = await requireAnnouncementOwner();
+  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) throw new Error("Choose a valid announcement collection.");
+  const { data: collection, error: lookupError } = await supabase.from("announcement_collections")
+    .select("id").eq("id", parsed.data.id).eq("church_id", member.churchId).maybeSingle();
+  if (lookupError) throw new Error(`Unable to find the announcement collection: ${lookupError.message}`);
+  if (!collection) throw new Error("This announcement collection is no longer available.");
+  const { data: items, error: itemsError } = await supabase.from("announcement_items")
+    .select("image_url").eq("collection_id", collection.id).eq("church_id", member.churchId);
+  if (itemsError) throw new Error(`Unable to prepare the collection for deletion: ${itemsError.message}`);
+  const { error } = await supabase.from("announcement_collections")
+    .delete().eq("id", collection.id).eq("church_id", member.churchId);
+  if (error) throw new Error(`Unable to delete the announcement collection: ${error.message}`);
+  const cleanupNotices: string[] = [];
+  for (const item of items ?? []) {
+    const cleanupNotice = await removeAnnouncementImage(item.image_url, member.churchId);
+    if (cleanupNotice) cleanupNotices.push(cleanupNotice);
+  }
+  return cleanupNotices.length ? cleanupNotices.join(" ") : null;
 }
 
 export async function saveAnnouncementItem(input: {
+  collection_id: string;
   id?: string;
   expected_updated_at?: string;
   title: string;
@@ -985,6 +1027,7 @@ export async function saveAnnouncementItem(input: {
     if (!expectedUpdatedAt) throw new Error("Reload this announcement and try again.");
     const { data: current, error: lookupError } = await supabase.from("announcement_items")
       .select("id, image_url").eq("id", parsed.data.id).eq("church_id", member.churchId)
+      .eq("collection_id", parsed.data.collection_id)
       .eq("updated_at", expectedUpdatedAt).maybeSingle();
     if (lookupError) throw new Error(`Unable to verify this announcement: ${lookupError.message}`);
     if (!current) throw new Error("This announcement changed since it was opened. Reload and review the latest version.");
@@ -1003,11 +1046,12 @@ export async function saveAnnouncementItem(input: {
   }
 
   const { data: lastItem, error: orderError } = await supabase.from("announcement_items")
-    .select("position").eq("church_id", member.churchId)
+    .select("position").eq("church_id", member.churchId).eq("collection_id", parsed.data.collection_id)
     .order("position", { ascending: false }).limit(1).maybeSingle();
   if (orderError) throw new Error(`Unable to determine announcement order: ${orderError.message}`);
   const { error } = await supabase.from("announcement_items").insert({
     church_id: member.churchId,
+    collection_id: parsed.data.collection_id,
     title: parsed.data.title,
     image_url: parsed.data.image_url || null,
     body: parsed.data.body,
@@ -1017,15 +1061,17 @@ export async function saveAnnouncementItem(input: {
   return null;
 }
 
-export async function moveAnnouncementItem(input: { id: string; direction: -1 | 1 }) {
+export async function moveAnnouncementItem(input: { collection_id: string; id: string; direction: -1 | 1 }) {
   const { member, supabase } = await requireAnnouncementOwner();
   const parsed = z.object({
+    collection_id: z.string().uuid(),
     id: z.string().uuid(),
     direction: z.union([z.literal(-1), z.literal(1)]),
   }).safeParse(input);
   if (!parsed.success) throw new Error("Choose a valid announcement to reorder.");
   const { data: items, error: listError } = await supabase.from("announcement_items")
-    .select("id, position").eq("church_id", member.churchId).order("position");
+    .select("id, position").eq("church_id", member.churchId)
+    .eq("collection_id", parsed.data.collection_id).order("position");
   if (listError) throw new Error(`Unable to load announcement order: ${listError.message}`);
   const ordered = items ?? [];
   const index = ordered.findIndex(({ id }) => id === parsed.data.id);
@@ -1035,23 +1081,25 @@ export async function moveAnnouncementItem(input: { id: string; direction: -1 | 
   const current = ordered[index];
   const target = ordered[targetIndex];
   const { error: moveError } = await supabase.from("announcement_items").update({ position: target.position })
-    .eq("id", current.id).eq("church_id", member.churchId);
+    .eq("id", current.id).eq("church_id", member.churchId).eq("collection_id", parsed.data.collection_id);
   if (moveError) throw new Error(`Unable to save announcement order: ${moveError.message}`);
   const { error: swapError } = await supabase.from("announcement_items").update({ position: current.position })
-    .eq("id", target.id).eq("church_id", member.churchId);
+    .eq("id", target.id).eq("church_id", member.churchId).eq("collection_id", parsed.data.collection_id);
   if (swapError) throw new Error(`Unable to save announcement order: ${swapError.message}`);
 }
 
-export async function deleteAnnouncementItem(input: { id: string }): Promise<string | null> {
+export async function deleteAnnouncementItem(input: { id: string; collection_id: string }): Promise<string | null> {
   const { member, supabase } = await requireAnnouncementOwner();
-  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
+  const parsed = z.object({ id: z.string().uuid(), collection_id: z.string().uuid() }).safeParse(input);
   if (!parsed.success) throw new Error("Choose a valid announcement to delete.");
   const { data: item, error: lookupError } = await supabase.from("announcement_items")
-    .select("id, image_url").eq("id", parsed.data.id).eq("church_id", member.churchId).maybeSingle();
+    .select("id, image_url").eq("id", parsed.data.id).eq("church_id", member.churchId)
+    .eq("collection_id", parsed.data.collection_id).maybeSingle();
   if (lookupError) throw new Error(`Unable to find the announcement: ${lookupError.message}`);
   if (!item) throw new Error("This announcement is no longer available.");
   const { error } = await supabase.from("announcement_items")
-    .delete().eq("id", item.id).eq("church_id", member.churchId);
+    .delete().eq("id", item.id).eq("church_id", member.churchId)
+    .eq("collection_id", parsed.data.collection_id);
   if (error) throw new Error(`Unable to delete the announcement: ${error.message}`);
   return removeAnnouncementImage(item.image_url, member.churchId);
 }

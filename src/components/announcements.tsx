@@ -7,17 +7,17 @@ import {
   Bold,
   Italic,
   ImagePlus,
-  MonitorPlay,
   Pencil,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ConfirmationDialog } from "@/components/confirm-button";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import {
   deleteAnnouncementItem,
+  deleteAnnouncementCollection,
   moveAnnouncementItem,
   saveAnnouncementCollection,
   saveAnnouncementItem,
@@ -37,6 +37,7 @@ const maxAnnouncementImagePixels = 60_000_000;
 
 type AnnouncementItem = {
   id: string;
+  collection_id: string;
   title: string;
   image_url: string | null;
   body: string;
@@ -44,13 +45,20 @@ type AnnouncementItem = {
   updated_at: string;
 };
 
+type AnnouncementCollection = {
+  id: string;
+  collection_name: string;
+  is_published: boolean;
+};
+
 type AnnouncementData = {
   churchId: string;
-  collectionName: string;
+  collections: AnnouncementCollection[];
   items: AnnouncementItem[];
 };
 
 type AnnouncementDraft = {
+  collection_id: string;
   id?: string;
   expected_updated_at?: string;
   title: string;
@@ -176,9 +184,9 @@ function useAnnouncementData() {
       if (churchError) throw new Error(`Unable to identify INCOC South: ${churchError.message}`);
       if (!church) throw new Error("The INCOC South church record is unavailable.");
       const [collectionResult, itemsResult] = await Promise.all([
-        supabase.from("announcement_collections").select("collection_name")
-          .eq("church_id", church.id).maybeSingle(),
-        supabase.from("announcement_items").select("id, title, image_url, body, position, updated_at")
+        supabase.from("announcement_collections").select("id, collection_name, is_published")
+          .eq("church_id", church.id).order("created_at"),
+        supabase.from("announcement_items").select("id, collection_id, title, image_url, body, position, updated_at")
           .eq("church_id", church.id).order("position").order("created_at"),
       ]);
       if (collectionResult.error) throw new Error(`Unable to load the announcement collection: ${collectionResult.error.message}`);
@@ -186,7 +194,7 @@ function useAnnouncementData() {
       if (active) {
         setData({
           churchId: church.id,
-          collectionName: collectionResult.data?.collection_name ?? "South Region",
+          collections: collectionResult.data ?? [],
           items: itemsResult.data ?? [],
         });
       }
@@ -289,6 +297,7 @@ function AnnouncementItemEditor({
         imageUrl = createClient().storage.from(announcementBucket).getPublicUrl(uploadedPath).data.publicUrl;
       }
       const notice = await onSave({
+        collection_id: value.collection_id,
         ...(value.id ? { id: value.id, expected_updated_at: value.expected_updated_at } : {}),
         title: value.title,
         body: sanitizeAnnouncementBody(bodyEditor.current?.innerHTML ?? value.body),
@@ -377,41 +386,126 @@ function AnnouncementItemEditor({
 }
 
 export function AnnouncementManagerPage() {
-  const { membership } = useAuth();
+  const { membership, loading: authLoading } = useAuth();
   const { data, loading, error, reload } = useAnnouncementData();
   const isOwner = membership?.role === "owner" && membership.churchId === data?.churchId;
-  const [collectionName, setCollectionName] = useState("South Region");
-  const [savingCollection, setSavingCollection] = useState(false);
+  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [pendingCollectionId, setPendingCollectionId] = useState("");
+  const [collectionName, setCollectionName] = useState("");
+  const [creatingCollection, setCreatingCollection] = useState(false);
+  const [newCollectionName, setNewCollectionName] = useState("");
   const [draft, setDraft] = useState<AnnouncementDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AnnouncementItem | null>(null);
+  const [deleteCollectionTarget, setDeleteCollectionTarget] = useState<AnnouncementCollection | null>(null);
   const [pendingAction, setPendingAction] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [actionError, setActionError] = useState("");
   const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
-    if (data) setCollectionName(data.collectionName);
-  }, [data]);
+    if (!data) return;
+    const availableCollections = isOwner ? data.collections : data.collections.filter((collection) => collection.is_published);
+    if (pendingCollectionId) {
+      if (availableCollections.some((collection) => collection.id === pendingCollectionId)) {
+        setSelectedCollectionId(pendingCollectionId);
+        setPendingCollectionId("");
+      }
+      return;
+    }
+    if (!availableCollections.some((collection) => collection.id === selectedCollectionId)) {
+      setSelectedCollectionId(availableCollections[0]?.id ?? "");
+    }
+    const selected = availableCollections.find((collection) => collection.id === selectedCollectionId);
+    if (selected) setCollectionName(selected.collection_name);
+  }, [data, isOwner, pendingCollectionId, selectedCollectionId]);
+
+  const availableCollections = data
+    ? isOwner ? data.collections : data.collections.filter((collection) => collection.is_published)
+    : [];
+  const selectedCollection = availableCollections.find((collection) => collection.id === selectedCollectionId)
+    ?? availableCollections[0];
+  const selectedItems = selectedCollection
+    ? data?.items.filter((item) => item.collection_id === selectedCollection.id) ?? []
+    : [];
 
   async function saveCollection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!data || savingCollection) return;
-    setSavingCollection(true);
+    if (!selectedCollection || pendingAction) return;
+    setPendingAction(true);
     setActionError("");
     try {
-      await saveAnnouncementCollection({ collection_name: collectionName });
+      await saveAnnouncementCollection({
+        id: selectedCollection.id,
+        collection_name: collectionName,
+        is_published: selectedCollection.is_published,
+      });
       setFeedback("Collection name saved.");
       reload();
     } catch (saveError) {
       setActionError(saveError instanceof Error ? saveError.message : "Unable to save the collection name.");
     } finally {
-      setSavingCollection(false);
+      setPendingAction(false);
+    }
+  }
+
+  async function createCollection(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newCollectionName.trim() || pendingAction) return;
+    setPendingAction(true);
+    setActionError("");
+    try {
+      const newId = await saveAnnouncementCollection({ collection_name: newCollectionName.trim(), is_published: false });
+      setNewCollectionName("");
+      setCreatingCollection(false);
+      setPendingCollectionId(newId);
+      setFeedback("Collection created. Publish it when its content is ready.");
+      reload();
+    } catch (saveError) {
+      setActionError(saveError instanceof Error ? saveError.message : "Unable to create the collection.");
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  async function toggleCollectionVisibility() {
+    if (!selectedCollection || pendingAction) return;
+    setPendingAction(true);
+    setActionError("");
+    try {
+      await saveAnnouncementCollection({
+        id: selectedCollection.id,
+        collection_name: selectedCollection.collection_name,
+        is_published: !selectedCollection.is_published,
+      });
+      setFeedback(selectedCollection.is_published ? "Collection hidden from viewers." : "Collection published for viewers.");
+      reload();
+    } catch (visibilityError) {
+      setActionError(visibilityError instanceof Error ? visibilityError.message : "Unable to change collection visibility.");
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  async function removeCollection() {
+    if (!deleteCollectionTarget || pendingAction) return;
+    setPendingAction(true);
+    setDeleteError("");
+    try {
+      const notice = await deleteAnnouncementCollection({ id: deleteCollectionTarget.id });
+      setDeleteCollectionTarget(null);
+      setFeedback(notice ?? "Collection and its items were deleted.");
+      reload();
+    } catch (collectionError) {
+      setDeleteError(collectionError instanceof Error ? collectionError.message : "Unable to delete the collection.");
+    } finally {
+      setPendingAction(false);
     }
   }
 
   async function saveItem(value: AnnouncementDraft): Promise<string | null> {
     if (!data) throw new Error("Announcement data is unavailable. Reload and try again.");
     return saveAnnouncementItem({
+      collection_id: value.collection_id,
       ...(value.id ? { id: value.id, expected_updated_at: value.expected_updated_at } : {}),
       title: value.title,
       image_url: value.image_url,
@@ -424,7 +518,7 @@ export function AnnouncementManagerPage() {
     setPendingAction(true);
     setActionError("");
     try {
-      await moveAnnouncementItem({ id: item.id, direction });
+      await moveAnnouncementItem({ collection_id: item.collection_id, id: item.id, direction });
       reload();
     } catch (moveError) {
       setActionError(moveError instanceof Error ? moveError.message : "Unable to reorder the announcement.");
@@ -440,7 +534,7 @@ export function AnnouncementManagerPage() {
     setActionError("");
     setDeleteError("");
     try {
-      const notice = await deleteAnnouncementItem({ id: deleteTarget.id });
+      const notice = await deleteAnnouncementItem({ collection_id: deleteTarget.collection_id, id: deleteTarget.id });
       setDeleteTarget(null);
       setFeedback(notice ?? "Announcement deleted.");
       reload();
@@ -452,31 +546,62 @@ export function AnnouncementManagerPage() {
     }
   }
 
+  if (!isOwner) {
+    return <section className="announcement-public content-wrap">
+      {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
+      {(authLoading || loading) && <p className="muted" role="status">Loading announcements…</p>}
+      {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
+      {!authLoading && !loading && !error && availableCollections.length > 0 && <div className="announcement-public-feed">
+        {availableCollections.flatMap((collection) =>
+          (data?.items.filter((item) => item.collection_id === collection.id) ?? [])
+            .map((item) => <AnnouncementPublicItem key={item.id} item={item} />))}
+      </div>}
+      {!authLoading && !loading && !error && !availableCollections.length && <div className="empty-state">There are no published announcements.</div>}
+    </section>;
+  }
+
   return <section className="announcement-manager content-wrap">
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
     <header className="announcement-manager-header">
       <div>
         <p className="eyebrow">ANNOUNCEMENTS</p>
-        <h1 className="detail-title">{collectionName || "South Region"}</h1>
+        <h1 className="detail-title">{selectedCollection?.collection_name ?? "Announcement collections"}</h1>
       </div>
-      <Link className="button button-secondary" to="/announcement/slides"><MonitorPlay size={16} /> View slides</Link>
     </header>
-    {isOwner && <form className="announcement-collection-form" onSubmit={(event) => void saveCollection(event)}>
+    <div className="announcement-collection-toolbar">
+      <label htmlFor="announcement-selected-collection">Manage collection</label>
+      <select id="announcement-selected-collection" value={selectedCollection?.id ?? ""} onChange={(event) => setSelectedCollectionId(event.target.value)}>
+        {availableCollections.map((collection) => <option value={collection.id} key={collection.id}>{collection.collection_name}{collection.is_published ? " · Published" : " · Hidden"}</option>)}
+      </select>
+      <button type="button" className="button button-secondary" onClick={() => setCreatingCollection((value) => !value)}>New collection</button>
+    </div>
+    {creatingCollection && <form className="announcement-collection-form" onSubmit={(event) => void createCollection(event)}>
+      <label htmlFor="announcement-new-collection">New collection name</label>
+      <input id="announcement-new-collection" value={newCollectionName} maxLength={120} required onChange={(event) => setNewCollectionName(event.target.value)} />
+      <button type="submit" className="button button-secondary" disabled={pendingAction}>{pendingAction ? "Creating…" : "Create hidden collection"}</button>
+    </form>}
+    {selectedCollection && <form className="announcement-collection-form" onSubmit={(event) => void saveCollection(event)}>
       <label htmlFor="announcement-collection-name">Collection name</label>
       <input id="announcement-collection-name" value={collectionName} maxLength={120} required onChange={(event) => setCollectionName(event.target.value)} />
-      <button type="submit" className="button button-secondary" disabled={savingCollection} aria-busy={savingCollection}>{savingCollection ? "Saving…" : "Save name"}</button>
+      <button type="submit" className="button button-secondary" disabled={pendingAction} aria-busy={pendingAction}>{pendingAction ? "Saving…" : "Save name"}</button>
+      <button type="button" className="button button-secondary" disabled={pendingAction} onClick={() => void toggleCollectionVisibility()}>
+        {selectedCollection.is_published ? "Hide collection" : "Publish collection"}
+      </button>
+      <button type="button" className="button button-danger" disabled={pendingAction} onClick={() => setDeleteCollectionTarget(selectedCollection)}>
+        Delete collection
+      </button>
     </form>}
     {feedback && <p className="announcement-feedback" role="status">{feedback}</p>}
     {actionError && <p className="form-error" role="alert">{actionError}</p>}
     {loading && <p className="muted" role="status">Loading announcements…</p>}
     {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
     {!loading && !error && <>
-      {isOwner && <button type="button" className="button button-primary announcement-add-button" onClick={() => setDraft({ title: "", image_url: "", body: "" })}>
+      {selectedCollection && <button type="button" className="button button-primary announcement-add-button" onClick={() => setDraft({ collection_id: selectedCollection.id, title: "", image_url: "", body: "" })}>
         <Plus size={16} /> Add item
       </button>}
-      {data?.items.length
+      {selectedCollection && selectedItems.length
         ? <ol className="announcement-list">
-          {data.items.map((item, index) => <li className="announcement-list-item" key={item.id}>
+          {selectedItems.map((item, index) => <li className="announcement-list-item" key={item.id}>
             {item.image_url
               ? <img className="announcement-thumbnail" src={item.image_url} alt="" />
               : <div className="announcement-thumbnail announcement-thumbnail-empty"><ImagePlus size={20} /></div>}
@@ -486,8 +611,9 @@ export function AnnouncementManagerPage() {
             </div>
             {isOwner && <div className="announcement-list-actions">
               <button type="button" className="icon-button" title="Move up" aria-label={`Move ${item.title || "announcement"} up`} disabled={index === 0 || pendingAction} onClick={() => void reorder(item, -1)}><ArrowUp size={16} /></button>
-              <button type="button" className="icon-button" title="Move down" aria-label={`Move ${item.title || "announcement"} down`} disabled={index === data.items.length - 1 || pendingAction} onClick={() => void reorder(item, 1)}><ArrowDown size={16} /></button>
+              <button type="button" className="icon-button" title="Move down" aria-label={`Move ${item.title || "announcement"} down`} disabled={index === selectedItems.length - 1 || pendingAction} onClick={() => void reorder(item, 1)}><ArrowDown size={16} /></button>
               <button type="button" className="icon-button" title="Edit" aria-label={`Edit ${item.title || "announcement"}`} onClick={() => setDraft({
+                collection_id: item.collection_id,
                 id: item.id,
                 expected_updated_at: item.updated_at,
                 title: item.title,
@@ -498,7 +624,7 @@ export function AnnouncementManagerPage() {
             </div>}
           </li>)}
         </ol>
-        : <div className="empty-state announcement-empty">There are no announcements yet.</div>}
+        : <div className="empty-state announcement-empty">{selectedCollection ? "There are no announcements in this collection yet." : "Create a collection to start adding announcements."}</div>}
     </>}
     {draft && data && <AnnouncementItemEditor
       key={draft.id ?? "new"}
@@ -520,7 +646,27 @@ export function AnnouncementManagerPage() {
       onCancel={() => { if (!pendingAction) { setDeleteTarget(null); setDeleteError(""); } }}
       onConfirm={() => void removeItem()}
     />}
+    {deleteCollectionTarget && <ConfirmationDialog
+      title="Delete announcement collection?"
+      description={`Delete "${deleteCollectionTarget.collection_name}" and all ${data?.items.filter((item) => item.collection_id === deleteCollectionTarget.id).length ?? 0} items in it? Image files referenced by its items will also be removed. This cannot be undone.`}
+      pending={pendingAction}
+      error={deleteError}
+      onCancel={() => { if (!pendingAction) { setDeleteCollectionTarget(null); setDeleteError(""); } }}
+      onConfirm={() => void removeCollection()}
+    />}
   </section>;
+}
+
+function AnnouncementPublicItem({ item }: { item: AnnouncementItem }) {
+  const hasContent = Boolean(item.title.trim() || item.body.trim() || item.image_url);
+  if (!hasContent) return null;
+  return <article className="announcement-public-item">
+    <div className="announcement-public-item-copy">
+      {item.title.trim() && <h2>{item.title}</h2>}
+      {item.image_url && <img src={item.image_url} alt="" loading="lazy" />}
+      {item.body.trim() && <div className="announcement-public-item-body">{announcementBodyNodes(item.body)}</div>}
+    </div>
+  </article>;
 }
 
 function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: number }) {
@@ -533,8 +679,8 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
       <div
         className={`announcement-slide-content${split ? " announcement-slide-split" : ""}`}
         style={{
-          width: `${zoom * 100}%`,
-          height: `${zoom * 100}%`,
+          transform: `scale(${zoom})`,
+          transformOrigin: zoom > 1 ? "top left" : "center center",
           gridTemplateColumns: split ? "minmax(0, 1fr) minmax(0, 1fr)" : undefined,
         }}
       >
@@ -542,7 +688,6 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
         {hasBody
           ? <div
             className="announcement-slide-body"
-            style={{ fontSize: `clamp(${20 * zoom}px, ${3.2 * zoom}vw, ${42 * zoom}px)` }}
           >{announcementBodyNodes(item.body)}</div>
           : !hasImage && <p className="announcement-slide-empty">No announcement content.</p>}
       </div>
@@ -552,10 +697,15 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
 
 export function AnnouncementSlidesPage() {
   const { data, loading, error, reload } = useAnnouncementData();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(1);
   const pointerStart = useRef<{ id: number; x: number; y: number } | null>(null);
-  const items = data?.items ?? [];
+  const publishedCollections = data?.collections.filter((collection) => collection.is_published) ?? [];
+  const requestedCollectionId = searchParams.get("collectionId") ?? "";
+  const selectedCollection = publishedCollections.find((collection) => collection.id === requestedCollectionId)
+    ?? publishedCollections[0];
+  const items = data?.items.filter((item) => item.collection_id === selectedCollection?.id) ?? [];
   const currentIndex = Math.min(index, Math.max(items.length - 1, 0));
   const currentItem = items[currentIndex];
   const move = useCallback((direction: -1 | 1) => {
@@ -567,25 +717,35 @@ export function AnnouncementSlidesPage() {
   }, [items.length]);
 
   useEffect(() => {
+    if (!selectedCollection || requestedCollectionId === selectedCollection.id) return;
+    setSearchParams({ collectionId: selectedCollection.id }, { replace: true });
+    setIndex(0);
+  }, [requestedCollectionId, selectedCollection, setSearchParams]);
+
+  useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      const target = event.target;
-      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if ((event.ctrlKey || event.metaKey) && !event.altKey) {
-        const zoomDirection = event.key === "+" || (event.key === "=" && event.shiftKey)
+        const key = event.key.toLowerCase();
+        const zoomDirection = key === "+" || key === "=" || key === "add"
+          || event.code === "Equal" || event.code === "NumpadAdd"
           ? 1
-          : event.key === "-" || event.key === "_"
+          : key === "-" || key === "_" || key === "subtract"
+            || event.code === "Minus" || event.code === "NumpadSubtract"
             ? -1
             : 0;
-        if (zoomDirection || event.key === "0") {
+        if (zoomDirection || key === "0") {
           event.preventDefault();
           event.stopPropagation();
           if (event.repeat) return;
-          setZoom((current) => event.key === "0"
+          setZoom((current) => key === "0"
             ? 1
             : Math.min(2.5, Math.max(0.5, Math.round((current + zoomDirection * 0.1) * 10) / 10)));
           return;
         }
       }
+
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) return;
       if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
       if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable=true], a")) return;
       if (event.key === "ArrowLeft") {
@@ -596,8 +756,8 @@ export function AnnouncementSlidesPage() {
         move(1);
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [move]);
 
   function onPointerDown(event: PointerEvent<HTMLElement>) {
@@ -627,7 +787,18 @@ export function AnnouncementSlidesPage() {
     onLostPointerCapture={() => { pointerStart.current = null; }}
   >
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} quiet />}
-    <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /> Announcements</Link>
+    <header className="announcement-projector-header">
+      <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /> Announcements</Link>
+      {publishedCollections.length > 1 && <label className="announcement-projector-collection">
+        <span className="sr-only">Announcement collection</span>
+        <select value={selectedCollection?.id ?? ""} onChange={(event) => {
+          setIndex(0);
+          setSearchParams({ collectionId: event.target.value });
+        }}>
+          {publishedCollections.map((collection) => <option value={collection.id} key={collection.id}>{collection.collection_name}</option>)}
+        </select>
+      </label>}
+    </header>
     {loading
       ? <p className="announcement-projector-message" role="status">Loading announcements…</p>
       : error
@@ -643,6 +814,6 @@ export function AnnouncementSlidesPage() {
               <button type="button" onClick={() => move(1)} disabled={currentIndex >= items.length - 1} aria-label="Next announcement"><ArrowRight size={22} /></button>
             </nav>
           </>
-          : <p className="announcement-projector-message">There are no announcements to display.</p>}
+          : <p className="announcement-projector-message">{selectedCollection ? "There are no announcements to display in this collection." : "There are no published announcement collections."}</p>}
   </section>;
 }

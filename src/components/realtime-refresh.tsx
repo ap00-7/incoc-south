@@ -56,7 +56,14 @@ export function RealtimeRefresh({
         if (notifyGlobalDataChange) notifyDataChanged();
       }, 80);
     };
-    let channel = supabase.channel(`content-updates:${filters.map((filter) => `${filter.table}-${filter.value}`).join(":")}`);
+    const announcementChurchId = filters.find((filter) => filter.table === "announcement_items" || filter.table === "announcement_collections")?.value;
+    const hasAnnouncementSubscription = filters.some((filter) => filter.table === "announcement_items" || filter.table === "announcement_collections");
+    const channelName = hasAnnouncementSubscription
+      ? `announcements:${announcementChurchId}`
+      : `content-updates:${filters.map((filter) => `${filter.table}-${filter.value}`).join(":")}`;
+    let channel = hasAnnouncementSubscription
+      ? supabase.channel(channelName, { config: { broadcast: { self: false }, private: false } })
+      : supabase.channel(channelName);
     for (const filter of filters) {
       if (filter.table === "announcement_items" || filter.table === "announcement_collections") {
         for (const event of ["INSERT", "UPDATE"] as const) {
@@ -91,6 +98,9 @@ export function RealtimeRefresh({
           filter: `${filter.column}=eq.${filter.value}`,
         }, refresh);
       }
+    }
+    if (hasAnnouncementSubscription) {
+      channel = channel.on("broadcast", { event: "announcement-change" }, refresh);
     }
     if (filters.some((filter) => filter.table === "schedules")) {
       channel = channel.on("postgres_changes", {

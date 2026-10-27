@@ -955,9 +955,20 @@ body:has(.presentation-page)::-webkit-scrollbar,
 .footer-auth-error { color: var(--danger); font-size: 11px; }
 
 .about-announcement-link { margin: 20px 0 0; }
+.announcement-public { display: grid; gap: 28px; }
+.announcement-public-feed { display: grid; gap: 28px; }
+.announcement-public-item { min-width: 0; padding: 0 0 28px; border-bottom: 1px solid var(--border); }
+.announcement-public-item-copy { min-width: 0; overflow-wrap: anywhere; }
+.announcement-public-item-copy h2 { margin: 0 0 14px; font-size: clamp(20px, 2.5vw, 28px); }
+.announcement-public-item img { display: block; width: 100%; max-width: 1100px; max-height: 80vh; margin: 0 auto 18px; object-fit: contain; }
+.announcement-public-item-body { min-width: 0; overflow-wrap: anywhere; }
+.announcement-public-item-body p, .announcement-public-item-body div { margin: 0 0 .7em; }
 .announcement-manager { width: 100%; }
 .announcement-manager-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 24px; }
 .announcement-manager-header .eyebrow { margin-bottom: 8px; }
+.announcement-collection-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.announcement-collection-toolbar label { color: var(--muted); font-size: 12px; font-weight: 600; }
+.announcement-collection-toolbar select { min-width: min(100%, 240px); min-height: 40px; padding: 8px 11px; color: var(--ink); background: var(--paper); border: 1px solid var(--border); border-radius: 7px; }
 .announcement-collection-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px; margin-bottom: 22px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; }
 .announcement-collection-form label { color: var(--muted); font-size: 12px; font-weight: 600; }
 .announcement-collection-form input { min-width: 180px; min-height: 40px; flex: 1 1 240px; padding: 8px 11px; color: var(--ink); background: var(--paper); border: 1px solid var(--border); border-radius: 7px; }
@@ -992,18 +1003,20 @@ body:has(.presentation-page)::-webkit-scrollbar,
 .announcement-image-empty { min-height: 74px; display: grid; flex: 1 1 120px; place-content: center; justify-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
 .announcement-image-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .announcement-editor-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 12px; }
-.announcement-projector { width: 100%; height: 100dvh; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 4px 10px; color: #f5eee5; background: #000; overflow: hidden; }
+.announcement-projector { width: 100%; height: 100dvh; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 4px 6px; color: #f5eee5; background: #000; overflow: hidden; }
+.announcement-projector-header { min-height: 28px; display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 10px; }
 .announcement-projector-back { width: fit-content; min-height: 28px; display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; padding: 2px 6px; color: #cbbba9; font-size: 11px; }
-.announcement-slide-title { flex: 0 0 auto; margin: 0; padding: 4px 10px; font-size: clamp(24px, 4vw, 48px); font-weight: 600; line-height: 1.12; text-align: center; overflow-wrap: anywhere; }
+.announcement-projector-collection select { max-width: min(55vw, 260px); min-height: 30px; padding: 4px 8px; color: #f5eee5; background: #17120e; border: 1px solid #493627; border-radius: 6px; }
+.announcement-slide-title { width: 100%; flex: 0 0 auto; margin: 0; padding: 4px 10px; font-size: clamp(24px, 4vw, 48px); font-weight: 600; line-height: 1.12; text-align: center; overflow-wrap: anywhere; }
 .announcement-slide-frame { min-width: 0; min-height: 0; flex: 1 1 0; display: flex; overflow: hidden; padding: 0; background: #000; }
-.announcement-slide-viewport { min-width: 0; min-height: 0; flex: 1 1 0; overflow: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.announcement-slide-viewport { min-width: 0; min-height: 0; flex: 1 1 0; display: grid; overflow: auto; scrollbar-width: none; overscroll-behavior: contain; }
 .announcement-slide-viewport::-webkit-scrollbar { display: none; }
-.announcement-slide-content { min-width: 0; min-height: 100%; display: grid; align-items: center; justify-items: center; gap: 12px; margin: auto; text-align: center; }
+.announcement-slide-content { width: 100%; height: 100%; min-width: 0; min-height: 100%; display: grid; grid-template-rows: minmax(0, 1fr); align-items: center; justify-items: center; gap: 12px; margin: auto; text-align: center; }
 .announcement-slide-content img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; }
-.announcement-slide-body { min-width: 0; min-height: 0; max-width: 100%; max-height: 100%; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.35; scrollbar-width: none; }
-.announcement-slide-body::-webkit-scrollbar { display: none; }
+.announcement-slide-body { min-width: 0; min-height: 0; max-width: 100%; font-size: clamp(20px, 3.2vw, 42px); white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.35; }
 .announcement-slide-body p, .announcement-slide-body div { margin: 0 0 .7em; }
 .announcement-slide-split img, .announcement-slide-split .announcement-slide-body { width: 100%; height: 100%; }
+.announcement-slide-split .announcement-slide-body { overflow: visible; }
 .announcement-slide-empty { color: #cbbba9; }
 .announcement-slide-controls { min-height: 44px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 16px; color: #d7c6b3; font-size: 12px; font-variant-numeric: tabular-nums; }
 .announcement-slide-controls button { width: 42px; height: 38px; display: grid; place-items: center; color: #f5eee5; background: #271d16; border: 1px solid #493627; border-radius: 7px; cursor: pointer; }
@@ -1013,6 +1026,9 @@ body:has(.presentation-page)::-webkit-scrollbar,
 .site-footer-announcements { min-height: 48px; }
 
 @media (max-width: 640px) {
+  .announcement-public-feed { gap: 22px; }
+  .announcement-public-item { padding-bottom: 22px; }
+  .announcement-public-item img { max-height: 65vh; }
   .announcement-manager-header { align-items: flex-start; }
   .announcement-manager-header .button { min-height: 40px; padding-inline: 10px; font-size: 12px; }
   .announcement-list-item { flex-wrap: wrap; }
