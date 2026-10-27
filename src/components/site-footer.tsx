@@ -10,11 +10,13 @@ export function SiteFooter() {
   const searchParams = new URLSearchParams(search);
   const footerSection = pathname === "/songs"
     ? "songbook"
-    : pathname === "/schedule" || /^\/schedule\/[^/]+$/.test(pathname)
-      ? "schedule"
-      : pathname === "/slides" && !searchParams.get("scheduleId")
-        ? "slides"
-        : null;
+    : pathname === "/announcement" || pathname === "/announcement/slides"
+      ? "announcements"
+      : pathname === "/schedule" || /^\/schedule\/[^/]+$/.test(pathname)
+        ? "schedule"
+        : pathname === "/slides" && !searchParams.get("scheduleId")
+          ? "slides"
+          : null;
   const canSignOut = Boolean(user && membership?.role === "owner");
   const returnTo = `${pathname}${search}`;
 

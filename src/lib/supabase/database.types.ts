@@ -38,6 +38,22 @@ export type Database = {
           { foreignKeyName: "song_sections_song_id_fkey"; columns: ["song_id"]; isOneToOne: false; referencedRelation: "songs"; referencedColumns: ["id"] },
         ];
       };
+      announcement_collections: {
+        Row: { church_id: string; collection_name: string; created_at: string; updated_at: string };
+        Insert: { church_id: string; collection_name?: string; created_at?: string; updated_at?: string };
+        Update: { church_id?: string; collection_name?: string; created_at?: string; updated_at?: string };
+        Relationships: [
+          { foreignKeyName: "announcement_collections_church_id_fkey"; columns: ["church_id"]; isOneToOne: true; referencedRelation: "churches"; referencedColumns: ["id"] },
+        ];
+      };
+      announcement_items: {
+        Row: { id: string; church_id: string; title: string; image_url: string | null; body: string; position: number; created_at: string; updated_at: string };
+        Insert: { id?: string; church_id: string; title: string; image_url?: string | null; body?: string; position: number; created_at?: string; updated_at?: string };
+        Update: { id?: string; church_id?: string; title?: string; image_url?: string | null; body?: string; position?: number; created_at?: string; updated_at?: string };
+        Relationships: [
+          { foreignKeyName: "announcement_items_church_id_fkey"; columns: ["church_id"]; isOneToOne: false; referencedRelation: "churches"; referencedColumns: ["id"] },
+        ];
+      };
       schedules: {
         Row: { id: string; church_id: string; title: string; service_date: string; venue: string | null; description: string | null; status: Database["public"]["Enums"]["schedule_status"]; created_by: string; created_at: string; updated_at: string; published_at: string | null };
         Insert: { id?: string; church_id: string; title: string; service_date: string; venue?: string | null; description?: string | null; status?: Database["public"]["Enums"]["schedule_status"]; created_by: string; created_at?: string; updated_at?: string; published_at?: string | null };

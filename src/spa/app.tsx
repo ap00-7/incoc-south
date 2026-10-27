@@ -29,6 +29,8 @@ const InlineScheduleDetails = lazy(() => import("@/components/admin/inline-sched
 const InlineScheduleManager = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.InlineScheduleManager })));
 const NewScheduleForm = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.NewScheduleForm })));
 const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.ScheduleActions })));
+const AnnouncementManagerPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementManagerPage })));
+const AnnouncementSlidesPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementSlidesPage })));
 const InviteMemberForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.InviteMemberForm })));
 const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
 const LoginForm = lazy(() => import("@/components/auth/login-form").then((module) => ({ default: module.LoginForm })));
@@ -230,6 +232,7 @@ function HomePage() {
         </div>
       </section>
       <p className="about-closing">INCOC South supports organized worship and Sunday service preparation.</p>
+      <p className="about-announcement-link"><Link className="button button-secondary" to="/announcement">Announcement Manager</Link></p>
     </div>
   </PageShell>;
 }
@@ -903,6 +906,8 @@ export function App() {
       <Route path="/schedule/:scheduleId/slides" element={<ScheduleSlidesRedirect />} />
       <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} />} />
       <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} />} />
+      <Route path="/announcement" element={<PageShell><AnnouncementManagerPage /></PageShell>} />
+      <Route path="/announcement/slides" element={<PageShell><AnnouncementSlidesPage /></PageShell>} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />

@@ -888,3 +888,168 @@ export async function deleteSchedule(formData: FormData) {
   invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, "/admin/schedules") };
 }
+
+const announcementCollectionSchema = z.object({
+  collection_name: z.string().trim().min(1).max(120),
+});
+
+const announcementItemSchema = z.object({
+  id: z.string().uuid().optional(),
+  expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  title: z.string().trim().min(1, "Enter an announcement title.").max(200),
+  image_url: z.string().trim().max(2048),
+  body: z.string().max(10000),
+}).superRefine((item, context) => {
+  if (Boolean(item.id) !== Boolean(item.expected_updated_at)) {
+    context.addIssue({ code: "custom", message: "Reload this announcement and try again." });
+  }
+  if (item.image_url) {
+    try {
+      const url = new URL(item.image_url);
+      if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error();
+    } catch {
+      context.addIssue({ code: "custom", path: ["image_url"], message: "Choose a valid announcement image." });
+    }
+  }
+});
+
+function announcementStoragePath(imageUrl: string) {
+  try {
+    const marker = "/storage/v1/object/public/announcement-images/";
+    const pathname = new URL(imageUrl).pathname;
+    const markerIndex = pathname.indexOf(marker);
+    if (markerIndex < 0) return null;
+    return decodeURIComponent(pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
+
+function isAnnouncementImageUrl(imageUrl: string, churchId: string, supabase: ReturnType<typeof createClient>) {
+  const path = announcementStoragePath(imageUrl);
+  const fileName = path?.startsWith(`${churchId}/`) ? path.slice(churchId.length + 1) : "";
+  if (!path || !/^[\da-f-]{36}\.(?:png|jpg|webp|gif)$/i.test(fileName)) return false;
+  return supabase.storage.from("announcement-images").getPublicUrl(path).data.publicUrl === imageUrl;
+}
+
+async function removeAnnouncementImage(imageUrl: string | null, churchId: string): Promise<string | null> {
+  if (!imageUrl) return null;
+  const path = announcementStoragePath(imageUrl);
+  const fileName = path?.startsWith(`${churchId}/`) ? path.slice(churchId.length + 1) : "";
+  if (!path || !/^[\da-f-]{36}\.(?:png|jpg|webp|gif)$/i.test(fileName)) return null;
+  const supabase = await createClient();
+  const bucket = supabase.storage.from("announcement-images");
+  if (bucket.getPublicUrl(path).data.publicUrl !== imageUrl) return null;
+  const { error } = await bucket.remove([path]);
+  return error ? `Announcement was saved, but its previous image could not be removed: ${error.message}` : null;
+}
+
+async function requireAnnouncementOwner() {
+  const member = await requireOwner();
+  const supabase = await createClient();
+  const { data: church, error } = await supabase.from("churches").select("id")
+    .eq("id", member.churchId).eq("slug", "incoc-south").maybeSingle();
+  if (error) throw new Error(`Unable to verify INCOC South ownership: ${error.message}`);
+  if (!church) throw new Error("Announcement management is only available for INCOC South owners.");
+  return { member, supabase };
+}
+
+export async function saveAnnouncementCollection(input: { collection_name: string }) {
+  const { member, supabase } = await requireAnnouncementOwner();
+  const parsed = announcementCollectionSchema.safeParse(input);
+  if (!parsed.success) throw new Error("Enter a collection name up to 120 characters.");
+  const { error } = await supabase.from("announcement_collections").upsert({
+    church_id: member.churchId,
+    collection_name: parsed.data.collection_name,
+  }, { onConflict: "church_id" });
+  if (error) throw new Error(`Unable to save the announcement collection: ${error.message}`);
+}
+
+export async function saveAnnouncementItem(input: {
+  id?: string;
+  expected_updated_at?: string;
+  title: string;
+  image_url: string;
+  body: string;
+}): Promise<string | null> {
+  const { member, supabase } = await requireAnnouncementOwner();
+  const parsed = announcementItemSchema.safeParse(input);
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "Review the announcement details and try again.");
+  if (parsed.data.image_url && !isAnnouncementImageUrl(parsed.data.image_url, member.churchId, supabase)) {
+    throw new Error("Choose an image uploaded for this announcement collection.");
+  }
+  if (parsed.data.id) {
+    const expectedUpdatedAt = parsed.data.expected_updated_at;
+    if (!expectedUpdatedAt) throw new Error("Reload this announcement and try again.");
+    const { data: current, error: lookupError } = await supabase.from("announcement_items")
+      .select("id, image_url").eq("id", parsed.data.id).eq("church_id", member.churchId)
+      .eq("updated_at", expectedUpdatedAt).maybeSingle();
+    if (lookupError) throw new Error(`Unable to verify this announcement: ${lookupError.message}`);
+    if (!current) throw new Error("This announcement changed since it was opened. Reload and review the latest version.");
+    const { data, error } = await supabase.from("announcement_items").update({
+      title: parsed.data.title,
+      image_url: parsed.data.image_url || null,
+      body: parsed.data.body,
+    }).eq("id", parsed.data.id).eq("church_id", member.churchId)
+      .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
+    if (error) throw new Error(`Unable to save the announcement: ${error.message}`);
+    if (!data) throw new Error("This announcement changed while it was being saved. Reload and review the latest version.");
+    if (current.image_url && current.image_url !== (parsed.data.image_url || null)) {
+      return removeAnnouncementImage(current.image_url, member.churchId);
+    }
+    return null;
+  }
+
+  const { data: lastItem, error: orderError } = await supabase.from("announcement_items")
+    .select("position").eq("church_id", member.churchId)
+    .order("position", { ascending: false }).limit(1).maybeSingle();
+  if (orderError) throw new Error(`Unable to determine announcement order: ${orderError.message}`);
+  const { error } = await supabase.from("announcement_items").insert({
+    church_id: member.churchId,
+    title: parsed.data.title,
+    image_url: parsed.data.image_url || null,
+    body: parsed.data.body,
+    position: (lastItem?.position ?? -1) + 1,
+  });
+  if (error) throw new Error(`Unable to create the announcement: ${error.message}`);
+  return null;
+}
+
+export async function moveAnnouncementItem(input: { id: string; direction: -1 | 1 }) {
+  const { member, supabase } = await requireAnnouncementOwner();
+  const parsed = z.object({
+    id: z.string().uuid(),
+    direction: z.union([z.literal(-1), z.literal(1)]),
+  }).safeParse(input);
+  if (!parsed.success) throw new Error("Choose a valid announcement to reorder.");
+  const { data: items, error: listError } = await supabase.from("announcement_items")
+    .select("id, position").eq("church_id", member.churchId).order("position");
+  if (listError) throw new Error(`Unable to load announcement order: ${listError.message}`);
+  const ordered = items ?? [];
+  const index = ordered.findIndex(({ id }) => id === parsed.data.id);
+  const targetIndex = index + parsed.data.direction;
+  if (index < 0) throw new Error("This announcement is no longer available.");
+  if (targetIndex < 0 || targetIndex >= ordered.length) return;
+  const current = ordered[index];
+  const target = ordered[targetIndex];
+  const { error: moveError } = await supabase.from("announcement_items").update({ position: target.position })
+    .eq("id", current.id).eq("church_id", member.churchId);
+  if (moveError) throw new Error(`Unable to save announcement order: ${moveError.message}`);
+  const { error: swapError } = await supabase.from("announcement_items").update({ position: current.position })
+    .eq("id", target.id).eq("church_id", member.churchId);
+  if (swapError) throw new Error(`Unable to save announcement order: ${swapError.message}`);
+}
+
+export async function deleteAnnouncementItem(input: { id: string }): Promise<string | null> {
+  const { member, supabase } = await requireAnnouncementOwner();
+  const parsed = z.object({ id: z.string().uuid() }).safeParse(input);
+  if (!parsed.success) throw new Error("Choose a valid announcement to delete.");
+  const { data: item, error: lookupError } = await supabase.from("announcement_items")
+    .select("id, image_url").eq("id", parsed.data.id).eq("church_id", member.churchId).maybeSingle();
+  if (lookupError) throw new Error(`Unable to find the announcement: ${lookupError.message}`);
+  if (!item) throw new Error("This announcement is no longer available.");
+  const { error } = await supabase.from("announcement_items")
+    .delete().eq("id", item.id).eq("church_id", member.churchId);
+  if (error) throw new Error(`Unable to delete the announcement: ${error.message}`);
+  return removeAnnouncementImage(item.image_url, member.churchId);
+}
