@@ -674,7 +674,7 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
   const hasBody = Boolean(item.body.trim());
   const split = hasImage && hasBody;
   return <>
-    {item.title.trim() && <h1 className="announcement-slide-title">{item.title}</h1>}
+    {item.title.trim() && <h2 className="announcement-slide-title">{item.title}</h2>}
     <div className="announcement-slide-viewport">
       <div
         className={`announcement-slide-content${split ? " announcement-slide-split" : ""}`}
@@ -788,7 +788,11 @@ export function AnnouncementSlidesPage() {
   >
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} quiet />}
     <header className="announcement-projector-header">
-      <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /> Announcements</Link>
+      <div className="announcement-projector-heading">
+        <h1>Announcements</h1>
+        <p>{selectedCollection?.collection_name ?? "Announcement collections"}</p>
+      </div>
+      <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /><span>Back</span></Link>
       {publishedCollections.length > 1 && <label className="announcement-projector-collection">
         <span className="sr-only">Announcement collection</span>
         <select value={selectedCollection?.id ?? ""} onChange={(event) => {
