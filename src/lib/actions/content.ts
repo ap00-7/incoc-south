@@ -381,15 +381,6 @@ export async function saveSong(formData: FormData) {
   });
   if (!parsedMetadata.success) throw new Error("Enter a title and select one of the supported song languages.");
   const sections = parseEditorSections(formData);
-  if (parsedMetadata.data.language === "Multilingual") {
-    const lyricSections = sections.filter((section) => section.lyrics.trim());
-    if (lyricSections.some((section) => !section.lyrics_language || section.lyrics_language === "Multilingual")) {
-      throw new Error("Choose a language for every multilingual lyric section.");
-    }
-    if (new Set(lyricSections.filter((section) => !section.is_hidden).map((section) => section.lyrics_language)).size < 2) {
-      throw new Error("A multilingual song must contain lyrics in at least two languages.");
-    }
-  }
   const supabase = await createClient();
 
   if (!songId) {
@@ -417,7 +408,7 @@ export async function saveSong(formData: FormData) {
       label: section.section_label || null,
       position,
       lyrics: section.lyrics,
-      lyrics_language: section.lyrics_language || null,
+      lyrics_language: section.lyrics_language || (parsedMetadata.data.language === "Multilingual" ? null : parsedMetadata.data.language),
       translation: section.translation.trim() || null,
       translation_language: section.translation.trim() ? section.translation_language || null : null,
       is_hidden: section.is_hidden,
@@ -481,7 +472,7 @@ export async function saveSong(formData: FormData) {
       label: section.section_label || null,
       position,
       lyrics: section.lyrics,
-      lyrics_language: section.lyrics_language || null,
+      lyrics_language: section.lyrics_language || (parsedMetadata.data.language === "Multilingual" ? null : parsedMetadata.data.language),
       translation: section.translation.trim() || null,
       translation_language: section.translation.trim() ? section.translation_language || null : null,
       is_hidden: section.is_hidden,

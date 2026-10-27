@@ -19,12 +19,10 @@ export const songLanguages = [
 ] as const;
 
 export const songEditorLanguages = [
-  songLanguages[0],
-  songLanguages[2],
-  songLanguages[4],
-  songLanguages[5],
-  songLanguages[1],
-  songLanguages[3],
+  { value: "English", label: "English" },
+  { value: "Kannada", label: "ಕನ್ನಡ · Kannada" },
+  { value: "Tamil", label: "தமிழ் · Tamil" },
+  { value: "Hindi", label: "हिन्दी · Hindi" },
   { value: "Multilingual", label: "Multilingual" },
 ] as const;
 
@@ -32,9 +30,7 @@ export const songEditorLanguageValues = songEditorLanguages.map(({ value }) => v
   "English",
   "Kannada",
   "Tamil",
-  "Telugu",
   "Hindi",
-  "Malayalam",
   "Multilingual",
 ];
 

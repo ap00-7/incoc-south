@@ -74,7 +74,7 @@ export function SongPageContent({
           {labeledSections.some(({ section }) => section.lyrics.trim()) ? labeledSections.filter(({ section }) => section.lyrics.trim()).map(({ section, label }, index) => (
             <section className="lyrics-section" key={`${section.id}-${index}`}>
               <h2>[{label}]</h2>
-              {isMultilingual && <p className="translation-language">{section.lyrics_language || song.language}</p>}
+              {isMultilingual && section.lyrics_language && <p className="translation-language">{section.lyrics_language}</p>}
               <p className="lyrics-text">{section.lyrics}</p>
             </section>
           )) : <div className="empty-state" style={{ marginTop: 25 }}>No lyric sections have been added to this song yet.</div>}
