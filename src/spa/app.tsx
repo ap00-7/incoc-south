@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, MonitorPlay, Plus, Trash2, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, Menu, MonitorPlay, Plus, Trash2, Users, X } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -616,8 +616,34 @@ function OwnerOnly() {
 function AdminLayout() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const menuToggleRef = useRef<HTMLButtonElement>(null);
+  const navigation = [
+    { label: "Dashboard", href: "/admin" },
+    { label: "Songs", href: "/admin/songs" },
+    { label: "Sunday Schedule & Slides", href: "/admin/schedules" },
+    { label: "Announcements", href: "/admin/announcements" },
+    { label: "Members", href: "/admin/members" },
+  ];
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+        menuToggleRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileNavOpen]);
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -637,19 +663,45 @@ function AdminLayout() {
     <div className="admin-shell">
       <header className="admin-header">
         <Link className="admin-brand" to="/"><BrandMark /><span><strong>INCOC South</strong><small>Owner management</small></span></Link>
-        <button type="button" className="admin-signout" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut}>
-          <LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}
+        <button
+          type="button"
+          className="admin-menu-toggle"
+          ref={menuToggleRef}
+          onClick={() => setMobileNavOpen((open) => !open)}
+          aria-controls="admin-navigation"
+          aria-expanded={mobileNavOpen}
+          aria-label={mobileNavOpen ? "Close owner navigation" : "Open owner navigation"}
+        >
+          {mobileNavOpen ? <X size={19} aria-hidden="true" /> : <Menu size={19} aria-hidden="true" />}
+        </button>
+        <button type="button" className="admin-signout" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut} aria-label={signingOut ? "Signing out" : "Sign out"}>
+          <LogOut size={15} aria-hidden="true" /><span>{signingOut ? "Signing out…" : "Sign out"}</span>
         </button>
       </header>
       {signOutError && <p className="admin-signout-error" role="alert">{signOutError}</p>}
+      <button
+        type="button"
+        className="admin-nav-backdrop"
+        aria-label="Close owner navigation"
+        tabIndex={mobileNavOpen ? 0 : -1}
+        hidden={!mobileNavOpen}
+        onClick={() => {
+          setMobileNavOpen(false);
+          menuToggleRef.current?.focus();
+        }}
+      />
       <div className="admin-layout">
         <UnsavedChangesGuard />
-        <aside className="admin-nav" aria-label="Owner navigation">
-          <IntentPrefetchLink href="/admin">Dashboard</IntentPrefetchLink>
-          <IntentPrefetchLink href="/admin/songs">Songs</IntentPrefetchLink>
-          <IntentPrefetchLink href="/admin/schedules">Sunday Schedule &amp; Slides</IntentPrefetchLink>
-          <IntentPrefetchLink href="/admin/announcements">Announcements</IntentPrefetchLink>
-          <IntentPrefetchLink href="/admin/members">Members</IntentPrefetchLink>
+        <aside className="admin-nav" id="admin-navigation" aria-label="Owner navigation" data-open={mobileNavOpen}>
+          {navigation.map(({ label, href }) => {
+            const active = location.pathname === href || (href !== "/admin" && location.pathname.startsWith(`${href}/`));
+            return <IntentPrefetchLink
+              href={href}
+              key={href}
+              aria-current={active ? "page" : undefined}
+              onClick={() => setMobileNavOpen(false)}
+            >{label}</IntentPrefetchLink>;
+          })}
         </aside>
         <section className="admin-content"><Outlet /></section>
       </div>
