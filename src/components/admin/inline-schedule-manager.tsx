@@ -80,6 +80,7 @@ const itemTitles = [
   ["Announcements Slides", "announcement"],
   ["Worship", "song"],
   ["Sermon and Communion", "sermon"],
+  ["Message Song", "song"],
   ["Communion", "communion"],
   ["Communion Song", "song"],
   ["Contribution Song", "song"],

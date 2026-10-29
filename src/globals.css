@@ -240,6 +240,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .admin-link-card span { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .admin-title-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .admin-title-row h1 { margin: 0; }
+.admin-song-search { position: relative; width: min(100%, 520px); margin-top: 18px; }
+.admin-song-search .search-input { max-width: none; padding-right: 44px; padding-left: 40px; }
+.admin-song-search .search-input::-webkit-search-cancel-button { display: none; }
+.admin-song-search-icon { position: absolute; top: 50%; left: 13px; z-index: 1; color: #b89a5c; transform: translateY(-50%); pointer-events: none; }
+.admin-song-search-clear { position: absolute; top: 50%; right: 7px; display: grid; width: 34px; height: 34px; place-items: center; color: #d7c38e; background: transparent; border: 0; border-radius: 6px; transform: translateY(-50%); cursor: pointer; }
+.admin-song-search-clear:hover { color: #fff; background: #292929; }
+.admin-song-search-clear:focus-visible { outline: 2px solid #b89a5c; outline-offset: 1px; }
 .admin-stats { display: grid; grid-template-columns: repeat(2, minmax(120px, 190px)); gap: 12px; margin-top: 24px; }
 .admin-stats > div { padding: 15px 17px; background: white; border: 1px solid var(--border); border-radius: 9px; }
 .admin-stats strong { display: block; color: var(--navy); font-family: var(--font-display); font-size: 25px; }

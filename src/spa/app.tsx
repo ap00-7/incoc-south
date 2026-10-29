@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, Menu, MonitorPlay, Plus, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -731,14 +731,33 @@ function AdminDashboard() {
 }
 
 function AdminSongsPage({ songs }: { songs: SharedContent["songs"] | null }) {
+  const [query, setQuery] = useState("");
   if (!songs) return <LoadingPage title="Manage songs" />;
-  const visibleSongs = songs.slice(0, 100);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleSongs = normalizedQuery
+    ? songs.filter((song) => song.title.toLocaleLowerCase().includes(normalizedQuery)
+      || song.language.toLocaleLowerCase().includes(normalizedQuery))
+    : songs.slice(0, 100);
   return <>
     <p className="eyebrow">LIBRARY</p>
     <div className="admin-title-row"><h1>Manage songs</h1><Link className="button button-primary" to="/admin/songs/new"><Plus size={16} /> Add a song</Link></div>
     <p>Each song lives once in the library and can be reused across services.</p>
+    <div className="admin-song-search">
+      <Search className="admin-song-search-icon" size={17} aria-hidden="true" />
+      <input
+        className="search-input"
+        type="search"
+        aria-label="Search songs by title or language"
+        placeholder="Search songs by title..."
+        value={query}
+        onChange={(event) => setQuery(event.currentTarget.value)}
+      />
+      {query && <button className="admin-song-search-clear" type="button" aria-label="Clear song search" onClick={() => setQuery("")}>
+        <X size={16} aria-hidden="true" />
+      </button>}
+    </div>
     {visibleSongs.length ? <div className="results-list admin-results">{visibleSongs.map((song) => <IntentPrefetchLink className="result-card" href={`/admin/songs/${song.id}`} key={song.id}><div><h2>{song.title}</h2><p>{song.language}{song.author ? ` · ${song.author}` : ""}</p></div><span className="muted">Edit</span></IntentPrefetchLink>)}</div>
-      : <div className="empty-state">No songs yet. Add the first song to begin your library.</div>}
+      : <div className="empty-state">{normalizedQuery ? "No songs found." : "No songs yet. Add the first song to begin your library."}</div>}
   </>;
 }
 
