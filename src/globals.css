@@ -925,9 +925,8 @@ body:has(.presentation-page)::-webkit-scrollbar,
 
 .about-announcement-link { margin: 20px 0 0; }
 .announcement-public { display: grid; gap: 18px; }
-.announcement-public-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.announcement-public-header { display: block; }
 .announcement-public-header .eyebrow { margin: 0; }
-.announcement-slides-link { min-height: 44px; }
 .announcement-public-feed { display: grid; gap: 28px; }
 .announcement-public-collection { display: grid; gap: 14px; }
 .announcement-public-collection > .detail-title { margin: 0; }
