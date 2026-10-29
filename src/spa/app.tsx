@@ -445,7 +445,7 @@ function ScheduleDetailPage({ schedules, songs }: {
               if (item.leader_name) metadata.push({ label: item.item_type === "song" ? "Song leader" : "Responsible", value: item.leader_name });
               if (duration) metadata.push({ label: "Duration", value: duration });
               if (item.translator_name) metadata.push({ label: "Translator", value: item.translator_name });
-              if (item.translation_language) metadata.push({ label: "Language", value: item.translation_language });
+              if (item.translation_language) metadata.push({ label: "Translation language", value: item.translation_language });
               if (item.link_url && !announcementDestination) {
                 metadata.push({
                   label: "Reference",

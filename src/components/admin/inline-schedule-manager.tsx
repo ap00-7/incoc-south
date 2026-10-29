@@ -1014,8 +1014,8 @@ export function InlineScheduleManager({
               {draft.item_type !== "song" && <>
                 <label htmlFor="schedule-item-translator">Translator</label>
                 <input id="schedule-item-translator" value={draft.translator_name} maxLength={200} onChange={(event) => setDraft({ ...draft, translator_name: event.target.value })} />
-                <label htmlFor="schedule-item-language">Translation in</label>
-                <Dropdown id="schedule-item-language" value={draft.translation_language} options={[
+                <label htmlFor="schedule-item-translation-language">Translation language</label>
+                <Dropdown id="schedule-item-translation-language" value={draft.translation_language} options={[
                   { label: "Select a language", value: "" },
                   { label: "Kannada", value: "Kannada" },
                   { label: "Tamil", value: "Tamil" },
