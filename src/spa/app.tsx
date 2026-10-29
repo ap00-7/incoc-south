@@ -437,27 +437,36 @@ function ScheduleDetailPage({ schedules, songs }: {
             {visibleScheduleItems.map((item) => {
               const song = item.item_type === "song" && item.song_id ? songById.get(item.song_id) : null;
               const announcementDestination = getAnnouncementScheduleDestination(item.title);
-              const primary = song
-                ? <><span className="programme-field-label">Song</span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link></>
-                : item.public_content
-                  ? item.public_content
-                  : item.item_type === "scripture_reading" ? "Scripture reading" : null;
+              const primary = !song && item.public_content
+                ? item.public_content
+                : !song && item.item_type === "scripture_reading" ? "Scripture reading" : null;
               const duration = formatScheduleDuration(item.duration_minutes);
-              const details = [
-                item.leader_name ? <span key="leader"><span className="programme-field-label">{item.item_type === "song" ? "Song leader" : "Responsible"}</span>{item.leader_name}</span> : null,
-                duration ? <span className="programme-duration" key="duration">{duration}</span> : null,
-                item.translator_name ? <span key="translator"><span className="programme-field-label">Translator</span>{item.translator_name}</span> : null,
-                item.translation_language ? <span key="language"><span className="programme-field-label">Language</span>{item.translation_language}</span> : null,
-                item.link_url && !announcementDestination ? <a key="link" href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a> : null,
-              ];
+              const metadata: Array<{ label: string; value: ReactNode }> = [];
+              if (item.leader_name) metadata.push({ label: item.item_type === "song" ? "Song leader" : "Responsible", value: item.leader_name });
+              if (duration) metadata.push({ label: "Duration", value: duration });
+              if (item.translator_name) metadata.push({ label: "Translator", value: item.translator_name });
+              if (item.translation_language) metadata.push({ label: "Language", value: item.translation_language });
+              if (item.link_url && !announcementDestination) {
+                metadata.push({
+                  label: "Reference",
+                  value: <a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a>,
+                });
+              }
               return <li className="programme-item" key={item.id}>
-                <span className="programme-timeline-marker" aria-hidden="true" />
                 <div className="programme-item-content">
                   <h2>{announcementDestination
                     ? <Link className="song-title-link" to={announcementDestination.path}>{item.title}</Link>
                     : item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2>
+                  {song && <div className="programme-song">
+                    <Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link>
+                  </div>}
                   {primary && <p className="programme-primary">{primary}</p>}
-                  {details.some(Boolean) && <p className="programme-details">{details.map((detail, index) => detail && <span className="programme-detail" key={index}>{detail}</span>)}</p>}
+                  {metadata.length > 0 && <dl className={`programme-metadata programme-metadata-${metadata.length}`}>
+                    {metadata.map(({ label, value }) => <div className="programme-metadata-field" key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>)}
+                  </dl>}
                   {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
                     ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
                     : null}
