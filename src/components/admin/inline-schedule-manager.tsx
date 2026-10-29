@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   FileText,
   FileUp,
@@ -12,7 +12,7 @@ import {
   MoreVertical,
   Plus,
   Search,
-  Trash2,
+  ChevronRight,
   X,
 } from "lucide-react";
 import {
@@ -93,14 +93,11 @@ const titleOptions = [
   ...itemTitles.map(([title, type]) => ({ label: title, value: title, disabled: type === "song" })),
   { label: "Other / Custom title", value: customTitleOption },
 ];
-const insertionActions: Array<[string, ScheduleItemInput["item_type"], boolean]> = [
-  ["Add Item Before", "other", true],
-  ["Add Item After", "other", false],
-  ["Add Song Before", "song", true],
-  ["Add Song After", "song", false],
-  ["Add Scripture Before", "scripture_reading", true],
-  ["Add Scripture After", "scripture_reading", false],
-];
+const insertionOptions = [
+  { label: "Add Item", itemType: "other" },
+  { label: "Add Song", itemType: "song" },
+  { label: "Add Scripture", itemType: "scripture_reading" },
+] as const;
 function itemTypeForTitle(title: string, fallback: ScheduleItemInput["item_type"]): ScheduleItemInput["item_type"] {
   return itemTitles.find(([option]) => option === title)?.[1] ?? fallback;
 }
@@ -259,11 +256,13 @@ export function InlineScheduleManager({
   const [mediaValidation, setMediaValidation] = useState("");
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
+  const [activeSubmenu, setActiveSubmenu] = useState<{ itemId: string; itemType: ScheduleItemInput["item_type"]; opensLeft: boolean } | null>(null);
   const [dragState, setDragState] = useState<{ itemId: string; targetIndex: number } | null>(null);
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
   const [reordering, setReordering] = useState(false);
   const listRef = useRef<HTMLOListElement | null>(null);
   const activeMenuRef = useRef<HTMLDivElement | null>(null);
+  const submenuTriggerRef = useRef<HTMLButtonElement | null>(null);
   const dragSession = useRef<ScheduleDragSession | null>(null);
   const displayItems = optimisticOrder
     ? optimisticOrder.map((id) => items.find((item) => item.id === id)).filter((item): item is ScheduleItem => Boolean(item))
@@ -480,10 +479,25 @@ export function InlineScheduleManager({
   useEffect(() => {
     if (!contextMenuItemId) return;
     function onPointerDown(event: PointerEvent) {
-      if (!activeMenuRef.current?.contains(event.target as Node)) setContextMenuItemId(null);
+      if ((event.target as Element).closest(".confirm-dialog-backdrop")) return;
+      if (!activeMenuRef.current?.contains(event.target as Node)) {
+        setContextMenuItemId(null);
+        setActiveSubmenu(null);
+      }
     }
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setContextMenuItemId(null);
+      if (event.key !== "Escape") return;
+      if (activeSubmenu?.itemId === contextMenuItemId) {
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveSubmenu(null);
+        submenuTriggerRef.current?.focus();
+      } else {
+        const trigger = activeMenuRef.current?.querySelector<HTMLButtonElement>(":scope > button");
+        setContextMenuItemId(null);
+        setActiveSubmenu(null);
+        requestAnimationFrame(() => trigger?.focus());
+      }
     }
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
@@ -491,11 +505,12 @@ export function InlineScheduleManager({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [contextMenuItemId]);
+  }, [activeSubmenu, contextMenuItemId]);
 
   function openAdd(itemType: ScheduleItemInput["item_type"] = "other", insertion?: { itemId: string; before: boolean }) {
     setDraft(emptyDraft(itemType, insertion));
     setContextMenuItemId(null);
+    setActiveSubmenu(null);
     setSelectedMedia(null);
     setSelectedPresentation(null);
     setSelectedBackground(null);
@@ -506,6 +521,7 @@ export function InlineScheduleManager({
   function openEdit(item: ScheduleItem) {
     setDraft(draftFromItem(item));
     setContextMenuItemId(null);
+    setActiveSubmenu(null);
     setSelectedMedia(null);
     setSelectedPresentation(null);
     setSelectedBackground(null);
@@ -661,6 +677,7 @@ export function InlineScheduleManager({
   async function moveItem(itemId: string, direction: -1 | 1) {
     if (reordering) return;
     setContextMenuItemId(null);
+    setActiveSubmenu(null);
     setReordering(true);
     setFeedback("");
     const formData = new FormData();
@@ -675,6 +692,81 @@ export function InlineScheduleManager({
       setFeedback(moveError instanceof Error ? moveError.message : "Unable to move this schedule item.");
     } finally {
       setReordering(false);
+    }
+
+    function showSubmenu(event: ReactPointerEvent<HTMLDivElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+      if (event.pointerType !== "mouse" || (itemType === "song" && !songsReady)) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const estimatedWidth = 132;
+      const opensLeft = bounds.right + estimatedWidth > window.innerWidth;
+      const trigger = event.currentTarget.querySelector<HTMLButtonElement>(":scope > button");
+      if (trigger) submenuTriggerRef.current = trigger;
+      setActiveSubmenu({ itemId, itemType, opensLeft });
+    }
+
+    function toggleSubmenu(event: ReactMouseEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+      event.stopPropagation();
+      if (itemType === "song" && !songsReady) return;
+      const parent = event.currentTarget.parentElement;
+      const bounds = parent?.getBoundingClientRect();
+      const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
+      submenuTriggerRef.current = event.currentTarget;
+      if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+        setActiveSubmenu({ itemId, itemType, opensLeft });
+        return;
+      }
+      setActiveSubmenu((current) => current?.itemId === itemId && current.itemType === itemType
+        ? null
+        : { itemId, itemType, opensLeft });
+    }
+
+    function openSubmenuFromKeyboard(event: ReactKeyboardEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+      if (event.key !== "ArrowRight") return;
+      if (itemType === "song" && !songsReady) return;
+      event.preventDefault();
+      const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+      const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
+      submenuTriggerRef.current = event.currentTarget;
+      const parent = event.currentTarget.parentElement;
+      setActiveSubmenu({ itemId, itemType, opensLeft });
+      requestAnimationFrame(() => parent?.querySelector<HTMLButtonElement>(".schedule-item-submenu button")?.focus());
+    }
+
+    function onSubmenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setActiveSubmenu(null);
+        submenuTriggerRef.current?.focus();
+        return;
+      }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+      if (!options.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+      const nextIndex = event.key === "ArrowDown"
+        ? (currentIndex + 1) % options.length
+        : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
+      options[nextIndex].focus();
+    }
+
+    function onMainMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        ":scope > button[role='menuitem'], :scope > .schedule-item-submenu-group > button[role='menuitem'], :scope > .schedule-item-remove-form button[role='menuitem']",
+      )].filter((button) => !button.disabled);
+      if (!options.length) return;
+      event.preventDefault();
+      const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+      const nextIndex = event.key === "ArrowDown"
+        ? (currentIndex + 1) % options.length
+        : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
+      options[nextIndex].focus();
+    }
+
+    function insertRelative(itemId: string, itemType: ScheduleItemInput["item_type"], before: boolean) {
+      openAdd(itemType, { itemId, before });
     }
   }
 
@@ -726,38 +818,80 @@ export function InlineScheduleManager({
                   disabled={reordering}
                   onPointerDown={(event) => startDrag(event, item.id)}
                 ><GripVertical size={17} /></button>
-                <div className="schedule-item-context" ref={contextMenuItemId === item.id ? activeMenuRef : null}>
+                <div className={`schedule-item-context${contextMenuItemId === item.id ? " is-menu-open" : ""}`} ref={contextMenuItemId === item.id ? activeMenuRef : null}>
                   <button
                     className="icon-button"
                     type="button"
                     aria-label={`Actions for ${displayTitle}`}
+                    aria-haspopup="menu"
+                    aria-controls={`schedule-item-menu-${item.id}`}
                     aria-expanded={contextMenuItemId === item.id}
-                    onClick={() => setContextMenuItemId(contextMenuItemId === item.id ? null : item.id)}
+                    onClick={() => {
+                      setContextMenuItemId(contextMenuItemId === item.id ? null : item.id);
+                      setActiveSubmenu(null);
+                    }}
                   ><MoreVertical size={18} /></button>
-                  {contextMenuItemId === item.id && <div className="schedule-item-context-menu" role="menu">
-                    <button type="button" role="menuitem" disabled={index === 0 || reordering} onClick={() => void moveItem(item.id, -1)}>Move item up</button>
-                    <button type="button" role="menuitem" disabled={index === displayItems.length - 1 || reordering} onClick={() => void moveItem(item.id, 1)}>Move item down</button>
-                    {insertionActions.map(([label, itemType, before]) => <button
-                      type="button"
-                      role="menuitem"
-                      key={label}
-                      disabled={itemType === "song" && !songsReady}
-                      onClick={() => openAdd(itemType, { itemId: item.id, before })}
-                    >{label}</button>)}
+                  {contextMenuItemId === item.id && <div className="schedule-item-context-menu" id={`schedule-item-menu-${item.id}`} role="menu" aria-label={`${displayTitle} actions`} onKeyDown={onMainMenuKeyDown}>
+                    <button type="button" role="menuitem" disabled={index === 0 || reordering} onPointerEnter={() => setActiveSubmenu(null)} onClick={() => void moveItem(item.id, -1)}>Move item up</button>
+                    <button type="button" role="menuitem" disabled={index === displayItems.length - 1 || reordering} onPointerEnter={() => setActiveSubmenu(null)} onClick={() => void moveItem(item.id, 1)}>Move item down</button>
+                    {insertionOptions.map(({ label, itemType }) => {
+                      const submenuIsOpen = activeSubmenu?.itemId === item.id && activeSubmenu.itemType === itemType;
+                      return <div
+                        className={`schedule-item-submenu-group${submenuIsOpen ? " is-active" : ""}`}
+                        role="none"
+                        key={label}
+                        onPointerEnter={(event) => showSubmenu(event, item.id, itemType)}
+                        onPointerLeave={(event) => {
+                          if (event.pointerType === "mouse" && activeSubmenu?.itemId === item.id && activeSubmenu.itemType === itemType) {
+                            setActiveSubmenu(null);
+                          }
+                        }}
+                      >
+                        <button
+                          type="button"
+                          role="menuitem"
+                          aria-haspopup="menu"
+                          aria-expanded={submenuIsOpen}
+                          aria-controls={`schedule-submenu-${item.id}-${itemType}`}
+                          disabled={itemType === "song" && !songsReady}
+                          onClick={(event) => toggleSubmenu(event, item.id, itemType)}
+                          onKeyDown={(event) => openSubmenuFromKeyboard(event, item.id, itemType)}
+                        >
+                          <span>{label}</span><ChevronRight size={14} aria-hidden="true" />
+                        </button>
+                        {submenuIsOpen && <div
+                          className={`schedule-item-submenu${activeSubmenu?.opensLeft ? " opens-left" : ""}`}
+                          id={`schedule-submenu-${item.id}-${itemType}`}
+                          role="menu"
+                          aria-label={`${label} position`}
+                          onKeyDown={onSubmenuKeyDown}
+                        >
+                          <button type="button" role="menuitem" onClick={() => insertRelative(item.id, itemType, true)}>Before</button>
+                          <button type="button" role="menuitem" onClick={() => insertRelative(item.id, itemType, false)}>After</button>
+                        </div>}
+                      </div>;
+                    })}
+                    <form className="schedule-item-remove-form" role="presentation" onPointerEnter={() => setActiveSubmenu(null)}>
+                      <input type="hidden" name="item_id" value={item.id} />
+                      <input type="hidden" name="return_to" value={returnTo} />
+                      <ConfirmButton
+                        action={deleteScheduleItem}
+                        title="Delete schedule item?"
+                        message={`Delete “${displayTitle}” from this schedule? The selected Songbook entry will remain.`}
+                        confirmLabel="Remove"
+                        pendingLabel="Removing…"
+                        className="schedule-item-menu-remove"
+                        role="menuitem"
+                        onActionSuccess={() => {
+                          setContextMenuItemId(null);
+                          setActiveSubmenu(null);
+                        }}
+                      >Remove</ConfirmButton>
+                    </form>
                   </div>}
                 </div>
                 <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)} disabled={!privateNotesReady}>Edit</button>
                 <button className="icon-button" type="button" aria-label={`Duplicate ${displayTitle}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null || reordering}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
-                <form>
-                  <input type="hidden" name="item_id" value={item.id} />
-                  <input type="hidden" name="return_to" value={returnTo} />
-                  <ConfirmButton
-                    action={deleteScheduleItem}
-                    title="Delete schedule item?"
-                    message={`Delete “${displayTitle}” from this schedule? The selected Songbook entry will remain.`}
-                    className="icon-button danger"
-                  ><Trash2 size={15} /></ConfirmButton>
-                </form>
               </div>
             </div>
           </li>;

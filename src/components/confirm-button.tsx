@@ -81,6 +81,7 @@ export function ConfirmButton({
   title = "Delete item?",
   confirmLabel = "Delete",
   onActionSuccess,
+  role,
 }: {
   action: ServerAction;
   message: string;
@@ -91,6 +92,7 @@ export function ConfirmButton({
   title?: string;
   confirmLabel?: string;
   onActionSuccess?: () => void;
+  role?: "menuitem";
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -125,7 +127,7 @@ export function ConfirmButton({
 
   return (
     <>
-      <button ref={triggerRef} type="button" className={className} onClick={() => { setOpen(true); setError(""); }} aria-haspopup="dialog">
+      <button ref={triggerRef} type="button" className={className} role={role} onClick={() => { setOpen(true); setError(""); }} aria-haspopup="dialog">
         {pending ? pendingLabel : children}
       </button>
       {open && <ConfirmationDialog

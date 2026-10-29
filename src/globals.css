@@ -125,10 +125,31 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .schedule-item-drag-handle:active { cursor: grabbing; }
 .schedule-item-drag-handle:focus-visible { outline: 2px solid #d3b46e; outline-offset: 2px; }
 .schedule-item-context { position: relative; }
-.schedule-item-context-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 5; display: grid; min-width: 180px; padding: 5px; background: #242424; border: 1px solid #454545; border-radius: 7px; box-shadow: 0 8px 24px #0008; }
-.schedule-item-context-menu button { min-height: 38px; padding: 9px 10px; color: #eee; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 12px; cursor: pointer; }
-.schedule-item-context-menu button:hover:not(:disabled) { background: #353535; }
-.schedule-item-context-menu button:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-item-context.is-menu-open { z-index: 20; }
+.schedule-item-context-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 5; display: grid; width: 204px; padding: 5px; background: #242424; border: 1px solid #454545; border-radius: 7px; box-shadow: 0 8px 24px #0008; }
+.schedule-item-context-menu > button, .schedule-item-submenu-group > button, .schedule-item-remove-form > button { display: flex; width: 100%; min-height: 38px; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; color: #eee; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 12px; cursor: pointer; }
+.schedule-item-submenu-group { position: relative; }
+.schedule-item-submenu-group > button { position: relative; z-index: 1; }
+.schedule-item-submenu-group.is-active > button, .schedule-item-context-menu > button:hover:not(:disabled), .schedule-item-submenu-group > button:hover:not(:disabled), .schedule-item-remove-form > button:hover { color: #f0d99c; background: #353535; }
+.schedule-item-submenu-group.is-active > button { box-shadow: inset 2px 0 #b89a5c; }
+.schedule-item-submenu-group > button:disabled, .schedule-item-context-menu > button:disabled { opacity: .5; cursor: not-allowed; }
+.schedule-item-submenu { position: absolute; top: -5px; left: 100%; z-index: 8; display: grid; width: 126px; padding: 5px; background: #242424; border: 1px solid #5b513b; border-radius: 7px; box-shadow: 0 8px 24px #000a; }
+.schedule-item-submenu.opens-left { right: 100%; left: auto; }
+.schedule-item-submenu button { min-height: 38px; padding: 9px 10px; color: #eee; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 12px; cursor: pointer; }
+.schedule-item-submenu button:hover, .schedule-item-submenu button:focus-visible { color: #f0d99c; background: #353535; }
+.schedule-item-remove-form { margin: 0; }
+.schedule-item-remove-form > button { color: #ffb4a9; }
+.schedule-item-remove-form > button:hover { color: #ffc9c1; background: #442b29; }
+@media (max-width: 640px) {
+  .schedule-item-context-menu { width: min(204px, calc(100vw - 28px)); }
+  .schedule-item-submenu,
+  .schedule-item-submenu.opens-left {
+    top: calc(100% + 3px);
+    right: auto;
+    left: 0;
+    width: 100%;
+  }
+}
 .item-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: #000c; }
 .item-modal { width: min(100%, 650px); max-height: min(92vh, 900px); overflow: auto; padding: 22px; color: #f1f1f1; background: #151515; border: 1px solid #3a3a3a; border-radius: 12px; box-shadow: 0 20px 80px #000b; }
 .item-modal-header { position: sticky; top: -22px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -22px -22px 17px; padding: 18px 22px 14px; background: #151515; border-bottom: 1px solid #303030; }
@@ -1213,7 +1234,7 @@ body:has(.presentation-page)::-webkit-scrollbar,
   .inline-programme-actions .mini-actions { min-width: 0; flex-wrap: wrap; justify-content: flex-start; }
   .mini-actions form, .mini-actions > * { max-width: 100%; }
   .mini-actions .icon-button { min-width: 42px; min-height: 42px; }
-  .schedule-item-context-menu { max-width: min(88vw, 260px); max-height: min(60dvh, 360px); overflow-y: auto; }
+  .schedule-item-context-menu { max-width: min(88vw, 260px); overflow: visible; }
   .schedule-editor-actions, .admin-content .form-actions,
   .admin-content .item-modal-footer, .admin-content .announcement-editor-actions {
     min-width: 0;
@@ -1342,7 +1363,7 @@ body:has(.presentation-page)::-webkit-scrollbar,
     .admin-content .announcement-list-copy { flex-basis: calc(100% - 80px); }
   }
 
-@media (prefers-color-scheme: light) {
+  @media (prefers-color-scheme: light) {
   html {
     color-scheme: light;
     background: var(--paper);
