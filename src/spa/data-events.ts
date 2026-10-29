@@ -12,6 +12,10 @@ export function notifyDataChanged(path?: string) {
   });
 }
 
+export function notifyStorageChanged() {
+  window.dispatchEvent(new CustomEvent("incoc:storage-changed"));
+}
+
 export function notifyScheduleDeleted(scheduleId: string) {
   return applyScheduleDeletion(scheduleId);
 }

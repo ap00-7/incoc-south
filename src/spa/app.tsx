@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, MapPin, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, HardDrive, LogOut, MapPin, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -31,6 +31,7 @@ const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-ma
 const AnnouncementManagerPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementManagerPage })));
 const AnnouncementPublicPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementPublicPage })));
 const AnnouncementSlidesPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementSlidesPage })));
+const StorageManagerPage = lazy(() => import("@/components/admin/storage-manager").then((module) => ({ default: module.StorageManagerPage })));
 const InviteMemberForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.InviteMemberForm })));
 const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
 const LoginForm = lazy(() => import("@/components/auth/login-form").then((module) => ({ default: module.LoginForm })));
@@ -639,6 +640,7 @@ function AdminLayout() {
     { label: "Songs", href: "/admin/songs" },
     { label: "Sunday Schedule & Slides", href: "/admin/schedules" },
     { label: "Announcements", href: "/admin/announcements" },
+    { label: "Storage Manager", href: "/admin/storage" },
     { label: "Members", href: "/admin/members" },
   ];
 
@@ -727,6 +729,7 @@ function AdminDashboard() {
     { title: "Songbook management", description: "Add, edit, and organize songs, sections, and translations.", href: "/admin/songs", icon: BookOpen },
     { title: "Schedule and slides", description: "Plan services, reorder programme items, and manage slide content and visibility.", href: "/admin/schedules", icon: CalendarDays },
     { title: "Announcement management", description: "Create collections and announcement items, control publishing, and manage images and text.", href: "/admin/announcements", icon: FileText },
+    { title: "Storage Manager", description: "Review storage usage, browse uploaded files, and safely remove unreferenced objects.", href: "/admin/storage", icon: HardDrive },
     { title: "Member access", description: "Invite members and manage their church roles.", href: "/admin/members", icon: Users },
   ];
   return <>
@@ -1104,6 +1107,7 @@ export function App() {
           <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
           <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
           <Route path="announcements" element={<AnnouncementManagerPage />} />
+          <Route path="storage" element={<StorageManagerPage />} />
           <Route path="members" element={<AdminMembersPage />} />
         </Route>
       </Route>

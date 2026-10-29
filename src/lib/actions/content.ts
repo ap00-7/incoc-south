@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { parseDurationMinutes } from "@/lib/domain/validation";
 import { lyricLanguageValues, songEditorLanguageValues, songSectionValues } from "@/lib/domain/songs";
 import { sanitizeAnnouncementBody } from "@/lib/domain/announcement-body";
-import { notifyDataChanged, notifyScheduleDeleted } from "@/spa/data-events";
+import { notifyDataChanged, notifyScheduleDeleted, notifyStorageChanged } from "@/spa/data-events";
 
 function invalidateRouteData(path: string) {
   notifyDataChanged(path);
@@ -1025,6 +1025,7 @@ async function removeAnnouncementImage(imageUrl: string | null, churchId: string
   const bucket = supabase.storage.from("announcement-images");
   if (bucket.getPublicUrl(path).data.publicUrl !== imageUrl) return null;
   const { error } = await bucket.remove([path]);
+  if (!error) notifyStorageChanged();
   return error ? `Announcement was saved, but its previous image could not be removed: ${error.message}` : null;
 }
 

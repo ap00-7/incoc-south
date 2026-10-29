@@ -9,6 +9,7 @@ This is a Vite + React Router single-page application with Supabase Auth, Postgr
 - Responsive coffee-and-golden-brown design with Songs, Sunday Schedule, and Slides as the three homepage destinations.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
 - Shared browser auth and membership state, an `/admin` owner dashboard, and database RLS enforcement.
+- Owner-only Storage Manager with recursive object inventory, searchable files, per-bucket estimates, and reference-protected Storage API deletion.
 - Owner song creation and editing, four primary song languages, reusable chorus sequencing, optional section translations, and deletion protection for songs referenced by schedules.
 - Public songbook search, language filtering, lyric sections, and translations.
 - Dated service drafts, reusable song references, non-song programme items, leaders, durations, private notes, ordering, publishing, and unpublishing.
@@ -102,6 +103,8 @@ The five original migrations (`001`–`005`) are recorded as applied. The song-e
 `src/lib/supabase/database.types.ts` provides strict table, enum, relationship, and RPC types to the browser Supabase client. After manually applying approved SQL, refresh types from the intended project and run `npm run typecheck`.
 
 All exposed application tables have RLS enabled. Membership helpers use fixed search paths and `SECURITY DEFINER` so policies do not recurse through membership RLS. The browser checks membership to display owner tools; PostgreSQL RLS remains the authorization boundary for data changes. The invitation function separately validates the caller's bearer token and owner membership before using its server-only service-role key. Anonymous and authenticated readers can access INCOC South songs and sections, plus published INCOC South schedules and their programme items. Draft schedules, private service notes, membership/profile data, and presentation-session controls are not public. Songs referenced by a programme item cannot be deleted because of the database foreign key.
+
+The Storage Manager uses the signed-in browser client and does not use a service-role key. It lists buckets and objects through Supabase Storage, creates short-lived signed URLs for private-object viewing, and removes objects only through `storage.remove()`. Its delete action checks announcement, schedule/presentation, and song-source references and blocks deletion when references exist or the checks fail. Storage inventory is an estimate from accessible object metadata, not Supabase's official billing usage. The repository does not define Storage bucket/object policies; the project must already grant the owner account the required listing, private-object read (if needed), and object-delete permissions. Missing permissions are reported in the admin UI; no policy migration is applied by the app.
 
 Presentation sharing by restricted URL is disabled. `presentation_links` stores hashes only and is owner-only, but no public token validation endpoint is enabled.
 

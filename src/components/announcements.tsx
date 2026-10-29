@@ -30,6 +30,7 @@ import {
   sanitizeAnnouncementBody,
 } from "@/lib/domain/announcement-body";
 import { useAuth } from "@/spa/auth-provider";
+import { notifyStorageChanged } from "@/spa/data-events";
 
 const announcementBucket = "announcement-images";
 const maxAnnouncementImageSize = 50 * 1024 * 1024;
@@ -294,6 +295,7 @@ function AnnouncementItemEditor({
           upsert: false,
         });
         if (uploadError) throw new Error(`Unable to upload the announcement image: ${uploadError.message}`);
+        notifyStorageChanged();
         imageUrl = createClient().storage.from(announcementBucket).getPublicUrl(uploadedPath).data.publicUrl;
       }
       const notice = await onSave({
@@ -313,6 +315,7 @@ function AnnouncementItemEditor({
           setSaving(false);
           return;
         }
+        notifyStorageChanged();
       }
       setError(saveError instanceof Error ? saveError.message : "Unable to save the announcement.");
     } finally {

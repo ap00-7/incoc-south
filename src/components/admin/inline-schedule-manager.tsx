@@ -32,7 +32,7 @@ import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 import { createClient } from "@/lib/supabase/browser";
 import { getAnnouncementScheduleDestination } from "@/lib/domain/slides";
-import { notifyDataChanged } from "@/spa/data-events";
+import { notifyDataChanged, notifyStorageChanged } from "@/spa/data-events";
 
 type SongOption = { id: string; title: string; language: string };
 type TranslationLanguage = ScheduleItemInput["translation_language"];
@@ -554,6 +554,7 @@ export function InlineScheduleManager({
       upsert: false,
     });
     if (uploadError) throw new Error(`Unable to upload ${kind === "background" ? "background image" : presentationType ? "presentation file" : "media"}: ${uploadError.message}`);
+    notifyStorageChanged();
     return supabase.storage.from("schedule-media").getPublicUrl(path).data.publicUrl;
   }
 
