@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, MapPin, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -13,6 +13,7 @@ import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
 import { filterPresentationItems, generateSlides, getAnnouncementScheduleDestination, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
+import { formatScheduleDuration } from "@/lib/domain/schedule";
 import { notifyDataChanged } from "@/spa/data-events";
 import { useAuth } from "@/spa/auth-provider";
 import { useAsyncResource } from "@/spa/use-async-resource";
@@ -382,7 +383,7 @@ function ScheduleListPage({ schedules }: { schedules: SharedContent["schedules"]
       {pageSchedules.length ? <div className="results-list">
         {pageSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
           <IntentPrefetchLink className="result-card" href={`/schedule/${schedule.id}`}>
-            <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
+            <div><h2>{schedule.title}</h2><p className="schedule-list-venue"><MapPin size={14} aria-hidden="true" />{schedule.venue ?? "Venue not set"}</p><p className="schedule-list-date"><CalendarDays size={14} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
             <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
           </IntentPrefetchLink>
         </article>)}
@@ -427,9 +428,8 @@ function ScheduleDetailPage({ schedules, songs }: {
           <header className="schedule-detail-heading">
             <h1 className="detail-title">{schedule.title}</h1>
             <div className="detail-meta schedule-detail-meta">
-              <CalendarDays size={16} aria-hidden="true" />
-              <span>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</span>
-              {schedule.venue && <span className="schedule-detail-venue"><span aria-hidden="true">·</span> {schedule.venue}</span>}
+              <span className="schedule-detail-meta-item"><CalendarDays size={16} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</span>
+              {schedule.venue && <span className="schedule-detail-meta-item schedule-detail-venue"><MapPin size={16} aria-hidden="true" />{schedule.venue}</span>}
             </div>
           </header>
           {schedule.description && <p className="section-description">{schedule.description}</p>}
@@ -438,27 +438,31 @@ function ScheduleDetailPage({ schedules, songs }: {
               const song = item.item_type === "song" && item.song_id ? songById.get(item.song_id) : null;
               const announcementDestination = getAnnouncementScheduleDestination(item.title);
               const primary = song
-                ? <><span>Song: </span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link></>
-                : item.leader_name && item.public_content
-                  ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name} · {item.public_content}</>
-                  : item.leader_name
-                    ? <>{item.item_type === "song" ? "Song leader: " : "Responsible: "}{item.leader_name}</>
-                    : item.public_content || (item.item_type === "scripture_reading" ? "Scripture reading" : item.item_type.replaceAll("_", " ").replace(/^\w/, (letter) => letter.toUpperCase()));
+                ? <><span className="programme-field-label">Song</span><Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link></>
+                : item.public_content
+                  ? item.public_content
+                  : item.item_type === "scripture_reading" ? "Scripture reading" : null;
+              const duration = formatScheduleDuration(item.duration_minutes);
               const details = [
-                song && item.leader_name ? `Song leader: ${item.leader_name}` : null,
-                item.duration_minutes != null ? `${item.duration_minutes} min` : null,
-                item.translator_name ? `Translator: ${item.translator_name}` : null,
-                item.translation_language,
-              ].filter(Boolean);
-              return <li className="programme-item" key={item.id}><div>
-                <h2>{announcementDestination
-                  ? <Link className="song-title-link" to={announcementDestination.path}>{item.title}</Link>
-                  : item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2><p>{primary}</p>
-                {(details.length > 0 || (item.link_url && !announcementDestination)) && <p>{details.join(" · ")}{item.link_url && !announcementDestination && <>{details.length > 0 && " · "}<a href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></>}</p>}
-                {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
-                  ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
-                  : null}
-              </div></li>;
+                item.leader_name ? <span key="leader"><span className="programme-field-label">{item.item_type === "song" ? "Song leader" : "Responsible"}</span>{item.leader_name}</span> : null,
+                duration ? <span className="programme-duration" key="duration">{duration}</span> : null,
+                item.translator_name ? <span key="translator"><span className="programme-field-label">Translator</span>{item.translator_name}</span> : null,
+                item.translation_language ? <span key="language"><span className="programme-field-label">Language</span>{item.translation_language}</span> : null,
+                item.link_url && !announcementDestination ? <a key="link" href={item.link_url} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a> : null,
+              ];
+              return <li className="programme-item" key={item.id}>
+                <span className="programme-timeline-marker" aria-hidden="true" />
+                <div className="programme-item-content">
+                  <h2>{announcementDestination
+                    ? <Link className="song-title-link" to={announcementDestination.path}>{item.title}</Link>
+                    : item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2>
+                  {primary && <p className="programme-primary">{primary}</p>}
+                  {details.some(Boolean) && <p className="programme-details">{details.map((detail, index) => detail && <span className="programme-detail" key={index}>{detail}</span>)}</p>}
+                  {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url)
+                    ? <video className="schedule-item-media" src={item.media_url} controls preload="metadata" />
+                    : null}
+                </div>
+              </li>;
             })}
           </ol> : <div className="empty-state" style={{ marginTop: 22 }}>
             {schedule.schedule_items.length
