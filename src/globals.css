@@ -283,7 +283,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .schedule-list-venue, .schedule-list-date { display: flex; align-items: flex-start; gap: 7px; }
 .schedule-list-venue svg, .schedule-list-date svg { flex: 0 0 auto; margin-top: 2px; color: var(--gold); }
 .schedule-detail-heading { position: relative; max-width: 920px; margin: 0 auto 24px; padding: 10px 12px 14px; text-align: center; }
-.schedule-detail-heading .detail-title { width: 100%; margin-inline: auto; font-size: clamp(34px, 5.2vw, 52px); font-weight: 500; letter-spacing: -.035em; line-height: 1.12; }
+.schedule-detail-heading .detail-title { width: 100%; margin-inline: auto; font-size: clamp(34px, 5.2vw, 52px); font-weight: 550; letter-spacing: -.035em; line-height: 1.12; }
 .detail-meta.schedule-detail-meta { display: flex; justify-content: center; align-items: flex-start; flex-wrap: wrap; gap: 8px 24px; margin-top: 13px; color: var(--ink); font-size: 16px; font-weight: 500; line-height: 1.5; }
 .schedule-detail-meta-item { display: inline-flex; min-width: 0; align-items: flex-start; gap: 8px; overflow-wrap: anywhere; }
 .schedule-detail-meta-item svg { flex: 0 0 auto; margin-top: 4px; color: var(--gold); }
@@ -298,9 +298,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .content-wrap > .programme-list .programme-item h2 .song-title-link:hover { color: var(--gold-bright); }
 .content-wrap > .programme-list .programme-item p { margin: 8px 0 0; font-size: 15px; line-height: 1.55; }
 .content-wrap > .programme-list .programme-item .programme-primary { max-width: 760px; color: var(--ink); }
-.programme-song { display: grid; justify-items: start; margin-top: 5px; }
+.programme-song { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 0 7px; margin-top: 5px; }
+.programme-song-label { color: var(--muted); font-size: 13px; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; }
+.programme-song-label::after, .programme-metadata-field dt::after { content: " -"; }
 .programme-song .song-title-link { display: inline-block; max-width: 100%; min-height: 30px; color: var(--gold); font-size: 17px; font-weight: 650; line-height: 1.45; text-decoration-thickness: 1px; text-underline-offset: 4px; overflow-wrap: anywhere; }
 .programme-song .song-title-link:hover { color: var(--gold-bright); }
+.programme-song + .programme-metadata { margin-top: 5px; }
 .programme-metadata { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 18px; margin: 9px 0 0; padding: 0; }
 .programme-metadata-1 { grid-template-columns: minmax(0, min(100%, 360px)); }
 .programme-metadata-field { min-width: 0; padding: 0 10px 0 0; }
@@ -321,6 +324,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
   .programme-item:last-child { padding-bottom: 6px; }
   .content-wrap > .programme-list .programme-item h2 { font-size: 19px; }
   .programme-song { margin-top: 4px; }
+  .programme-song-label { font-size: 12px; }
   .programme-song .song-title-link { min-height: 30px; font-size: 16px; }
   .programme-metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 13px; margin-top: 8px; }
   .programme-metadata-field { padding: 0 6px 0 0; }
