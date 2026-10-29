@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Search, X } from "lucide-react";
 import { Dropdown } from "@/components/dropdown";
 import { isMultilingualSong } from "@/lib/domain/songs";
 
@@ -123,6 +124,7 @@ export function SongbookSearch({
     <div className="songbook-search" ref={searchRef}>
       <label className="sr-only" htmlFor="song-title-search">Search song titles</label>
       <div className="songbook-search-field">
+        <Search className="songbook-search-icon" size={18} aria-hidden="true" />
         <input
           id="song-title-search"
           className="search-input"
@@ -130,16 +132,23 @@ export function SongbookSearch({
           name="q"
           autoComplete="off"
           value={title}
-          placeholder="Search by song title"
+          placeholder="Search songs by title"
           onFocus={() => setOpen(Boolean(title.trim()))}
           onChange={(event) => onTitleChange(event.currentTarget.value)}
           onKeyDown={onKeyDown}
         />
+        {title && <button
+          className="songbook-search-clear"
+          type="button"
+          aria-label="Clear song search"
+          onClick={() => onTitleChange("")}
+        ><X size={17} aria-hidden="true" /></button>}
       </div>
       <label className="sr-only" htmlFor="song-language-filter">Filter by language</label>
       <Dropdown
         id="song-language-filter"
         value={selectedLanguage}
+        className={`songbook-language-filter${selectedLanguage ? " has-selection" : ""}`}
         aria-label="Filter by language"
         options={[
           { value: "", label: "All languages" },

@@ -268,8 +268,8 @@ function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
   };
 
   return <PageShell>
-    <div className="content-wrap">
-      <div className="section-heading"><h1>Songbook</h1></div>
+    <div className="content-wrap songbook-page">
+      <div className="section-heading songbook-heading"><h1>Songbook</h1></div>
       <SongbookSearch songs={songs} query={query} language={language} />
       {visibleSongs.length ? <div className="results-list songbook-results-list">
         {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/songs/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
