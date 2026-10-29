@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Dropdown } from "@/components/dropdown";
 import { isMultilingualSong } from "@/lib/domain/songs";
 
@@ -30,7 +30,7 @@ export function SongbookSearch({
 }) {
   const navigate = useNavigate();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const appliedFiltersRef = useRef(`${query.trim()}|${language}`);
   const [title, setTitle] = useState(query);
   const [selectedLanguage, setSelectedLanguage] = useState(language);
@@ -55,6 +55,28 @@ export function SongbookSearch({
     };
   }, [navigateToFilters, selectedLanguage, title]);
 
+  useEffect(() => {
+    const nextFilters = `${query.trim()}|${language}`;
+    if (appliedFiltersRef.current === nextFilters) return;
+    appliedFiltersRef.current = nextFilters;
+    setTitle(query);
+    setSelectedLanguage(language);
+    setActiveIndex(-1);
+    setOpen(false);
+  }, [language, query]);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOnOutsidePointer(event: PointerEvent) {
+      if (event.target instanceof Node && !searchRef.current?.contains(event.target)) {
+        setOpen(false);
+        setActiveIndex(-1);
+      }
+    }
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, [open]);
+
   const suggestions = useMemo(() => {
     const normalized = title.trim().toLocaleLowerCase();
     if (!normalized) return [];
@@ -73,7 +95,7 @@ export function SongbookSearch({
     setOpen(Boolean(value.trim()));
   }
 
-  function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+  function onKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key === "ArrowDown" && suggestions.length) {
       event.preventDefault();
       setOpen(true);
@@ -85,36 +107,60 @@ export function SongbookSearch({
     } else if (event.key === "Enter" && open && suggestions.length) {
       event.preventDefault();
       const song = suggestions[activeIndex >= 0 ? activeIndex : 0];
-      navigate(`/songs/${song.id}`);
+      navigate(`/songs/${song.id}`, { state: { songOrigin: "songbook" } });
       setOpen(false);
+      setActiveIndex(-1);
     } else if (event.key === "Escape") {
+      setOpen(false);
+      setActiveIndex(-1);
+    } else if (event.key === "Tab") {
       setOpen(false);
       setActiveIndex(-1);
     }
   }
 
   return (
-    <div className="songbook-search">
+    <div className="songbook-search" ref={searchRef}>
       <label className="sr-only" htmlFor="song-title-search">Search song titles</label>
-      <input
-        id="song-title-search"
-        className="search-input"
-        type="search"
-        name="q"
-        autoComplete="off"
-        value={title}
-        placeholder="Search by song title"
-        aria-autocomplete="list"
-        aria-controls="song-title-suggestions"
-        aria-expanded={open && suggestions.length > 0}
-        aria-activedescendant={activeIndex >= 0 ? `song-suggestion-${suggestions[activeIndex]?.id}` : undefined}
-        onFocus={() => setOpen(Boolean(title.trim()))}
-        onBlur={() => {
-          blurTimerRef.current = setTimeout(() => setOpen(false), 120);
-        }}
-        onChange={(event) => onTitleChange(event.currentTarget.value)}
-        onKeyDown={onKeyDown}
-      />
+      <div className="songbook-search-field">
+        <input
+          id="song-title-search"
+          className="search-input"
+          type="search"
+          name="q"
+          autoComplete="off"
+          value={title}
+          placeholder="Search by song title"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
+          aria-controls="song-title-suggestions"
+          aria-expanded={open}
+          aria-activedescendant={activeIndex >= 0 ? `song-suggestion-${suggestions[activeIndex]?.id}` : undefined}
+          onFocus={() => setOpen(Boolean(title.trim()))}
+          onChange={(event) => onTitleChange(event.currentTarget.value)}
+          onKeyDown={onKeyDown}
+        />
+        {open && title.trim() && <ul className="song-suggestions" id="song-title-suggestions" role="listbox" aria-label="Matching songs">
+          {suggestions.length > 0
+            ? suggestions.map((song, index) => (
+              <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>
+                <Link
+                  className="song-suggestion-link"
+                  to={`/songs/${song.id}`}
+                  state={{ songOrigin: "songbook" }}
+                  onClick={() => {
+                    setOpen(false);
+                    setActiveIndex(-1);
+                  }}
+                >
+                  {song.title}
+                </Link>
+              </li>
+            ))
+            : <li className="song-suggestions-empty" role="option" aria-disabled="true">No matching songs found</li>}
+        </ul>}
+      </div>
       <label className="sr-only" htmlFor="song-language-filter">Filter by language</label>
       <Dropdown
         id="song-language-filter"
@@ -126,26 +172,11 @@ export function SongbookSearch({
         ]}
         onValueChange={(value) => {
           setSelectedLanguage(value);
+          setActiveIndex(-1);
+          setOpen(Boolean(title.trim()));
           navigateToFilters(title, value);
         }}
       />
-      {open && suggestions.length > 0 && <ul className="song-suggestions" id="song-title-suggestions" role="listbox" aria-label="Matching songs">
-        {suggestions.map((song, index) => (
-          <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>
-            <Link
-              className="song-suggestion-link"
-              to={`/songs/${song.id}`}
-              state={{ songOrigin: "songbook" }}
-              onClick={() => {
-                if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
-                setOpen(false);
-              }}
-            >
-              {song.title}
-            </Link>
-          </li>
-        ))}
-      </ul>}
     </div>
   );
 }

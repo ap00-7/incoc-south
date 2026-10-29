@@ -784,12 +784,16 @@ code, kbd, pre { font-family: var(--font-mono); }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-.songbook-search { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, 190px); gap: 10px; margin: 18px 0; }
+.songbook-search { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, 190px); align-items: start; gap: 10px; margin: 18px 0; }
+.songbook-search-field { position: relative; min-width: 0; }
 .songbook-search .search-input { max-width: none; }
 .songbook-search select { min-height: 44px; padding: 0 34px 0 12px; color: var(--ink); background: var(--white); border: 1px solid var(--border); border-radius: 8px; }
-.song-suggestions { position: absolute; z-index: 6; top: 44px; left: 0; width: calc(100% - 200px); max-height: 320px; margin: 0; padding: 5px; overflow-y: auto; list-style: none; background: var(--white); border: 1px solid var(--border); border-radius: 0 0 9px 9px; box-shadow: var(--shadow); }
-.song-suggestion-link { display: block; padding: 8px 10px; color: var(--navy); border-radius: 5px; font-size: 14px; overflow-wrap: anywhere; }
+.song-suggestions { position: absolute; z-index: 20; top: calc(100% + 5px); left: 0; width: 100%; max-height: min(320px, 60dvh); margin: 0; padding: 5px; overflow-x: hidden; overflow-y: auto; list-style: none; background: var(--white); border: 1px solid var(--border); border-radius: 9px; box-shadow: var(--shadow); }
+.song-suggestions li { min-width: 0; }
+.song-suggestion-link { min-height: 44px; display: flex; align-items: center; padding: 9px 11px; color: var(--ink); border-radius: 5px; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .song-suggestion-link:hover, .song-suggestions [aria-selected="true"] .song-suggestion-link { background: var(--surface-soft); }
+.song-suggestion-link:focus-visible { color: var(--gold); background: var(--surface-soft); }
+.song-suggestions-empty { padding: 12px 11px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .songbook-results-list { gap: 0; }
 .song-title-result { display: block; padding: 12px 2px; color: var(--gold); border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 550; line-height: 1.5; overflow-wrap: anywhere; }
 .song-title-result:hover { color: var(--navy); text-decoration: underline; text-underline-offset: 3px; }
@@ -820,7 +824,6 @@ code, kbd, pre { font-family: var(--font-mono); }
 
 @media (max-width: 600px) {
   .songbook-search { grid-template-columns: minmax(0, 1fr); }
-  .song-suggestions { width: 100%; }
   .song-title-result { padding: 11px 2px; font-size: 15px; }
   .presentation-bottom-controls { bottom: max(10px, env(safe-area-inset-bottom)); left: max(10px, env(safe-area-inset-left)); }
   .slide-stage { padding-bottom: 115px; }

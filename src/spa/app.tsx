@@ -270,7 +270,7 @@ function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
   return <PageShell>
     <div className="content-wrap">
       <div className="section-heading"><h1>Songbook</h1></div>
-      <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
+      <SongbookSearch songs={songs} query={query} language={language} />
       {visibleSongs.length ? <div className="results-list songbook-results-list">
         {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/songs/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
       </div> : <div className="empty-state">{query || language ? "No songs match those filters." : "The songbook is ready for its first song."}</div>}
