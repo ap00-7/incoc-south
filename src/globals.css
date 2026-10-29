@@ -118,9 +118,14 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .inline-programme-item { background: #151515; }
 .inline-programme-actions > div:first-child p { margin: 5px 0 0; font-size: 11px; }
 .inline-programme-actions { color: #ededed; }
+.inline-programme-item { transition: border-color .12s ease, box-shadow .12s ease, opacity .12s ease; }
+.inline-programme-item.is-dragging { opacity: .48; border-color: #b89a5c; }
+.inline-programme-item.is-drop-target { box-shadow: inset 0 3px 0 #b89a5c; }
+.schedule-item-drag-handle { cursor: grab; touch-action: none; color: #c9b47e; }
+.schedule-item-drag-handle:active { cursor: grabbing; }
 .schedule-item-context { position: relative; }
 .schedule-item-context-menu { position: absolute; top: calc(100% + 5px); right: 0; z-index: 5; display: grid; min-width: 180px; padding: 5px; background: #242424; border: 1px solid #454545; border-radius: 7px; box-shadow: 0 8px 24px #0008; }
-.schedule-item-context-menu button { padding: 9px 10px; color: #eee; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 12px; cursor: pointer; }
+.schedule-item-context-menu button { min-height: 38px; padding: 9px 10px; color: #eee; background: transparent; border: 0; border-radius: 4px; text-align: left; font-size: 12px; cursor: pointer; }
 .schedule-item-context-menu button:hover:not(:disabled) { background: #353535; }
 .schedule-item-context-menu button:disabled { opacity: .5; cursor: not-allowed; }
 .item-modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 18px; background: #000c; }

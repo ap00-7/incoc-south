@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   FileText,
   FileUp,
   Film,
+  GripVertical,
   ImagePlus,
   Link2,
   LoaderCircle,
@@ -22,6 +21,7 @@ import {
   deleteScheduleItem,
   duplicateScheduleItem,
   moveScheduleItem,
+  reorderScheduleItems,
   saveScheduleItem,
   updateSchedule,
   type ScheduleItemInput,
@@ -58,6 +58,18 @@ type ScheduleItem = {
   updated_at: string;
   song: { title: string } | { title: string }[] | null;
   notes?: string;
+};
+type ScheduleDragSession = {
+  itemId: string;
+  pointerId: number;
+  pointerType: string;
+  startX: number;
+  startY: number;
+  pointerY: number;
+  timer: number | null;
+  autoScrollFrame: number | null;
+  active: boolean;
+  targetIndex: number | null;
 };
 
 const itemTitles = [
@@ -245,6 +257,223 @@ export function InlineScheduleManager({
   const [mediaValidation, setMediaValidation] = useState("");
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
+  const [dragState, setDragState] = useState<{ itemId: string; targetIndex: number } | null>(null);
+  const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const listRef = useRef<HTMLOListElement | null>(null);
+  const activeMenuRef = useRef<HTMLDivElement | null>(null);
+  const dragSession = useRef<ScheduleDragSession | null>(null);
+  const displayItems = optimisticOrder
+    ? optimisticOrder.map((id) => items.find((item) => item.id === id)).filter((item): item is ScheduleItem => Boolean(item))
+    : items;
+  const displayItemsRef = useRef(displayItems);
+  displayItemsRef.current = displayItems;
+  const persistOrderRef = useRef<(expectedIds: string[], itemIds: string[]) => void>(() => undefined);
+
+  useEffect(() => {
+    if (!optimisticOrder) return;
+    const sameItems = items.length === optimisticOrder.length
+      && optimisticOrder.every((id) => items.some((item) => item.id === id));
+    if (!sameItems) {
+      if (!reordering) setOptimisticOrder(null);
+      return;
+    }
+    if (items.every((item, index) => item.id === optimisticOrder[index])) setOptimisticOrder(null);
+  }, [items, optimisticOrder, reordering]);
+
+  async function saveItemOrder(expectedIds: string[], itemIds: string[]) {
+    if (expectedIds.every((id, index) => id === itemIds[index])) return;
+    setOptimisticOrder(itemIds);
+    setReordering(true);
+    setFeedback("");
+    try {
+      await reorderScheduleItems({ schedule_id: schedule.id, expected_item_ids: expectedIds, item_ids: itemIds });
+      notifyDataChanged();
+      setFeedback("Schedule order saved.");
+    } catch (reorderError) {
+      setOptimisticOrder(null);
+      notifyDataChanged();
+      setFeedback(reorderError instanceof Error ? reorderError.message : "Unable to save the schedule order. Reload to review the saved order.");
+    } finally {
+      setReordering(false);
+    }
+  }
+  persistOrderRef.current = (expectedIds, itemIds) => { void saveItemOrder(expectedIds, itemIds); };
+
+  function activateDrag(session: ScheduleDragSession) {
+    if (dragSession.current !== session || reordering) return;
+    session.active = true;
+    const index = displayItemsRef.current.findIndex((item) => item.id === session.itemId);
+    if (index >= 0) {
+      session.targetIndex = index;
+      setDragState({ itemId: session.itemId, targetIndex: index });
+    }
+  }
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, itemId: string) {
+    if (reordering || event.button !== 0 || dragSession.current) return;
+    const session: ScheduleDragSession = {
+      itemId,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startY: event.clientY,
+      pointerY: event.clientY,
+      timer: null,
+      autoScrollFrame: null,
+      active: false,
+      targetIndex: null,
+    };
+    dragSession.current = session;
+    if (event.pointerType === "touch") {
+      session.timer = window.setTimeout(() => activateDrag(session), 350);
+    } else {
+      activateDrag(session);
+    }
+  }
+
+  useEffect(() => {
+    function clearDragSession() {
+      const session = dragSession.current;
+      if (!session) return;
+      if (session?.timer !== null && session?.timer !== undefined) window.clearTimeout(session.timer);
+      if (session.autoScrollFrame !== null) window.cancelAnimationFrame(session.autoScrollFrame);
+      dragSession.current = null;
+      setDragState(null);
+    }
+
+    function scrollAtPointer(y: number) {
+      const list = listRef.current;
+      if (!list) return;
+      let scrollable: HTMLElement | null = list.parentElement;
+      while (scrollable && scrollable !== document.body) {
+        const style = window.getComputedStyle(scrollable);
+        if (/(auto|scroll)/.test(style.overflowY) && scrollable.scrollHeight > scrollable.clientHeight) break;
+        scrollable = scrollable.parentElement;
+      }
+      const bounds = scrollable && scrollable !== document.body
+        ? scrollable.getBoundingClientRect()
+        : { top: 0, bottom: window.innerHeight };
+      const edge = Math.min(72, Math.max(40, (bounds.bottom - bounds.top) * 0.12));
+      if (y < bounds.top + edge) {
+        if (scrollable && scrollable !== document.body) {
+          const previousScrollTop = scrollable.scrollTop;
+          scrollable.scrollTop = Math.max(0, previousScrollTop - 14);
+          return scrollable.scrollTop < previousScrollTop;
+        }
+        if (window.scrollY <= 0) return false;
+        window.scrollBy(0, -14);
+        return true;
+      } else if (y > bounds.bottom - edge) {
+        if (scrollable && scrollable !== document.body) {
+          const previousScrollTop = scrollable.scrollTop;
+          scrollable.scrollTop = Math.min(scrollable.scrollHeight - scrollable.clientHeight, previousScrollTop + 14);
+          return scrollable.scrollTop > previousScrollTop;
+        }
+        if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight) return false;
+        window.scrollBy(0, 14);
+        return true;
+      }
+      return false;
+    }
+
+    function updateDropTarget(session: ScheduleDragSession, y: number) {
+      const list = listRef.current;
+      if (!list) return;
+      const rows = [...list.querySelectorAll<HTMLElement>("[data-schedule-item-id]")];
+      let targetIndex = 0;
+      rows.forEach((row) => {
+        if (row.dataset.scheduleItemId === session.itemId) return;
+        if (y > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2) targetIndex += 1;
+      });
+      targetIndex = Math.max(0, Math.min(targetIndex, displayItemsRef.current.length - 1));
+      if (session.targetIndex === targetIndex) return;
+      session.targetIndex = targetIndex;
+      setDragState({ itemId: session.itemId, targetIndex });
+    }
+
+    function autoScroll() {
+      const session = dragSession.current;
+      if (!session?.active) return;
+      if (scrollAtPointer(session.pointerY)) {
+        updateDropTarget(session, session.pointerY);
+        session.autoScrollFrame = window.requestAnimationFrame(autoScroll);
+      } else {
+        session.autoScrollFrame = null;
+      }
+    }
+
+    function onPointerMove(event: PointerEvent) {
+      const session = dragSession.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+      if (!session.active) {
+        if (session.pointerType === "touch"
+          && (Math.abs(event.clientX - session.startX) > 10 || Math.abs(event.clientY - session.startY) > 10)) {
+          clearDragSession();
+        }
+        return;
+      }
+      event.preventDefault();
+      session.pointerY = event.clientY;
+      updateDropTarget(session, event.clientY);
+      if (session.autoScrollFrame === null) session.autoScrollFrame = window.requestAnimationFrame(autoScroll);
+    }
+
+    function onPointerUp(event: PointerEvent) {
+      const session = dragSession.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+      const wasActive = session.active;
+      const listBounds = listRef.current?.getBoundingClientRect();
+      const targetIndex = session.targetIndex;
+      const currentItems = displayItemsRef.current;
+      clearDragSession();
+      if (!wasActive || !listBounds || targetIndex === null || event.clientY < listBounds.top || event.clientY > listBounds.bottom) return;
+      const expectedIds = currentItems.map((item) => item.id);
+      const nextIds = expectedIds.filter((id) => id !== session.itemId);
+      nextIds.splice(Math.max(0, Math.min(targetIndex, nextIds.length)), 0, session.itemId);
+      persistOrderRef.current(expectedIds, nextIds);
+    }
+
+    function onPointerCancel(event: PointerEvent) {
+      if (dragSession.current?.pointerId === event.pointerId) clearDragSession();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") clearDragSession();
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("blur", clearDragSession);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("blur", clearDragSession);
+      const session = dragSession.current;
+      if (session?.timer !== null && session?.timer !== undefined) window.clearTimeout(session.timer);
+      if (session?.autoScrollFrame !== null && session?.autoScrollFrame !== undefined) window.cancelAnimationFrame(session.autoScrollFrame);
+      dragSession.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenuItemId) return;
+    function onPointerDown(event: PointerEvent) {
+      if (!activeMenuRef.current?.contains(event.target as Node)) setContextMenuItemId(null);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setContextMenuItemId(null);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [contextMenuItemId]);
 
   function openAdd(itemType: ScheduleItemInput["item_type"] = "other", insertion?: { itemId: string; before: boolean }) {
     setDraft(emptyDraft(itemType, insertion));
@@ -411,6 +640,26 @@ export function InlineScheduleManager({
     }
   }
 
+  async function moveItem(itemId: string, direction: -1 | 1) {
+    if (reordering) return;
+    setContextMenuItemId(null);
+    setReordering(true);
+    setFeedback("");
+    const formData = new FormData();
+    formData.set("item_id", itemId);
+    formData.set("direction", String(direction));
+    formData.set("return_to", returnTo);
+    try {
+      await moveScheduleItem(formData);
+      notifyDataChanged();
+      setFeedback("Schedule item moved.");
+    } catch (moveError) {
+      setFeedback(moveError instanceof Error ? moveError.message : "Unable to move this schedule item.");
+    } finally {
+      setReordering(false);
+    }
+  }
+
   const isAnnouncementSlidesDraft = draft?.title === "Announcements Slides" && !draft.customTitle;
 
   return (
@@ -432,28 +681,44 @@ export function InlineScheduleManager({
       {!privateNotesReady && <p className="muted" role="status">Loading private schedule notes; existing items cannot be edited until they are ready.</p>}
       {privateNotesReady && !songsReady && <p className="muted" role="status">Loading Songbook options…</p>}
       {feedback && <p className="inline-item-feedback" role="status">{feedback}</p>}
-      {items.length ? <ol className="inline-programme-list">
-        {items.map((item, index) => {
+      {displayItems.length ? <ol className="inline-programme-list" ref={listRef}>
+        {displayItems.map((item, index) => {
           const relatedSong = Array.isArray(item.song) ? item.song[0] : item.song;
           const displayTitle = item.item_type === "scripture_reading"
             ? "Scripture"
             : item.item_type === "presentation" ? "Presentation" : item.title;
-          return <li className="inline-programme-item" key={item.id}>
+          const itemIsDragging = dragState?.itemId === item.id;
+          const isDropTarget = dragState !== null && dragState.targetIndex === index && !itemIsDragging;
+          return <li
+            className={`inline-programme-item${itemIsDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
+            data-schedule-item-id={item.id}
+            key={item.id}
+          >
             <div className="inline-programme-actions">
               <div>
                 <strong>{displayTitle}</strong>
                 {relatedSong && <p className="muted">{relatedSong.title}</p>}
               </div>
               <div className="mini-actions">
-                <div className="schedule-item-context">
+                <button
+                  className="schedule-item-drag-handle icon-button"
+                  type="button"
+                  aria-label={`Reorder ${displayTitle}`}
+                  title="Drag to reorder"
+                  disabled={reordering}
+                  onPointerDown={(event) => startDrag(event, item.id)}
+                ><GripVertical size={17} /></button>
+                <div className="schedule-item-context" ref={contextMenuItemId === item.id ? activeMenuRef : null}>
                   <button
                     className="icon-button"
                     type="button"
-                    aria-label={`Insertion options for ${displayTitle}`}
+                    aria-label={`Actions for ${displayTitle}`}
                     aria-expanded={contextMenuItemId === item.id}
                     onClick={() => setContextMenuItemId(contextMenuItemId === item.id ? null : item.id)}
                   ><MoreVertical size={18} /></button>
                   {contextMenuItemId === item.id && <div className="schedule-item-context-menu" role="menu">
+                    <button type="button" role="menuitem" disabled={index === 0 || reordering} onClick={() => void moveItem(item.id, -1)}>Move item up</button>
+                    <button type="button" role="menuitem" disabled={index === displayItems.length - 1 || reordering} onClick={() => void moveItem(item.id, 1)}>Move item down</button>
                     {insertionActions.map(([label, itemType, before]) => <button
                       type="button"
                       role="menuitem"
@@ -464,9 +729,7 @@ export function InlineScheduleManager({
                   </div>}
                 </div>
                 <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)} disabled={!privateNotesReady}>Edit</button>
-                <button className="icon-button" type="button" aria-label={`Duplicate ${displayTitle}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
-                <MoveScheduleItemForm itemId={item.id} direction={-1} returnTo={returnTo} disabled={index === 0} />
-                <MoveScheduleItemForm itemId={item.id} direction={1} returnTo={returnTo} disabled={index === items.length - 1} />
+                <button className="icon-button" type="button" aria-label={`Duplicate ${displayTitle}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null || reordering}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
                 <form>
                   <input type="hidden" name="item_id" value={item.id} />
                   <input type="hidden" name="return_to" value={returnTo} />
@@ -962,30 +1225,6 @@ export function InlineScheduleDetails({
       </form>
     </section>
   );
-}
-
-function MoveScheduleItemForm({
-  itemId,
-  direction,
-  returnTo,
-  disabled,
-}: {
-  itemId: string;
-  direction: -1 | 1;
-  returnTo: string;
-  disabled: boolean;
-}) {
-  const { error, formAction } = useFormAction(moveScheduleItem);
-  const label = direction < 0 ? "Move item up" : "Move item down";
-  return <form action={formAction}>
-    <input type="hidden" name="item_id" value={itemId} />
-    <input type="hidden" name="direction" value={direction} />
-    <input type="hidden" name="return_to" value={returnTo} />
-    <PendingSubmitButton className="icon-button" ariaLabel={label} pendingLabel="Moving…" disabled={disabled}>
-      {direction < 0 ? <ArrowUp size={15} /> : <ArrowDown size={15} />}
-    </PendingSubmitButton>
-    {error && <p className="form-error" role="alert">{error}</p>}
-  </form>;
 }
 
 export function ScheduleActions({

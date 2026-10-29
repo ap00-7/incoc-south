@@ -272,18 +272,20 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
   if (!parsed.success) return { ok: false, message: "The item could not be duplicated." };
   const supabase = await createClient();
   const { data: source, error: sourceError } = await supabase.from("schedule_items")
-    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, presentation_file_name, presentation_mime_type, background_image_url, show_in_slides, show_in_schedule")
+    .select("id, schedule_id, church_id, item_type, title, song_id, leader_name, translator_name, translation_language, duration_minutes, public_content, link_title, link_url, media_url, presentation_file_name, presentation_mime_type, background_image_url, show_in_slides, show_in_schedule, position")
     .eq("id", parsed.data.item_id).eq("schedule_id", parsed.data.schedule_id)
     .eq("church_id", member.churchId).maybeSingle();
   if (sourceError) return { ok: false, message: `Unable to load item to duplicate: ${sourceError.message}` };
   if (!source) return { ok: false, message: "This item is not available to your account." };
-  const [{ data: lastItems, error: positionError }, { data: notes, error: notesError }] = await Promise.all([
-    supabase.from("schedule_items").select("position").eq("schedule_id", source.schedule_id)
-      .order("position", { ascending: false }).limit(1),
+  const [{ data: orderedItems, error: positionError }, { data: notes, error: notesError }] = await Promise.all([
+    supabase.from("schedule_items").select("id, position").eq("schedule_id", source.schedule_id)
+      .eq("church_id", member.churchId).order("position"),
     supabase.from("schedule_item_notes").select("notes").eq("schedule_item_id", source.id).maybeSingle(),
   ]);
   if (positionError) return { ok: false, message: `Unable to determine item order: ${positionError.message}` };
   if (notesError) return { ok: false, message: `Unable to copy the private note: ${notesError.message}` };
+  const sourceIndex = orderedItems?.findIndex((item) => item.id === source.id) ?? -1;
+  if (!orderedItems || sourceIndex < 0) return { ok: false, message: "The item order changed. Reload the schedule and try again." };
   const { data: copy, error } = await supabase.from("schedule_items").insert({
     schedule_id: source.schedule_id,
     church_id: source.church_id,
@@ -305,18 +307,93 @@ export async function duplicateScheduleItem(input: { schedule_id: string; item_i
     background_image_url: source.background_image_url,
     show_in_slides: source.show_in_slides,
     show_in_schedule: source.show_in_schedule !== false,
-    position: (lastItems?.[0]?.position ?? -1) + 1,
+    position: (orderedItems[orderedItems.length - 1]?.position ?? -1) + 1,
   }).select("id").single();
   if (error) return { ok: false, message: `Unable to duplicate item: ${error.message}` };
+  let currentOrder = [...orderedItems.map((item) => item.id), copy.id];
+  const destinationIndex = sourceIndex + 1;
+  while (currentOrder.indexOf(copy.id) > destinationIndex) {
+    const { error: moveError } = await supabase.rpc("move_schedule_item", { target_item: copy.id, direction: -1 });
+    if (moveError) {
+      invalidateRouteData(`/admin/schedules/${source.schedule_id}`);
+      invalidateRouteData(`/schedule/${source.schedule_id}`);
+      invalidateRouteData("/slides");
+      return { ok: false, message: `The copy was created, but could not be placed after the original: ${moveError.message}. Reload the schedule to review its order.` };
+    }
+    const copyIndex = currentOrder.indexOf(copy.id);
+    [currentOrder[copyIndex - 1], currentOrder[copyIndex]] = [currentOrder[copyIndex], currentOrder[copyIndex - 1]];
+  }
   if (notes) {
     const { error: noteError } = await supabase.from("schedule_item_notes")
       .insert({ schedule_item_id: copy.id, notes: notes.notes });
-    if (noteError) return { ok: false, message: `The item was duplicated, but its private note could not be copied: ${noteError.message}` };
+    if (noteError) {
+      invalidateRouteData(`/admin/schedules/${source.schedule_id}`);
+      invalidateRouteData(`/schedule/${source.schedule_id}`);
+      invalidateRouteData("/slides");
+      return { ok: false, message: `The item was duplicated and placed correctly, but its private note could not be copied: ${noteError.message}` };
+    }
   }
   invalidateRouteData("/schedule");
+  invalidateRouteData(`/admin/schedules/${source.schedule_id}`);
   invalidateRouteData("/slides");
   invalidateRouteData(`/schedule/${source.schedule_id}`);
   return { ok: true, message: "Schedule item duplicated." };
+}
+
+export async function reorderScheduleItems(input: {
+  schedule_id: string;
+  expected_item_ids: string[];
+  item_ids: string[];
+}) {
+  const member = await requireOwner();
+  const parsed = z.object({
+    schedule_id: z.string().uuid(),
+    expected_item_ids: z.array(z.string().uuid()).min(1).max(500),
+    item_ids: z.array(z.string().uuid()).min(1).max(500),
+  }).safeParse(input);
+  if (!parsed.success) throw new Error("The new schedule order is invalid. Reload and try again.");
+  if (new Set(parsed.data.expected_item_ids).size !== parsed.data.expected_item_ids.length
+    || new Set(parsed.data.item_ids).size !== parsed.data.item_ids.length
+    || parsed.data.expected_item_ids.length !== parsed.data.item_ids.length
+    || parsed.data.expected_item_ids.some((id) => !parsed.data.item_ids.includes(id))) {
+    throw new Error("The schedule items changed. Reload the schedule before reordering.");
+  }
+
+  const supabase = await createClient();
+  const { data: currentItems, error: itemsError } = await supabase.from("schedule_items")
+    .select("id").eq("schedule_id", parsed.data.schedule_id).eq("church_id", member.churchId).order("position");
+  if (itemsError) throw new Error(`Unable to verify the current schedule order: ${itemsError.message}`);
+  const currentIds = currentItems.map((item) => item.id);
+  if (currentIds.length !== parsed.data.expected_item_ids.length
+    || currentIds.some((id, index) => id !== parsed.data.expected_item_ids[index])) {
+    throw new Error("The schedule changed while you were reordering items. Reload and try again.");
+  }
+
+  const firstDifference = parsed.data.item_ids.findIndex((id, index) => id !== currentIds[index]);
+  if (firstDifference < 0) return;
+  const movedItemId = [currentIds[firstDifference], parsed.data.item_ids[firstDifference]].find((candidate) => {
+    const currentWithout = currentIds.filter((id) => id !== candidate);
+    const requestedWithout = parsed.data.item_ids.filter((id) => id !== candidate);
+    return currentWithout.every((id, index) => id === requestedWithout[index]);
+  });
+  if (!movedItemId) throw new Error("Reordering must move one item at a time. Reload and try again.");
+
+  const currentIndex = currentIds.indexOf(movedItemId);
+  const destinationIndex = parsed.data.item_ids.indexOf(movedItemId);
+  const direction = destinationIndex < currentIndex ? -1 : 1;
+  for (let step = 0; step < Math.abs(destinationIndex - currentIndex); step += 1) {
+    const { error } = await supabase.rpc("move_schedule_item", { target_item: movedItemId, direction });
+    if (error) {
+      invalidateRouteData(`/admin/schedules/${parsed.data.schedule_id}`);
+      invalidateRouteData(`/schedule/${parsed.data.schedule_id}`);
+      invalidateRouteData("/slides");
+      throw new Error(`Unable to save the complete schedule order. Reload to review the saved order: ${error.message}`);
+    }
+  }
+
+  invalidateRouteData(`/admin/schedules/${parsed.data.schedule_id}`);
+  invalidateRouteData(`/schedule/${parsed.data.schedule_id}`);
+  invalidateRouteData("/slides");
 }
 
 function parseSongSections(formData: FormData) {
