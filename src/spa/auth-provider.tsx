@@ -74,8 +74,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (currentUserId !== nextUserId) {
           currentUserId = nextUserId;
           void acceptSession(nextSession);
-        } else {
-          setLoading(false);
         }
       }, 0);
     });

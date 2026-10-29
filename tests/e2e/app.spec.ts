@@ -257,7 +257,6 @@ test("unauthenticated visitors cannot open owner pages", async ({ page }) => {
     "/admin/songs/new",
     "/admin/schedules",
     "/admin/members",
-    "/admin/settings",
     "/admin/announcements",
   ];
 

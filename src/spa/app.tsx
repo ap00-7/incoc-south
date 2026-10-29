@@ -12,7 +12,6 @@ import { BrandMark } from "@/components/brand-mark";
 import { deleteSong } from "@/lib/actions/content";
 import { removeMember } from "@/lib/actions/members";
 import { createClient } from "@/lib/supabase/browser";
-import { getSupabasePublicConfig } from "@/lib/supabase/config";
 import { filterPresentationItems, generateSlides, getAnnouncementScheduleDestination, groupPresentationSlides, normalizeProgrammeItems } from "@/lib/domain/slides";
 import { notifyDataChanged } from "@/spa/data-events";
 import { useAuth } from "@/spa/auth-provider";
@@ -607,7 +606,9 @@ function AdminEntry() {
 }
 
 function OwnerOnly() {
-  const { membership } = useAuth();
+  const { error, loading, membership } = useAuth();
+  if (loading) return <PageShell><LoadingPage title="Checking owner access" /></PageShell>;
+  if (error) return <PageShell><ResourceMessage error={error} /></PageShell>;
   if (membership?.role !== "owner") return <AccessDeniedPage />;
   return <AdminLayout />;
 }
@@ -649,7 +650,6 @@ function AdminLayout() {
           <IntentPrefetchLink href="/admin/schedules">Sunday Schedule &amp; Slides</IntentPrefetchLink>
           <IntentPrefetchLink href="/admin/announcements">Announcements</IntentPrefetchLink>
           <IntentPrefetchLink href="/admin/members">Members</IntentPrefetchLink>
-          <IntentPrefetchLink href="/admin/settings">Settings</IntentPrefetchLink>
         </aside>
         <section className="admin-content"><Outlet /></section>
       </div>
@@ -663,7 +663,6 @@ function AdminDashboard() {
     { title: "Schedule and slides", description: "Plan services, reorder programme items, and manage slide content and visibility.", href: "/admin/schedules", icon: CalendarDays },
     { title: "Announcement management", description: "Create collections and announcement items, control publishing, and manage images and text.", href: "/admin/announcements", icon: FileText },
     { title: "Member access", description: "Invite members and manage their church roles.", href: "/admin/members", icon: Users },
-    { title: "Application settings", description: "Review application and integration configuration.", href: "/admin/settings", icon: MonitorPlay },
   ];
   return <>
     <p className="eyebrow">OWNER MANAGEMENT</p>
@@ -836,23 +835,6 @@ function AdminMembersPage() {
     <Suspense fallback={<InlineLoading>Loading invitation form…</InlineLoading>}><InviteMemberForm /></Suspense>
     {!import.meta.env.VITE_SUPABASE_URL ? null
       : <p className="notice">Member invitations require the server-only SUPABASE_SERVICE_ROLE_KEY on Vercel. Never expose it to the browser.</p>}
-  </>;
-}
-
-function AdminSettingsPage() {
-  const configured = Boolean(getSupabasePublicConfig().url && getSupabasePublicConfig().key);
-  return <>
-    <p className="eyebrow">APPLICATION</p><h1>Settings</h1>
-    <p>INCOC South is configured for Indian Church of Christ, South Sector.</p>
-    <dl className="settings-list">
-      <div><dt>Application</dt><dd>INCOC South (<code>incoc-south</code>)</dd></div>
-      <div><dt>Organization</dt><dd>Indian Church of Christ</dd></div>
-      <div><dt>Ministry</dt><dd>South Sector</dd></div>
-      <div><dt>Church timezone</dt><dd>Asia/Kolkata</dd></div>
-      <div><dt>Supabase</dt><dd>{configured ? "Configured" : "Not configured"}</dd></div>
-      <div><dt>Presentation links</dt><dd>Disabled. Synchronized presentations require signed-in church members.</dd></div>
-    </dl>
-    <div className="notice">Database credentials and deployment variables are managed outside the browser in the project environment.</div>
   </>;
 }
 
@@ -1039,7 +1021,6 @@ export function App() {
           <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
           <Route path="announcements" element={<AnnouncementManagerPage />} />
           <Route path="members" element={<AdminMembersPage />} />
-          <Route path="settings" element={<AdminSettingsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
