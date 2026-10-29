@@ -693,81 +693,81 @@ export function InlineScheduleManager({
     } finally {
       setReordering(false);
     }
+  }
 
-    function showSubmenu(event: ReactPointerEvent<HTMLDivElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
-      if (event.pointerType !== "mouse" || (itemType === "song" && !songsReady)) return;
-      const bounds = event.currentTarget.getBoundingClientRect();
-      const estimatedWidth = 132;
-      const opensLeft = bounds.right + estimatedWidth > window.innerWidth;
-      const trigger = event.currentTarget.querySelector<HTMLButtonElement>(":scope > button");
-      if (trigger) submenuTriggerRef.current = trigger;
+  function showSubmenu(event: ReactPointerEvent<HTMLDivElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+    if (event.pointerType !== "mouse" || (itemType === "song" && !songsReady)) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const estimatedWidth = 132;
+    const opensLeft = bounds.right + estimatedWidth > window.innerWidth;
+    const trigger = event.currentTarget.querySelector<HTMLButtonElement>(":scope > button");
+    if (trigger) submenuTriggerRef.current = trigger;
+    setActiveSubmenu({ itemId, itemType, opensLeft });
+  }
+
+  function toggleSubmenu(event: ReactMouseEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+    event.stopPropagation();
+    if (itemType === "song" && !songsReady) return;
+    const parent = event.currentTarget.parentElement;
+    const bounds = parent?.getBoundingClientRect();
+    const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
+    submenuTriggerRef.current = event.currentTarget;
+    if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
       setActiveSubmenu({ itemId, itemType, opensLeft });
+      return;
     }
+    setActiveSubmenu((current) => current?.itemId === itemId && current.itemType === itemType
+      ? null
+      : { itemId, itemType, opensLeft });
+  }
 
-    function toggleSubmenu(event: ReactMouseEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
-      event.stopPropagation();
-      if (itemType === "song" && !songsReady) return;
-      const parent = event.currentTarget.parentElement;
-      const bounds = parent?.getBoundingClientRect();
-      const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
-      submenuTriggerRef.current = event.currentTarget;
-      if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-        setActiveSubmenu({ itemId, itemType, opensLeft });
-        return;
-      }
-      setActiveSubmenu((current) => current?.itemId === itemId && current.itemType === itemType
-        ? null
-        : { itemId, itemType, opensLeft });
-    }
+  function openSubmenuFromKeyboard(event: ReactKeyboardEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
+    if (event.key !== "ArrowRight") return;
+    if (itemType === "song" && !songsReady) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+    const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
+    submenuTriggerRef.current = event.currentTarget;
+    const parent = event.currentTarget.parentElement;
+    setActiveSubmenu({ itemId, itemType, opensLeft });
+    requestAnimationFrame(() => parent?.querySelector<HTMLButtonElement>(".schedule-item-submenu button")?.focus());
+  }
 
-    function openSubmenuFromKeyboard(event: ReactKeyboardEvent<HTMLButtonElement>, itemId: string, itemType: ScheduleItemInput["item_type"]) {
-      if (event.key !== "ArrowRight") return;
-      if (itemType === "song" && !songsReady) return;
+  function onSubmenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowLeft") {
       event.preventDefault();
-      const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
-      const opensLeft = Boolean(bounds && bounds.right + 132 > window.innerWidth);
-      submenuTriggerRef.current = event.currentTarget;
-      const parent = event.currentTarget.parentElement;
-      setActiveSubmenu({ itemId, itemType, opensLeft });
-      requestAnimationFrame(() => parent?.querySelector<HTMLButtonElement>(".schedule-item-submenu button")?.focus());
+      setActiveSubmenu(null);
+      submenuTriggerRef.current?.focus();
+      return;
     }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+    if (!options.length) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.key === "ArrowDown"
+      ? (currentIndex + 1) % options.length
+      : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
+    options[nextIndex].focus();
+  }
 
-    function onSubmenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setActiveSubmenu(null);
-        submenuTriggerRef.current?.focus();
-        return;
-      }
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-      if (!options.length) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
-      const nextIndex = event.key === "ArrowDown"
-        ? (currentIndex + 1) % options.length
-        : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
-      options[nextIndex].focus();
-    }
+  function onMainMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+      ":scope > button[role='menuitem'], :scope > .schedule-item-submenu-group > button[role='menuitem'], :scope > .schedule-item-remove-form button[role='menuitem']",
+    )].filter((button) => !button.disabled);
+    if (!options.length) return;
+    event.preventDefault();
+    const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
+    const nextIndex = event.key === "ArrowDown"
+      ? (currentIndex + 1) % options.length
+      : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
+    options[nextIndex].focus();
+  }
 
-    function onMainMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      const options = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(
-        ":scope > button[role='menuitem'], :scope > .schedule-item-submenu-group > button[role='menuitem'], :scope > .schedule-item-remove-form button[role='menuitem']",
-      )].filter((button) => !button.disabled);
-      if (!options.length) return;
-      event.preventDefault();
-      const currentIndex = options.indexOf(document.activeElement as HTMLButtonElement);
-      const nextIndex = event.key === "ArrowDown"
-        ? (currentIndex + 1) % options.length
-        : (currentIndex <= 0 ? options.length - 1 : currentIndex - 1);
-      options[nextIndex].focus();
-    }
-
-    function insertRelative(itemId: string, itemType: ScheduleItemInput["item_type"], before: boolean) {
-      openAdd(itemType, { itemId, before });
-    }
+  function insertRelative(itemId: string, itemType: ScheduleItemInput["item_type"], before: boolean) {
+    openAdd(itemType, { itemId, before });
   }
 
   const isAnnouncementSlidesDraft = draft?.title === "Announcements Slides" && !draft.customTitle;
