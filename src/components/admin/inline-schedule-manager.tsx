@@ -66,6 +66,7 @@ type ScheduleDragSession = {
   startX: number;
   startY: number;
   pointerY: number;
+  handle: HTMLButtonElement;
   timer: number | null;
   autoScrollFrame: number | null;
   active: boolean;
@@ -320,12 +321,16 @@ export function InlineScheduleManager({
       startX: event.clientX,
       startY: event.clientY,
       pointerY: event.clientY,
+      handle: event.currentTarget,
       timer: null,
       autoScrollFrame: null,
       active: false,
       targetIndex: null,
     };
     dragSession.current = session;
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
     if (event.pointerType === "touch") {
       session.timer = window.setTimeout(() => activateDrag(session), 350);
     } else {
@@ -341,6 +346,7 @@ export function InlineScheduleManager({
       if (session.autoScrollFrame !== null) window.cancelAnimationFrame(session.autoScrollFrame);
       dragSession.current = null;
       setDragState(null);
+      if (session.handle.hasPointerCapture(session.pointerId)) session.handle.releasePointerCapture(session.pointerId);
     }
 
     function scrollAtPointer(y: number) {
@@ -427,8 +433,13 @@ export function InlineScheduleManager({
       const listBounds = listRef.current?.getBoundingClientRect();
       const targetIndex = session.targetIndex;
       const currentItems = displayItemsRef.current;
+      const releaseIsNearList = listBounds
+        && event.clientX >= listBounds.left - 80
+        && event.clientX <= listBounds.right + 80
+        && event.clientY >= listBounds.top - 80
+        && event.clientY <= listBounds.bottom + 80;
       clearDragSession();
-      if (!wasActive || !listBounds || targetIndex === null || event.clientY < listBounds.top || event.clientY > listBounds.bottom) return;
+      if (!wasActive || !releaseIsNearList || targetIndex === null) return;
       const expectedIds = currentItems.map((item) => item.id);
       const nextIds = expectedIds.filter((id) => id !== session.itemId);
       nextIds.splice(Math.max(0, Math.min(targetIndex, nextIds.length)), 0, session.itemId);
@@ -438,24 +449,30 @@ export function InlineScheduleManager({
     function onPointerCancel(event: PointerEvent) {
       if (dragSession.current?.pointerId === event.pointerId) clearDragSession();
     }
+    function onLostPointerCapture(event: PointerEvent) {
+      if (dragSession.current?.pointerId === event.pointerId) clearDragSession();
+    }
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") clearDragSession();
     }
 
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("pointermove", onPointerMove, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerCancel, true);
+    window.addEventListener("lostpointercapture", onLostPointerCapture, true);
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("blur", clearDragSession);
     return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("pointermove", onPointerMove, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerCancel, true);
+      window.removeEventListener("lostpointercapture", onLostPointerCapture, true);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("blur", clearDragSession);
       const session = dragSession.current;
       if (session?.timer !== null && session?.timer !== undefined) window.clearTimeout(session.timer);
       if (session?.autoScrollFrame !== null && session?.autoScrollFrame !== undefined) window.cancelAnimationFrame(session.autoScrollFrame);
+      if (session && session.handle.hasPointerCapture(session.pointerId)) session.handle.releasePointerCapture(session.pointerId);
       dragSession.current = null;
     };
   }, []);
