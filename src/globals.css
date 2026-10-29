@@ -314,6 +314,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .programme-metadata-1 .programme-metadata-field { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
 .programme-metadata-1 .programme-metadata-field dt { margin: 0; }
 .programme-metadata-1 .programme-metadata-field dd { flex: 1 1 auto; }
+.programme-metadata-2 .programme-metadata-field { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 5px; }
+.programme-metadata-2 .programme-metadata-field dt { margin: 0; }
+.programme-metadata-2 .programme-metadata-field dd { flex: 0 1 auto; }
 @media (max-width: 600px) {
   .schedule-detail-heading { margin-bottom: 17px; padding: 4px 4px 10px; }
   .schedule-detail-heading .detail-title { font-size: clamp(30px, 8vw, 38px); line-height: 1.16; }
