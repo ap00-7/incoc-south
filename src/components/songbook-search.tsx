@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Dropdown } from "@/components/dropdown";
 import { isMultilingualSong } from "@/lib/domain/songs";
@@ -131,35 +131,10 @@ export function SongbookSearch({
           autoComplete="off"
           value={title}
           placeholder="Search by song title"
-          role="combobox"
-          aria-autocomplete="list"
-          aria-haspopup="listbox"
-          aria-controls="song-title-suggestions"
-          aria-expanded={open}
-          aria-activedescendant={activeIndex >= 0 ? `song-suggestion-${suggestions[activeIndex]?.id}` : undefined}
           onFocus={() => setOpen(Boolean(title.trim()))}
           onChange={(event) => onTitleChange(event.currentTarget.value)}
           onKeyDown={onKeyDown}
         />
-        {open && title.trim() && <ul className="song-suggestions" id="song-title-suggestions" role="listbox" aria-label="Matching songs">
-          {suggestions.length > 0
-            ? suggestions.map((song, index) => (
-              <li key={song.id} role="option" aria-selected={index === activeIndex} id={`song-suggestion-${song.id}`}>
-                <Link
-                  className="song-suggestion-link"
-                  to={`/songs/${song.id}`}
-                  state={{ songOrigin: "songbook" }}
-                  onClick={() => {
-                    setOpen(false);
-                    setActiveIndex(-1);
-                  }}
-                >
-                  {song.title}
-                </Link>
-              </li>
-            ))
-            : <li className="song-suggestions-empty" role="option" aria-disabled="true">No matching songs found</li>}
-        </ul>}
       </div>
       <label className="sr-only" htmlFor="song-language-filter">Filter by language</label>
       <Dropdown
