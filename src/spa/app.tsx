@@ -458,7 +458,6 @@ function ScheduleDetailPage({ schedules, songs }: {
                     ? <Link className="song-title-link" to={announcementDestination.path}>{item.title}</Link>
                     : item.item_type === "scripture_reading" ? "Scripture" : item.title}</h2>
                   {song && <div className="programme-song">
-                    <span className="programme-song-label">Song</span>
                     <Link className="song-title-link" to={`/songs/${song.id}`} state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}>{song.title}</Link>
                   </div>}
                   {primary && <p className="programme-primary">{primary}</p>}
