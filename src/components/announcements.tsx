@@ -7,12 +7,13 @@ import {
   Bold,
   Italic,
   ImagePlus,
+  MonitorPlay,
   Pencil,
   Plus,
   Trash2,
   X,
 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { ConfirmationDialog } from "@/components/confirm-button";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import {
@@ -393,6 +394,9 @@ export function AnnouncementPublicPage() {
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
     <header className="announcement-public-header">
       <p className="eyebrow">ANNOUNCEMENTS</p>
+      <Link className="button button-secondary announcement-slides-link" to="/announcement/slides" state={{ returnTo: "/announcement" }}>
+        <MonitorPlay size={16} aria-hidden="true" /> View announcement slides
+      </Link>
     </header>
     {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
     {loading && !data && <p className="muted" role="status" aria-busy="true">Loading announcements…</p>}
@@ -707,6 +711,7 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
 }
 
 export function AnnouncementSlidesPage() {
+  const location = useLocation();
   const { data, loading, error, reload } = useAnnouncementData();
   const [searchParams, setSearchParams] = useSearchParams();
   const [index, setIndex] = useState(0);
@@ -719,6 +724,10 @@ export function AnnouncementSlidesPage() {
   const items = data?.items.filter((item) => item.collection_id === selectedCollection?.id) ?? [];
   const currentIndex = Math.min(index, Math.max(items.length - 1, 0));
   const currentItem = items[currentIndex];
+  const navigationState = location.state as { returnTo?: unknown } | null;
+  const returnTo = navigationState?.returnTo === "/slides" || navigationState?.returnTo === "/announcement"
+    ? navigationState.returnTo
+    : "/announcement";
   const move = useCallback((direction: -1 | 1) => {
     setIndex((current) => Math.min(Math.max(current + direction, 0), Math.max(items.length - 1, 0)));
   }, [items.length]);
@@ -729,9 +738,9 @@ export function AnnouncementSlidesPage() {
 
   useEffect(() => {
     if (!selectedCollection || requestedCollectionId === selectedCollection.id) return;
-    setSearchParams({ collectionId: selectedCollection.id }, { replace: true });
+    setSearchParams({ collectionId: selectedCollection.id }, { replace: true, state: location.state });
     setIndex(0);
-  }, [requestedCollectionId, selectedCollection, setSearchParams]);
+  }, [location.state, requestedCollectionId, selectedCollection, setSearchParams]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -799,7 +808,7 @@ export function AnnouncementSlidesPage() {
   >
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} quiet />}
     <header className="announcement-projector-header">
-      <Link className="announcement-projector-back" to="/announcement" aria-label="Back to announcements"><ArrowLeft size={17} /><span>Back</span></Link>
+      <Link className="announcement-projector-back" to={returnTo} aria-label={`Back to ${returnTo === "/slides" ? "slides" : "announcements"}`}><ArrowLeft size={17} /><span>Back</span></Link>
     </header>
     {error && <p className="announcement-projector-message" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
     {currentItem

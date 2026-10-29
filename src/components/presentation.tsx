@@ -405,7 +405,11 @@ export function Presentation({
           : current ? <>
             {current.backgroundImageUrl && !hasLyrics && <img className="slide-background" src={current.backgroundImageUrl} alt="" />}
             <h1 className="slide-title">{announcementDestination
-              ? <Link className="presentation-announcement-link" to={announcementDestination.path}>{current.itemTitle}</Link>
+              ? <Link
+                className="presentation-announcement-link"
+                to={announcementDestination.path}
+                state={announcementDestination.path === "/announcement/slides" ? { returnTo: "/slides" } : undefined}
+              >{current.itemTitle}</Link>
               : current.itemTitle}</h1>
             <div className="slide-content">
               {current.mediaUrl && (isVideo
