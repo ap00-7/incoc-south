@@ -34,18 +34,10 @@ export function SongPageContent({ song }: { song: SongForReading }) {
   const returnLabel = scheduleId ? "Return to Schedule" : "Return to Songbook";
 
   const isMultilingual = isMultilingualSong(song.language, song.song_sections ?? []);
-  const lyricLanguages = new Set([
-    song.language,
-    ...song.song_sections
-      .filter(({ lyrics }) => lyrics.trim())
-      .map(({ lyrics_language }) => lyrics_language)
-      .filter((language): language is string => Boolean(language)),
-  ]);
-  const preserveSectionOrder = song.language === "Multilingual" || lyricLanguages.size > 1;
   const labeledSections = labelSongSections(sequenceSongSections(
     song.song_sections ?? [],
     song.start_with_chorus,
-    preserveSectionOrder,
+    isMultilingual,
   ));
   const translatedSections = song.has_translation ? labeledSections.filter(({ section }) => section.translation?.trim()) : [];
   return (

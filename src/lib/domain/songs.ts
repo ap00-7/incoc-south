@@ -67,10 +67,10 @@ export function isMultilingualSong(
   }>,
 ) {
   if (language === "Multilingual") return true;
-  const languages = new Set([language]);
+  const lyricLanguages = new Set<string>();
   for (const section of sections) {
-    if (section.lyrics?.trim() && section.lyrics_language) languages.add(section.lyrics_language);
-    if (section.translation?.trim() && section.translation_language) languages.add(section.translation_language);
+    if (section.lyrics?.trim()) lyricLanguages.add(section.lyrics_language || language);
+    if (section.translation?.trim() && section.translation_language && section.translation_language !== language) return true;
   }
-  return languages.size > 1;
+  return lyricLanguages.size > 1;
 }

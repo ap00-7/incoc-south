@@ -486,7 +486,9 @@ export async function saveSong(formData: FormData) {
       label: section.section_label || null,
       position,
       lyrics: section.lyrics,
-      lyrics_language: section.lyrics_language || (parsedMetadata.data.language === "Multilingual" ? null : parsedMetadata.data.language),
+      lyrics_language: parsedMetadata.data.language === "Multilingual"
+        ? section.lyrics_language || null
+        : parsedMetadata.data.language,
       translation: section.translation.trim() || null,
       translation_language: section.translation.trim() ? section.translation_language || null : null,
       is_hidden: section.is_hidden,

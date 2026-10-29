@@ -1,3 +1,5 @@
+import { isMultilingualSong } from "@/lib/domain/songs";
+
 export type LyricSection = {
   id: string;
   section_type: string;
@@ -327,14 +329,7 @@ export function generateSlides(items: ProgrammeItem[]): PresentationSlide[] {
       }
     } else if (item.song) {
       const songTitle = item.song.title;
-      const lyricLanguages = new Set([
-        item.song.language,
-        ...item.song.song_sections
-          .filter((section) => section.lyrics.trim())
-          .map((section) => section.lyrics_language)
-          .filter((language): language is string => Boolean(language)),
-      ]);
-      const multilingualLyrics = item.song.language === "Multilingual" || lyricLanguages.size > 1;
+      const multilingualLyrics = isMultilingualSong(item.song.language, item.song.song_sections);
       const sections = sequenceSongSections(
         item.song.song_sections,
         item.song.start_with_chorus,
