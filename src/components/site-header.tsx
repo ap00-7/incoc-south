@@ -1,12 +1,8 @@
 import { Link } from "react-router-dom";
-import { BookOpen, CalendarDays, ShieldCheck } from "lucide-react";
+import { BookOpen, CalendarDays } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
-import { useAuth } from "@/spa/auth-provider";
 
-export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean; showNavigation: boolean }) {
-  const auth = useAuth();
-  const showOwner = owner || auth.membership?.role === "owner";
-
+export function SiteHeader({ showNavigation }: { showNavigation: boolean }) {
   return (
     <header className="site-header">
       <div className="header-inner">
@@ -18,11 +14,7 @@ export function SiteHeader({ owner = false, showNavigation }: { owner?: boolean;
           <Link to="/songs"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
           <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
         </nav>}
-        <div className="header-actions">
-          {showOwner && <Link className="owner-session-label" to="/admin/songs"><ShieldCheck size={15} /> Owner</Link>}
-        </div>
       </div>
-      {auth.error && <p className="realtime-notice" role="alert">{auth.error}</p>}
     </header>
   );
 }

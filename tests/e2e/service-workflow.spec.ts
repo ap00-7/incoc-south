@@ -15,7 +15,7 @@ test.skip(
 );
 
 async function signIn(page: import("@playwright/test").Page, email: string, password: string) {
-  await page.goto("/login");
+  await page.goto("/admin");
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
@@ -30,21 +30,20 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   const ownerContext = await browser.newContext();
   const ownerPage = await ownerContext.newPage();
   await signIn(ownerPage, ownerEmail!, ownerPassword!);
-  await expect(ownerPage).toHaveURL(/\/songs$/);
+  await expect(ownerPage).toHaveURL(/\/admin$/);
   await expect(ownerPage.locator(".site-header")).toHaveCount(0);
   await ownerPage.goto("/login");
-  await expect(ownerPage).toHaveURL(/\/songs$/);
+  await expect(ownerPage).toHaveURL(/\/admin$/);
   await ownerPage.reload();
   await expect(ownerPage.locator(".site-header")).toHaveCount(0);
 
-  for (const path of ["/", "/songs", "/songbook", "/schedule", "/slides"]) {
+  for (const path of ["/", "/songs", "/songbook", "/schedule", "/slides", "/announcement"]) {
     await ownerPage.goto(path, { waitUntil: "domcontentloaded" });
-    if (new URL(ownerPage.url()).pathname === "/") {
-      await expect(ownerPage.locator(".site-footer-auth")).toHaveCount(0);
-      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toHaveCount(0);
-    } else {
+    await expect(ownerPage.locator(".site-footer")).toHaveCount(0);
+    await expect(ownerPage.getByRole("button", { name: /sign out/i })).toHaveCount(0);
+    await expect(ownerPage.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+    if (new URL(ownerPage.url()).pathname !== "/") {
       await expect(ownerPage.locator(".site-header")).toHaveCount(0);
-      await expect(ownerPage.getByRole("button", { name: "Sign out" })).toBeVisible();
     }
   }
   await ownerPage.setViewportSize({ width: 360, height: 800 });
@@ -106,7 +105,13 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(ownerPage.getByLabel("Language")).toHaveText("Kannada");
   await expect(ownerPage.getByLabel("Has Translation")).toBeChecked();
   await expect(ownerPage.getByLabel("Start With Chorus")).toBeChecked();
+  await ownerPage.goto("/songs");
+  await expect(ownerPage.getByRole("button", { name: /add a song/i })).toHaveCount(0);
+  await expect(ownerPage.locator(".inline-owner-editor")).toHaveCount(0);
   await ownerPage.goto(`/songbook/${songId}`);
+  await expect(ownerPage.locator(".inline-owner-area")).toHaveCount(0);
+  await expect(ownerPage.getByRole("button", { name: /edit song/i })).toHaveCount(0);
+  await expect(ownerPage.getByRole("button", { name: /delete song/i })).toHaveCount(0);
   await expect(ownerPage.locator(".lyrics-section h2")).toHaveText([
     "Chorus",
     "Verse 1",
@@ -153,6 +158,15 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   const scheduleId = ownerPage.url().match(/\/admin\/schedules\/([0-9a-f-]{36})$/i)?.[1];
   expect(scheduleId).toBeTruthy();
 
+  await ownerPage.goto("/schedule");
+  await expect(ownerPage.getByRole("button", { name: /create schedule/i })).toHaveCount(0);
+  await expect(ownerPage.getByRole("link", { name: /edit schedule/i })).toHaveCount(0);
+  await ownerPage.goto("/announcement");
+  await expect(ownerPage.getByRole("button", { name: "New collection" })).toHaveCount(0);
+  await ownerPage.goto("/admin/announcements");
+  await expect(ownerPage.getByRole("button", { name: "New collection" })).toBeVisible();
+
+  await ownerPage.goto(`/admin/schedules/${scheduleId}`);
   await ownerPage.getByRole("button", { name: "Add Song" }).click();
   let itemDialog = ownerPage.getByRole("dialog", { name: "Add item" });
   await itemDialog.getByRole("button", { name: "Select a Songbook song" }).click();
@@ -289,18 +303,18 @@ test("owner controls Slides visibility while a viewer still sees the full Sunday
   await expect(itemDialog.getByRole("checkbox", { name: "Display in Slides" })).toBeChecked();
   await itemDialog.getByRole("button", { name: "Cancel" }).click();
 
-  await ownerPage.goto("/songs");
-  await ownerPage.getByRole("button", { name: "Sign out" }).click();
-  await expect(ownerPage.getByRole("link", { name: "Sign in" })).toBeVisible();
   await ownerPage.goto("/admin");
-  await expect(ownerPage).toHaveURL(/\/login$/);
+  await ownerPage.getByRole("button", { name: "Sign out" }).click();
+  await expect(ownerPage).toHaveURL(/\/admin$/);
+  await expect(ownerPage.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(ownerPage.getByRole("button", { name: /sign out/i })).toHaveCount(0);
   await expect(ownerPage.getByRole("heading", { name: "Welcome to INCOC South" })).toHaveCount(0);
 
   const viewerContext = await browser.newContext();
   const viewerPage = await viewerContext.newPage();
   await viewerPage.emulateMedia({ colorScheme: "dark" });
   await signIn(viewerPage, viewerEmail!, viewerPassword!);
-  await expect(viewerPage).toHaveURL(/\/songs$/);
+  await expect(viewerPage).toHaveURL(/\/access-denied$/);
   await viewerPage.goto("/admin");
   await expect(viewerPage).toHaveURL(/\/access-denied$/);
   await viewerPage.goto("/schedule");

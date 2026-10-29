@@ -44,7 +44,8 @@ test("public and owner route shells avoid horizontal overflow across viewport si
     "/schedule/00000000-0000-0000-0000-000000000001",
     "/slides",
     "/present/00000000-0000-0000-0000-000000000001",
-    "/login",
+    "/admin",
+    "/admin/announcements",
     "/admin/schedules/new",
   ];
   for (const route of routes) {
@@ -74,24 +75,25 @@ test("theme follows the system preference without a manual switcher", async ({ p
   await expect.poll(() => root.evaluate((element) => getComputedStyle(element).getPropertyValue("--paper").trim())).toBe("#faf8f4");
 });
 
-test("section footers provide sign-in links only on landing pages and preserve the destination", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
-
-  for (const path of ["/songs", "/schedule", "/slides"]) {
+test("public pages contain no owner authentication controls or footer", async ({ page }) => {
+  for (const path of ["/", "/songs", "/schedule", "/slides", "/announcement", "/announcement/slides"]) {
     await page.goto(path, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    const signInLink = page.getByRole("link", { name: "Sign in" });
-    await expect(signInLink).toBeVisible();
-    await expect(signInLink).toHaveAttribute("href", `/login?returnTo=${encodeURIComponent(path)}`);
-    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
-    await expect(page.locator(".site-header")).toHaveCount(0);
-    await expect(page.locator(".page-main")).toBeVisible();
+    await expect(page.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
+    await expect(page.locator(".site-footer")).toHaveCount(0);
+    if (path !== "/") {
+      await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(0);
+      await expect(page.locator(".site-header")).toHaveCount(0);
+      await expect(page.locator(".page-main")).toBeVisible();
+    }
   }
 
   await page.goto("/songs/00000000-0000-0000-0000-000000000001");
-  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
   await page.goto("/schedule/00000000-0000-0000-0000-000000000001");
-  await expect(page.locator(".site-footer-auth")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /^sign in$/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /sign out/i })).toHaveCount(0);
 });
 
 test("custom dropdown supports keyboard selection and stays inside the viewport", async ({ page }) => {
@@ -200,8 +202,8 @@ test("the custom cross icon is served", async ({ request }) => {
   expect(icon).toContain('fill="#fff"');
 });
 
-test("sign-in page identifies the church and explains membership access", async ({ page }) => {
-  await page.goto("/login");
+test("admin entry identifies the church and explains membership access", async ({ page }) => {
+  await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
   await expect(page.getByText("Sign-in is restricted to the website owner.")).toBeVisible();
   await expect(page.getByText(/available without signing in/i)).toBeVisible();
@@ -256,18 +258,20 @@ test("unauthenticated visitors cannot open owner pages", async ({ page }) => {
     "/admin/schedules",
     "/admin/members",
     "/admin/settings",
+    "/admin/announcements",
   ];
 
   for (const path of protectedPaths) {
     await page.goto(path);
+    const loginPage = page.getByRole("heading", { name: "Welcome back" });
     const accessState = page.getByText(/unavailable until Supabase is configured|configured Supabase project|access is not configured|after Supabase is configured/i);
     await expect.poll(async () => {
-      if (new URL(page.url()).pathname === "/login") return "login";
+      if (await loginPage.count()) return "login";
       return (await accessState.count()) ? "configuration-notice" : "pending";
     }, { timeout: 15_000 }).not.toBe("pending");
     await expect(page.getByRole("heading", { name: "Welcome to INCOC South" })).toHaveCount(0);
 
-    if (new URL(page.url()).pathname === "/login") {
+    if (await loginPage.count()) {
       await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
       continue;
     }

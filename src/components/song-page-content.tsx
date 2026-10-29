@@ -1,21 +1,12 @@
-import { lazy, Suspense } from "react";
 import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
-import { deleteSong } from "@/lib/actions/content";
 import { labelSongSections, sequenceSongSections } from "@/lib/domain/slides";
 import { isMultilingualSong } from "@/lib/domain/songs";
 
-const SongEditorForm = lazy(() => import("@/components/admin/song-creation-form").then((module) => ({ default: module.SongEditorForm })));
-
 type SongForReading = {
-  id: string;
-  updated_at: string;
   title: string;
   language: string;
-  author: string | null;
-  source: string | null;
   has_translation: boolean;
   start_with_chorus: boolean;
   song_sections: Array<{
@@ -31,15 +22,7 @@ type SongForReading = {
   }>;
 };
 
-export function SongPageContent({
-  song,
-  isOwner,
-  editOpen,
-}: {
-  song: SongForReading;
-  isOwner: boolean;
-  editOpen: boolean;
-}) {
+export function SongPageContent({ song }: { song: SongForReading }) {
   const location = useLocation();
   const navigationState = location.state as { songOrigin?: string; scheduleId?: string } | null;
   const scheduleId = navigationState?.songOrigin === "schedule" && typeof navigationState.scheduleId === "string" && navigationState.scheduleId
@@ -87,49 +70,6 @@ export function SongPageContent({
             </div>)}
           </section>}
         </div>
-        {isOwner && <div id="owner-edit" className="inline-owner-area">
-          <details className="inline-owner-editor" open={editOpen}>
-            <summary>Edit song sections and translations</summary>
-            <Suspense fallback={<p className="muted" role="status">Loading song editor…</p>}>
-              <SongEditorForm
-                returnTo={`/songs/${song.id}?edit=1#owner-edit`}
-                song={{
-                  id: song.id,
-                  updated_at: song.updated_at,
-                  title: song.title,
-                  language: song.language,
-                  author: song.author,
-                  source: song.source,
-                  has_translation: song.has_translation,
-                  start_with_chorus: song.start_with_chorus,
-                  sections: song.song_sections.map((section) => ({
-                    id: section.id,
-                    section_type: section.section_type,
-                    label: section.label ?? "",
-                    lyrics: section.lyrics,
-                    lyrics_language: section.lyrics_language ?? "",
-                    translation: section.translation ?? "",
-                    translation_language: section.translation_language ?? "",
-                    is_hidden: section.is_hidden,
-                  })),
-                }}
-              />
-            </Suspense>
-          </details>
-          <form className="delete-song-form">
-            <input type="hidden" name="song_id" value={song.id} />
-            <input type="hidden" name="return_to" value="/songs" />
-            <ConfirmButton
-              action={deleteSong}
-              title="Delete song?"
-              message="This permanently deletes the song from the Songbook. A song used by a schedule cannot be deleted."
-              className="button button-danger"
-              pendingLabel="Deleting…"
-            >
-              Delete song
-            </ConfirmButton>
-          </form>
-        </div>}
       </article>
     </>
   );

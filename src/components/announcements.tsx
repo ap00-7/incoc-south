@@ -385,8 +385,30 @@ function AnnouncementItemEditor({
   </div>;
 }
 
+export function AnnouncementPublicPage() {
+  const { data, loading, error, reload } = useAnnouncementData();
+  const availableCollections = data?.collections.filter((collection) => collection.is_published) ?? [];
+
+  return <section className="announcement-public content-wrap">
+    {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
+    <header className="announcement-public-header">
+      <p className="eyebrow">ANNOUNCEMENTS</p>
+    </header>
+    {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
+    {loading && !data && <p className="muted" role="status" aria-busy="true">Loading announcements…</p>}
+    {availableCollections.length > 0 && <div className="announcement-public-feed">
+      {availableCollections.map((collection) => <section className="announcement-public-collection" key={collection.id}>
+        <h1 className="detail-title">{collection.collection_name}</h1>
+        {(data?.items.filter((item) => item.collection_id === collection.id) ?? [])
+          .map((item) => <AnnouncementPublicItem key={item.id} item={item} />)}
+      </section>)}
+    </div>}
+    {!loading && !error && !availableCollections.length && <div className="empty-state">There are no published announcements.</div>}
+  </section>;
+}
+
 export function AnnouncementManagerPage() {
-  const { membership, loading: authLoading } = useAuth();
+  const { membership } = useAuth();
   const { data, loading, error, reload } = useAnnouncementData();
   const isOwner = membership?.role === "owner" && membership.churchId === data?.churchId;
   const [selectedCollectionId, setSelectedCollectionId] = useState("");
@@ -546,23 +568,9 @@ export function AnnouncementManagerPage() {
     }
   }
 
-  if (!isOwner) {
-    return <section className="announcement-public content-wrap">
-      {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}
-      <header className="announcement-public-header">
-        <p className="eyebrow">ANNOUNCEMENTS</p>
-      </header>
-      {error && <p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p>}
-      {!authLoading && availableCollections.length > 0 && <div className="announcement-public-feed">
-        {availableCollections.map((collection) => <section className="announcement-public-collection" key={collection.id}>
-          <h1 className="detail-title">{collection.collection_name}</h1>
-          {(data?.items.filter((item) => item.collection_id === collection.id) ?? [])
-            .map((item) => <AnnouncementPublicItem key={item.id} item={item} />)}
-        </section>)}
-      </div>}
-      {!authLoading && !loading && !error && !availableCollections.length && <div className="empty-state">There are no published announcements.</div>}
-    </section>;
-  }
+  if (loading && !data) return <section className="announcement-manager content-wrap"><p className="muted" role="status" aria-busy="true">Loading announcement management…</p></section>;
+  if (error && !data) return <section className="announcement-manager content-wrap"><p className="notice notice-warning" role="alert">{error} <button type="button" className="text-link" onClick={reload}>Try again</button></p></section>;
+  if (!isOwner) return <section className="announcement-manager content-wrap"><p className="notice notice-warning" role="alert">Owner access is required to manage announcements.</p></section>;
 
   return <section className="announcement-manager content-wrap">
     {data && <AnnouncementRealtime churchId={data.churchId} onChange={reload} />}

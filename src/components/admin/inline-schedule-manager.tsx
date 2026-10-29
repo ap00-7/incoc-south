@@ -585,7 +585,7 @@ export function InlineScheduleManager({
                   song_id: songId,
                   song_title: songs.find(({ id }) => id === songId)?.title ?? "",
                 })}
-                onCreate={() => window.open("/songs?create=1", "_blank", "noopener,noreferrer")}
+                onCreate={() => window.open("/admin/songs/new", "_blank", "noopener,noreferrer")}
               />}
 
               {draft.item_type !== "song" && <>

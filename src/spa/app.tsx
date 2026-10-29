@@ -1,13 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, MonitorPlay, Plus, Trash2, Users } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
 import { SongbookSearch } from "@/components/songbook-search";
 import { isMultilingualSong } from "@/lib/domain/songs";
 import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
-import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { BrandMark } from "@/components/brand-mark";
 import { deleteSong } from "@/lib/actions/content";
@@ -30,6 +29,7 @@ const InlineScheduleManager = lazy(() => import("@/components/admin/inline-sched
 const NewScheduleForm = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.NewScheduleForm })));
 const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.ScheduleActions })));
 const AnnouncementManagerPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementManagerPage })));
+const AnnouncementPublicPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementPublicPage })));
 const AnnouncementSlidesPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementSlidesPage })));
 const InviteMemberForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.InviteMemberForm })));
 const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
@@ -122,16 +122,14 @@ type PageSwipeHandlers = {
   onLostPointerCapture: (event: ReactPointerEvent<HTMLElement>) => void;
 };
 
-function PageShell({ children, owner = false, hideFooter = false, swipeHandlers }: {
+function PageShell({ children, swipeHandlers }: {
   children: ReactNode;
-  owner?: boolean;
-  hideFooter?: boolean;
   swipeHandlers?: PageSwipeHandlers;
 }) {
   const { pathname } = useLocation();
   const showHeader = pathname === "/";
   return <>
-    {showHeader && <SiteHeader owner={owner} showNavigation />}
+    {showHeader && <SiteHeader showNavigation />}
     <main
       className={`page-main${showHeader ? "" : " page-main-headerless"}${swipeHandlers ? " page-main-scheduled-song" : ""}`}
       onPointerDown={swipeHandlers?.onPointerDown}
@@ -139,7 +137,6 @@ function PageShell({ children, owner = false, hideFooter = false, swipeHandlers 
       onPointerCancel={swipeHandlers?.onPointerCancel}
       onLostPointerCapture={swipeHandlers?.onLostPointerCapture}
     >{children}</main>
-    {!hideFooter && <SiteFooter />}
   </>;
 }
 
@@ -206,13 +203,6 @@ async function loadSharedContent(isOwner: boolean) {
 
 type SharedContent = Awaited<ReturnType<typeof loadSharedContent>>;
 
-function safeReturnTo(candidate: string | null) {
-  if (!candidate?.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\")) return "/songs";
-  const target = new URL(candidate, window.location.origin);
-  if (target.origin !== window.location.origin || ["/login", "/auth/callback"].includes(target.pathname)) return "/songs";
-  return `${target.pathname}${target.search}${target.hash}`;
-}
-
 function ResourceMessage({ error, retry, children }: { error: string; retry?: () => void; children?: React.ReactNode }) {
   return <div className="content-wrap">
     <div className="notice notice-warning" role="alert">
@@ -250,13 +240,12 @@ function HomePage() {
         </div>
       </section>
       <p className="about-closing">INCOC South supports organized worship and Sunday service preparation.</p>
-      <p className="about-announcement-link"><Link className="button button-secondary" to="/announcement">Announcement Manager</Link></p>
+      <p className="about-announcement-link"><Link className="button button-secondary" to="/announcement">Announcements</Link></p>
     </div>
   </PageShell>;
 }
 
 function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
-  const { membership } = useAuth();
   const [searchParams] = useSearchParams();
   const query = searchParams.get("q")?.trim() ?? "";
   const language = searchParams.get("language")?.trim() ?? "";
@@ -279,12 +268,9 @@ function SongbookPage({ songs }: { songs: SharedContent["songs"] }) {
     return `/songs?${params.toString()}`;
   };
 
-  return <PageShell owner={membership?.role === "owner"}>
+  return <PageShell>
     <div className="content-wrap">
       <div className="section-heading"><h1>Songbook</h1></div>
-      {membership?.role === "owner" && <details className="inline-owner-editor" open={searchParams.get("create") === "1"}>
-        <summary>Add a song</summary><Suspense fallback={<InlineLoading>Loading song editor…</InlineLoading>}><SongEditorForm returnTo="/songs" /></Suspense>
-      </details>}
       <SongbookSearch key={`${query}|${language}`} songs={visibleSongs} query={query} language={language} />
       {visibleSongs.length ? <div className="results-list songbook-results-list">
         {visibleSongs.map((song) => <Link className="song-title-result" key={song.id} to={`/songs/${song.id}`} state={{ songOrigin: "songbook" }}>{song.title}</Link>)}
@@ -302,8 +288,6 @@ function SongDetailPage({ songs, schedules }: {
   schedules: SharedContent["schedules"];
 }) {
   const { songId = "" } = useParams();
-  const { membership } = useAuth();
-  const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
   const swipeStart = useRef<{ pointerId: number; x: number; y: number } | null>(null);
@@ -370,34 +354,31 @@ function SongDetailPage({ songs, schedules }: {
     }
     : undefined;
 
-  return <PageShell owner={membership?.role === "owner"} hideFooter swipeHandlers={swipeHandlers}>
+  return <PageShell swipeHandlers={swipeHandlers}>
     {song
       ? <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
-          <SongPageContent song={song} isOwner={membership?.role === "owner"} editOpen={searchParams.get("edit") === "1"} />
+          <SongPageContent song={song} />
         </Suspense>
       : <div className="content-wrap"><ResourceMessage error="This song is not available." /></div>}
   </PageShell>;
 }
 
 function ScheduleListPage({ schedules }: { schedules: SharedContent["schedules"] }) {
-  const { membership } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const isOwner = membership?.role === "owner";
-  const visibleSchedules = isOwner ? schedules.filter((schedule) => schedule.status === "published") : schedules;
+  const visibleSchedules = schedules.filter((schedule) => schedule.status === "published");
   const pageSchedules = visibleSchedules.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasNextPage = visibleSchedules.length > page * PAGE_SIZE;
-  const soleScheduleId = !isOwner && visibleSchedules.length === 1 ? visibleSchedules[0].id : null;
+  const soleScheduleId = visibleSchedules.length === 1 ? visibleSchedules[0].id : null;
   useEffect(() => {
     if (soleScheduleId) navigate(`/schedule/${soleScheduleId}`, { replace: true });
   }, [navigate, soleScheduleId]);
-  return <PageShell owner={isOwner}>
+  return <PageShell>
     <div className="content-wrap">
       <div className="schedule-list-heading">
         <div className="section-heading"><h1>Sunday Schedule</h1></div>
-        {isOwner && <Link to="/admin/schedules/new" className="button button-primary"><Plus size={15} /> Create schedule</Link>}
       </div>
       {pageSchedules.length ? <div className="results-list">
         {pageSchedules.map((schedule) => <article className="public-list-entry" key={schedule.id}>
@@ -405,7 +386,6 @@ function ScheduleListPage({ schedules }: { schedules: SharedContent["schedules"]
             <div><h2>{schedule.title}</h2><p>{schedule.venue ?? "Venue not set"}</p><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</p></div>
             <span className="public-entry-meta"><ArrowRight size={17} aria-hidden="true" /></span>
           </IntentPrefetchLink>
-          {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
         </article>)}
       </div> : <div className="empty-state">There are no services to show yet.</div>}
       {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Sunday Schedule pages">
@@ -421,14 +401,12 @@ function ScheduleDetailPage({ schedules, songs }: {
   songs: SharedContent["songs"];
 }) {
   const { scheduleId = "" } = useParams();
-  const { membership } = useAuth();
-  const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
-  const schedule = schedules.find((item) => item.id === scheduleId);
+  const schedule = schedules.find((item) => item.id === scheduleId && item.status === "published");
   const visibleScheduleItems = schedule?.schedule_items.filter((item) => item.show_in_schedule) ?? [];
   const publishedSchedules = schedules.filter((item) => item.status === "published");
   const songById = useMemo(() => new Map(songs.map((song) => [song.id, song])), [songs]);
-  return <PageShell owner={isOwner}>
+  return <PageShell>
     {!schedule
       ? <article className="content-wrap">
         {publishedSchedules.length > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
@@ -447,8 +425,7 @@ function ScheduleDetailPage({ schedules, songs }: {
         }} />
         <article className="content-wrap">
           {publishedSchedules.length > 1 && <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to services</IntentPrefetchLink>}
-          <header className={`schedule-detail-heading${isOwner ? " has-edit" : ""}`}>
-            {isOwner && <IntentPrefetchLink href={`/admin/schedules/${schedule.id}`} className="schedule-edit-link">Edit schedule</IntentPrefetchLink>}
+          <header className="schedule-detail-heading">
             <h1 className="detail-title">{schedule.title}</h1>
             <div className="detail-meta schedule-detail-meta">
               <CalendarDays size={16} aria-hidden="true" />
@@ -495,14 +472,12 @@ function ScheduleDetailPage({ schedules, songs }: {
 }
 
 function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
-  const { membership } = useAuth();
-  const isOwner = membership?.role === "owner";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const scheduleId = searchParams.get("scheduleId");
   const pageValue = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(pageValue) ? Math.min(Math.max(pageValue, 1), 10_000) : 1;
-  const schedules = sharedContent.schedules;
+  const schedules = sharedContent.schedules.filter((item) => item.status === "published");
   const schedule = schedules.find((item) => item.id === scheduleId);
   const publishedSchedules = schedules.filter((item) => item.status === "published");
   const pageSchedules = schedules.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -511,8 +486,8 @@ function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
   const groups = useMemo(() => schedule
     ? groupPresentationSlides(generateSlides(normalizeProgrammeItems(scheduleItemsWithSongs(schedule, songById))))
     : [], [schedule, songById]);
-  const soleService = isOwner ? publishedSchedules[0] : schedules[0];
-  const serviceCount = isOwner ? publishedSchedules.length : schedules.length;
+  const soleService = schedules[0];
+  const serviceCount = schedules.length;
   const openingSoleService = !scheduleId && serviceCount === 1;
 
   useEffect(() => {
@@ -524,7 +499,7 @@ function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
     }
   }, [navigate, scheduleId, serviceCount, soleService]);
 
-  return <PageShell owner={isOwner}>
+  return <PageShell>
     {openingSoleService
       ? <div className="content-wrap"><div className="section-heading"><h1>Slides</h1></div><InlineLoading>Loading presentations…</InlineLoading></div>
       : schedule
@@ -540,7 +515,6 @@ function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
             {publishedSchedules.length > 1 && <IntentPrefetchLink href="/slides" className="back-link"><ArrowLeft size={15} /> All services</IntentPrefetchLink>}
             <div className="slides-overview-heading">
               <h1 className="detail-title">{schedule.title}</h1>
-              {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${schedule.id}`}>Edit schedule</IntentPrefetchLink>}
             </div>
             <p className="slides-overview-meta"><CalendarDays size={15} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue && <span>{schedule.venue}</span>}</p>
             {groups.length ? <div className="slides-preview-grid">
@@ -574,7 +548,6 @@ function SlidesPage({ sharedContent }: { sharedContent: SharedContent }) {
                   <div><h2>{item.title}</h2><p><CalendarDays size={13} style={{ verticalAlign: "middle", marginRight: 5 }} />{dateFormatter.format(new Date(`${item.service_date}T12:00:00+05:30`))}{item.venue ? ` · ${item.venue}` : ""}</p></div>
                   <span className="public-entry-meta"><MonitorPlay size={15} /> View slides <ArrowRight size={15} /></span>
                 </IntentPrefetchLink>
-                {isOwner && <IntentPrefetchLink className="schedule-edit-link" href={`/admin/schedules/${item.id}`}>Edit schedule</IntentPrefetchLink>}
               </article>)}
             </div> : <div className="empty-state">There are no presentations yet.</div>}
             {(page > 1 || hasNextPage) && <nav className="list-pagination" aria-label="Slides pages">
@@ -603,7 +576,7 @@ function PresentationPage({ sharedContent }: { sharedContent: SharedContent }) {
   const [searchParams] = useSearchParams();
   const requested = Number.parseInt(searchParams.get("slide") ?? "0", 10);
   const initialSlide = Number.isFinite(requested) ? requested : 0;
-  const schedule = sharedContent.schedules.find((item) => item.id === scheduleId);
+  const schedule = sharedContent.schedules.find((item) => item.id === scheduleId && item.status === "published");
   const songById = useMemo(() => new Map(sharedContent.songs.map((song) => [song.id, song])), [sharedContent.songs]);
   const presentationItems = useMemo(() => schedule
     ? filterPresentationItems(normalizeProgrammeItems(scheduleItemsWithSongs(schedule, songById)))
@@ -625,28 +598,81 @@ function PresentationPage({ sharedContent }: { sharedContent: SharedContent }) {
 }
 
 function OwnerOnly() {
-  const { configured, error, loading, membership } = useAuth();
+  const { configured, error, loading, membership, user } = useAuth();
   if (!configured) return <PageShell><ResourceMessage error="Owner tools are unavailable until Supabase is configured." /></PageShell>;
   if (loading) return <PageShell><LoadingPage title="Checking owner access" /></PageShell>;
   if (error) return <PageShell><ResourceMessage error={error} /></PageShell>;
-  if (!membership) return <Navigate to="/login" replace />;
+  if (!user) return <LoginPage />;
+  if (!membership) return <Navigate to="/access-denied" replace />;
   if (membership.role !== "owner") return <Navigate to="/access-denied" replace />;
   return <AdminLayout />;
 }
 
 function AdminLayout() {
-  return <PageShell owner>
-    <div className="admin-layout">
-      <UnsavedChangesGuard />
-      <aside className="admin-nav" aria-label="Owner navigation">
-        <IntentPrefetchLink href="/admin/songs">Songs</IntentPrefetchLink>
-        <IntentPrefetchLink href="/admin/schedules">Sunday Schedule &amp; Slides</IntentPrefetchLink>
-        <IntentPrefetchLink href="/admin/members">Members</IntentPrefetchLink>
-        <IntentPrefetchLink href="/admin/settings">Settings</IntentPrefetchLink>
-      </aside>
-      <section className="admin-content"><Outlet /></section>
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      await signOut();
+      navigate("/admin", { replace: true });
+    } catch (error) {
+      setSignOutError(error instanceof Error ? error.message : "Unable to sign out.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  return <PageShell>
+    <div className="admin-shell">
+      <header className="admin-header">
+        <Link className="admin-brand" to="/"><BrandMark /><span><strong>INCOC South</strong><small>Owner management</small></span></Link>
+        <button type="button" className="admin-signout" onClick={() => void handleSignOut()} disabled={signingOut} aria-busy={signingOut}>
+          <LogOut size={15} aria-hidden="true" />{signingOut ? "Signing out…" : "Sign out"}
+        </button>
+      </header>
+      {signOutError && <p className="admin-signout-error" role="alert">{signOutError}</p>}
+      <div className="admin-layout">
+        <UnsavedChangesGuard />
+        <aside className="admin-nav" aria-label="Owner navigation">
+          <IntentPrefetchLink href="/admin">Dashboard</IntentPrefetchLink>
+          <IntentPrefetchLink href="/admin/songs">Songs</IntentPrefetchLink>
+          <IntentPrefetchLink href="/admin/schedules">Sunday Schedule &amp; Slides</IntentPrefetchLink>
+          <IntentPrefetchLink href="/admin/announcements">Announcements</IntentPrefetchLink>
+          <IntentPrefetchLink href="/admin/members">Members</IntentPrefetchLink>
+          <IntentPrefetchLink href="/admin/settings">Settings</IntentPrefetchLink>
+        </aside>
+        <section className="admin-content"><Outlet /></section>
+      </div>
     </div>
   </PageShell>;
+}
+
+function AdminDashboard() {
+  const sections = [
+    { title: "Songbook management", description: "Add, edit, and organize songs, sections, and translations.", href: "/admin/songs", icon: BookOpen },
+    { title: "Schedule and slides", description: "Plan services, reorder programme items, and manage slide content and visibility.", href: "/admin/schedules", icon: CalendarDays },
+    { title: "Announcement management", description: "Create collections and announcement items, control publishing, and manage images and text.", href: "/admin/announcements", icon: FileText },
+    { title: "Member access", description: "Invite members and manage their church roles.", href: "/admin/members", icon: Users },
+    { title: "Application settings", description: "Review application and integration configuration.", href: "/admin/settings", icon: MonitorPlay },
+  ];
+  return <>
+    <p className="eyebrow">OWNER MANAGEMENT</p>
+    <h1>Dashboard</h1>
+    <p>Choose a section to manage INCOC South content and access.</p>
+    <div className="admin-dashboard-grid">
+      {sections.map(({ title, description, href, icon: Icon }) => <Link className="admin-dashboard-card" to={href} key={href}>
+        <span className="admin-dashboard-icon"><Icon size={19} aria-hidden="true" /></span>
+        <span><strong>{title}</strong><small>{description}</small></span>
+        <ArrowRight size={17} aria-hidden="true" />
+      </Link>)}
+    </div>
+  </>;
 }
 
 function AdminSongsPage({ songs }: { songs: SharedContent["songs"] | null }) {
@@ -828,10 +854,8 @@ function AdminSettingsPage() {
 
 function LoginPage() {
   const { configured, loading, membership, user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const returnTo = safeReturnTo(searchParams.get("returnTo"));
   if (loading) return <main className="auth-page" role="status" aria-busy="true">Checking sign-in…</main>;
-  if (user) return <Navigate to={membership ? returnTo : "/access-denied"} replace />;
+  if (user) return <Navigate to={membership ? "/admin" : "/access-denied"} replace />;
   return <main className="auth-page">
     <section className="auth-card">
       <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
@@ -846,7 +870,7 @@ function LoginPage() {
 function AccountSetupPage() {
   const { loading, user, membership } = useAuth();
   if (loading) return <main className="auth-page" role="status" aria-busy="true">Checking invitation…</main>;
-  if (!user || !membership) return <Navigate to="/login" replace />;
+  if (!user || !membership) return <Navigate to="/admin" replace />;
   if (user.email_confirmed_at == null) return <main className="auth-page"><section className="auth-card"><h1>Confirm your invitation</h1><p>Open the invitation link from your email before setting a password.</p></section></main>;
   return <main className="auth-page"><section className="auth-card">
     <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
@@ -878,7 +902,7 @@ function AuthCallbackPage() {
     return () => { active = false; };
   }, [navigate, refreshSession]);
   return <main className="auth-page" role={error ? undefined : "status"} aria-busy={!error}>
-    {error ? <section className="auth-card"><h1>Invitation error</h1><p className="form-error">{error}</p><Link to="/login">Return to sign in</Link></section> : "Completing invitation…"}
+    {error ? <section className="auth-card"><h1>Invitation error</h1><p className="form-error">{error}</p><Link to="/admin">Return to sign in</Link></section> : "Completing invitation…"}
   </main>;
 }
 
@@ -976,7 +1000,7 @@ export function App() {
   }
 
   if (needsSharedContent && !sharedContent) {
-    return <PageShell owner={isOwner}><ResourceMessage error={sharedError || "Shared content is unavailable."} retry={() => setRetryCount((count) => count + 1)} /></PageShell>;
+    return <PageShell><ResourceMessage error={sharedError || "Shared content is unavailable."} retry={() => setRetryCount((count) => count + 1)} /></PageShell>;
   }
 
   return <>
@@ -996,20 +1020,21 @@ export function App() {
       <Route path="/schedule/:scheduleId/slides" element={<ScheduleSlidesRedirect />} />
       <Route path="/slides" element={sharedContent && <SlidesPage sharedContent={sharedContent} />} />
       <Route path="/present/:scheduleId" element={sharedContent && <PresentationPage sharedContent={sharedContent} />} />
-      <Route path="/announcement" element={<PageShell><AnnouncementManagerPage /></PageShell>} />
-      <Route path="/announcement/slides" element={<PageShell hideFooter><AnnouncementSlidesPage /></PageShell>} />
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/announcement" element={<PageShell><AnnouncementPublicPage /></PageShell>} />
+      <Route path="/announcement/slides" element={<PageShell><AnnouncementSlidesPage /></PageShell>} />
+      <Route path="/login" element={<Navigate to="/admin" replace />} />
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
       <Route path="/admin" element={<OwnerOnly />}>
-        <Route index element={<Navigate to="/admin/songs" replace />} />
+        <Route index element={<AdminDashboard />} />
         <Route path="songs" element={<AdminSongsPage songs={sharedContent?.songs ?? null} />} />
         <Route path="songs/new" element={<AdminSongCreatePage />} />
         <Route path="songs/:songId" element={<AdminSongEditPage songs={sharedContent?.songs ?? null} />} />
         <Route path="schedules" element={<AdminSchedulesPage schedules={sharedContent?.schedules ?? null} />} />
         <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
         <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
+        <Route path="announcements" element={<AnnouncementManagerPage />} />
         <Route path="members" element={<AdminMembersPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>

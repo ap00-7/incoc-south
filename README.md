@@ -8,7 +8,7 @@ This is a Vite + React Router single-page application with Supabase Auth, Postgr
 
 - Responsive coffee-and-golden-brown design with Songs, Sunday Schedule, and Slides as the three homepage destinations.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
-- Shared browser auth and membership state, owner-only management routes, and database RLS enforcement.
+- Shared browser auth and membership state, an `/admin` owner dashboard, and database RLS enforcement.
 - Owner song creation and editing, four primary song languages, reusable chorus sequencing, optional section translations, and deletion protection for songs referenced by schedules.
 - Public songbook search, language filtering, lyric sections, and translations.
 - Dated service drafts, reusable song references, non-song programme items, leaders, durations, private notes, ordering, publishing, and unpublishing.
@@ -81,7 +81,7 @@ from public.churches
 where slug = 'incoc-south';
 ```
 
-5. Set the application's public Supabase URL and publishable key, then sign in at `/login`.
+5. Set the application's public Supabase URL and publishable key, then open `/admin` to sign in and manage the application.
 6. For owner-managed invitations, configure `SUPABASE_SERVICE_ROLE_KEY` only in the server environment and set the Supabase Auth redirect allow-list for `${SITE_URL}/auth/callback`.
 
 The bootstrap is a deliberate SQL operation so the first owner is never granted automatically by registration. Supabase invitation email delivery also needs an SMTP provider for production.
