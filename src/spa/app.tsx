@@ -597,14 +597,18 @@ function PresentationPage({ sharedContent }: { sharedContent: SharedContent }) {
   </Suspense>;
 }
 
-function OwnerOnly() {
-  const { configured, error, loading, membership, user } = useAuth();
-  if (!configured) return <PageShell><ResourceMessage error="Owner tools are unavailable until Supabase is configured." /></PageShell>;
+function AdminEntry() {
+  const { configured, error, loading, user } = useAuth();
   if (loading) return <PageShell><LoadingPage title="Checking owner access" /></PageShell>;
-  if (error) return <PageShell><ResourceMessage error={error} /></PageShell>;
   if (!user) return <LoginPage />;
-  if (!membership) return <Navigate to="/access-denied" replace />;
-  if (membership.role !== "owner") return <Navigate to="/access-denied" replace />;
+  if (!configured) return <PageShell><ResourceMessage error="Owner tools are unavailable until Supabase is configured." /></PageShell>;
+  if (error) return <PageShell><ResourceMessage error={error} /></PageShell>;
+  return <Outlet />;
+}
+
+function OwnerOnly() {
+  const { membership } = useAuth();
+  if (membership?.role !== "owner") return <AccessDeniedPage />;
   return <AdminLayout />;
 }
 
@@ -853,9 +857,7 @@ function AdminSettingsPage() {
 }
 
 function LoginPage() {
-  const { configured, loading, membership, user } = useAuth();
-  if (loading) return <main className="auth-page" role="status" aria-busy="true">Checking sign-in…</main>;
-  if (user) return <Navigate to={membership ? "/admin" : "/access-denied"} replace />;
+  const { configured } = useAuth();
   return <main className="auth-page">
     <section className="auth-card">
       <Link className="auth-brand" to="/"><BrandMark /> INCOC South</Link>
@@ -907,7 +909,7 @@ function AuthCallbackPage() {
 }
 
 function AccessDeniedPage() {
-  return <PageShell><div className="content-wrap"><p className="eyebrow">ACCESS CONTROL</p><h1>Access restricted</h1><p>You need an active church membership to use owner tools.</p><Link className="button button-secondary" to="/songs">Return to the Songbook</Link></div></PageShell>;
+  return <PageShell><div className="content-wrap"><p className="eyebrow">ACCESS CONTROL</p><h1>Access restricted</h1><p>Only an authorized INCOC South owner can use owner tools.</p><Link className="button button-secondary" to="/songs">Return to the Songbook</Link></div></PageShell>;
 }
 
 function NotFoundPage() {
@@ -1026,17 +1028,19 @@ export function App() {
       <Route path="/account/setup" element={<AccountSetupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route path="/access-denied" element={<AccessDeniedPage />} />
-      <Route path="/admin" element={<OwnerOnly />}>
-        <Route index element={<AdminDashboard />} />
-        <Route path="songs" element={<AdminSongsPage songs={sharedContent?.songs ?? null} />} />
-        <Route path="songs/new" element={<AdminSongCreatePage />} />
-        <Route path="songs/:songId" element={<AdminSongEditPage songs={sharedContent?.songs ?? null} />} />
-        <Route path="schedules" element={<AdminSchedulesPage schedules={sharedContent?.schedules ?? null} />} />
-        <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
-        <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
-        <Route path="announcements" element={<AnnouncementManagerPage />} />
-        <Route path="members" element={<AdminMembersPage />} />
-        <Route path="settings" element={<AdminSettingsPage />} />
+      <Route path="/admin" element={<AdminEntry />}>
+        <Route element={<OwnerOnly />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="songs" element={<AdminSongsPage songs={sharedContent?.songs ?? null} />} />
+          <Route path="songs/new" element={<AdminSongCreatePage />} />
+          <Route path="songs/:songId" element={<AdminSongEditPage songs={sharedContent?.songs ?? null} />} />
+          <Route path="schedules" element={<AdminSchedulesPage schedules={sharedContent?.schedules ?? null} />} />
+          <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
+          <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
+          <Route path="announcements" element={<AnnouncementManagerPage />} />
+          <Route path="members" element={<AdminMembersPage />} />
+          <Route path="settings" element={<AdminSettingsPage />} />
+        </Route>
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
