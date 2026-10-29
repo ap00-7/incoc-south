@@ -9,7 +9,7 @@ This is a Vite + React Router single-page application with Supabase Auth, Postgr
 - Responsive coffee-and-golden-brown design with Songs, Sunday Schedule, and Slides as the three homepage destinations.
 - Supabase email/password sign-in, invitation callback, and initial password setup.
 - Shared browser auth and membership state, an `/admin` owner dashboard, and database RLS enforcement.
-- Owner-only Storage Manager with recursive object inventory, searchable files, per-bucket estimates, and reference-protected Storage API deletion.
+- Owner-only Storage Manager with recursive object inventory, searchable and categorized files, media previews, per-bucket estimates, and reference-protected Storage API deletion.
 - Owner song creation and editing, four primary song languages, reusable chorus sequencing, optional section translations, and deletion protection for songs referenced by schedules.
 - Public songbook search, language filtering, lyric sections, and translations.
 - Dated service drafts, reusable song references, non-song programme items, leaders, durations, private notes, ordering, publishing, and unpublishing.

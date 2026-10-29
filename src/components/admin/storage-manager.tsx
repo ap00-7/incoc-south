@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  Archive,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   File,
-  FileImage,
-  FileSpreadsheet,
   FileText,
   HardDrive,
   Image,
   LoaderCircle,
+  Music2,
   Presentation,
   RefreshCw,
   Search,
@@ -78,15 +78,47 @@ type SizeInfo = {
   bytes: number | null;
 };
 
-function isImage(file: StoredObject) {
-  const mimeType = String(file.metadata?.mimetype ?? file.metadata?.contentType ?? "");
-  return mimeType.startsWith("image/") || /\.(avif|gif|jpe?g|png|svg|webp|bmp|tiff?)$/i.test(file.name);
+type FileCategory = "images" | "documents" | "presentations" | "videos" | "audio" | "archives" | "other";
+
+function getFileMimeType(file: StoredObject) {
+  const rawType = file.metadata?.mimetype ?? file.metadata?.contentType;
+  return typeof rawType === "string" ? rawType.split(";")[0].trim().toLowerCase() : "";
 }
 
-function isDocument(file: StoredObject) {
-  const mimeType = String(file.metadata?.mimetype ?? file.metadata?.contentType ?? "");
-  return /^(application\/pdf|application\/vnd\.openxmlformats-officedocument\.(presentationml|wordprocessingml|spreadsheetml)|application\/vnd\.ms-(powerpoint|word|excel)|text\/(plain|csv))/i.test(mimeType)
-    || /\.(pdf|pptx?|docx?|xlsx?|csv|txt|odp|odt|ods)$/i.test(file.name);
+function getFileExtension(file: StoredObject) {
+  const leafName = file.name.split("/").pop() ?? file.name;
+  const lastDot = leafName.lastIndexOf(".");
+  return lastDot > 0 ? leafName.slice(lastDot + 1).toLowerCase() : "";
+}
+
+function getFileCategory(file: StoredObject): FileCategory {
+  const mimeType = getFileMimeType(file);
+  const extension = getFileExtension(file);
+  if (mimeType.startsWith("image/") || /^(avif|gif|jpe?g|png|svg|webp|bmp|tiff?|heic|heif|ico)$/i.test(extension)) return "images";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")
+    || /^(ppt|pptx|pptm|pps|ppsx|odp|key)$/i.test(extension)) return "presentations";
+  if (mimeType.startsWith("video/") || /^(3gp|avi|m4v|mkv|mov|mp4|mpeg|mpg|ogv|webm|wmv)$/i.test(extension)) return "videos";
+  if (mimeType.startsWith("audio/") || /^(aac|aif|aiff|flac|m4a|m4b|mid|midi|mp3|oga|ogg|opus|wav|wma)$/i.test(extension)) return "audio";
+  if (mimeType.includes("zip") || mimeType.includes("compressed") || mimeType.includes("archive")
+    || /^(application\/(gzip|x-7z-compressed|x-rar-compressed|x-tar|x-bzip2))$/.test(mimeType)
+    || /^(7z|bz2|cab|gz|rar|tar|tgz|xz|zip)$/i.test(extension)) return "archives";
+  if (mimeType === "application/pdf" || mimeType.startsWith("text/")
+    || /^(application\/(msword|rtf|vnd\.ms-(excel|word)|vnd\.openxmlformats-officedocument\.(spreadsheetml|wordprocessingml)|vnd\.oasis\.opendocument\.(chart|formula|graphics|spreadsheet|text)|vnd\.wordperfect))/.test(mimeType)
+    || /^(csv|doc|docx|dot|dotx|odc|odf|odg|odi|odm|ods|odt|pages|pdf|rtf|tex|tsv|txt|xls|xlsx|xlt|xltx)$/i.test(extension)) return "documents";
+  return "other";
+}
+
+function getFileTypeLabel(file: StoredObject) {
+  const mimeType = getFileMimeType(file);
+  const category = getFileCategory(file);
+  if (mimeType && !["application/octet-stream", "binary/octet-stream"].includes(mimeType)) return mimeType;
+  if (category !== "other") return `${getFileExtension(file).toUpperCase()} ${category.slice(0, -1)}`;
+  return getFileExtension(file) ? `${getFileExtension(file).toUpperCase()} file` : "Unknown file type";
+}
+
+function isGif(file: StoredObject) {
+  const mimeType = getFileMimeType(file);
+  return mimeType ? mimeType === "image/gif" : getFileExtension(file) === "gif";
 }
 
 function getFileSize(file: StoredObject): SizeInfo {
@@ -125,7 +157,10 @@ function formatDateTime(value: string) {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "An unexpected error occurred.";
+  if (!(error instanceof Error)) return "An unexpected error occurred.";
+  const storageError = error as Error & { statusCode?: string; code?: string };
+  const details = [storageError.statusCode, storageError.code].filter(Boolean).join(" ");
+  return details ? `${details}: ${error.message}` : error.message;
 }
 
 async function loadStoragePages<T>(
@@ -152,7 +187,7 @@ async function loadStorageBuckets() {
       sortColumn: "id",
       sortOrder: "asc",
     });
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     const page = (data ?? []).map((bucket) => ({
       id: bucket.id,
       name: bucket.name,
@@ -166,7 +201,9 @@ async function loadStorageBuckets() {
 async function listBucketObjects(bucket: Bucket): Promise<BucketInventory> {
   const supabase = createClient();
   const files: StoredObject[] = [];
-  const errors: string[] = [];
+  const errors: string[] = bucket.public === null
+    ? ["Bucket metadata was not returned by Supabase Storage bucket discovery, so visibility and inventory completeness cannot be verified. Review the authenticated owner's SELECT access for this bucket in storage.buckets and storage.objects."]
+    : [];
   const pendingFolders = [""];
   const visitedFolders = new Set<string>();
 
@@ -183,16 +220,16 @@ async function listBucketObjects(bucket: Bucket): Promise<BucketInventory> {
           offset,
           sortBy: { column: "name", order: "asc" },
         });
-        if (error) throw new Error(error.message);
+        if (error) throw error;
         entries = (data ?? []) as ObjectEntry[];
       } catch (error) {
-        errors.push(`${folder || "bucket root"}: ${getErrorMessage(error)}`);
+        errors.push(`${folder || "bucket root"}: ${getErrorMessage(error)}. If this is a permission error, review the authenticated owner's SELECT policy on storage.objects for bucket "${bucket.name}".`);
         break;
       }
 
       for (const entry of entries) {
         const path = folder ? `${folder}/${entry.name}` : entry.name;
-        if (entry.id === null) {
+        if (entry.id === null && entry.metadata === null && !entry.created_at && !entry.updated_at) {
           if (!visitedFolders.has(path)) pendingFolders.push(path);
           continue;
         }
@@ -328,20 +365,23 @@ async function getObjectUrl(file: StoredObject) {
   return data.signedUrl;
 }
 
-function FileTypeIcon({ file }: { file: StoredObject }) {
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  if (isImage(file)) return <Image size={20} aria-hidden="true" />;
-  if (["ppt", "pptx", "odp"].includes(extension ?? "")) return <Presentation size={20} aria-hidden="true" />;
-  if (["xls", "xlsx", "ods", "csv"].includes(extension ?? "")) return <FileSpreadsheet size={20} aria-hidden="true" />;
-  if (["pdf", "doc", "docx", "txt", "odt"].includes(extension ?? "")) return <FileText size={20} aria-hidden="true" />;
-  if (["mp4", "mov", "webm", "m4v"].includes(extension ?? "")) return <Video size={20} aria-hidden="true" />;
-  return <File size={20} aria-hidden="true" />;
+function FileTypeIcon({ file, size = 20 }: { file: StoredObject; size?: number }) {
+  const category = getFileCategory(file);
+  if (category === "images") return <Image size={size} aria-hidden="true" />;
+  if (category === "presentations") return <Presentation size={size} aria-hidden="true" />;
+  if (category === "documents") return <FileText size={size} aria-hidden="true" />;
+  if (category === "videos") return <Video size={size} aria-hidden="true" />;
+  if (category === "audio") return <Music2 size={size} aria-hidden="true" />;
+  if (category === "archives") return <Archive size={size} aria-hidden="true" />;
+  return <File size={size} aria-hidden="true" />;
 }
 
-function ObjectThumbnail({ file }: { file: StoredObject }) {
+function ObjectPreview({ file }: { file: StoredObject }) {
   const [url, setUrl] = useState("");
   const [previewError, setPreviewError] = useState("");
+  const category = getFileCategory(file);
   useEffect(() => {
+    if (!["images", "videos", "audio"].includes(category)) return;
     let active = true;
     void getObjectUrl(file).then((nextUrl) => {
       if (active) setUrl(nextUrl);
@@ -352,16 +392,25 @@ function ObjectThumbnail({ file }: { file: StoredObject }) {
       }
     });
     return () => { active = false; };
-  }, [file]);
+  }, [category, file]);
 
-  return url
-    ? <img src={url} alt="" loading="lazy" onError={() => {
-      setUrl("");
-      setPreviewError("The preview link may have expired or access was denied.");
-    }} />
-    : <span className="storage-file-icon" title={previewError || "Image preview"} aria-label={previewError ? `Preview unavailable: ${previewError}` : "Image preview"}>
-      <FileImage size={22} aria-hidden="true" /><small>{previewError ? "Preview unavailable" : "Image"}</small>
+  function showPreviewUnavailable() {
+    setUrl("");
+    setPreviewError("Preview unavailable; use Open to try a fresh authorized link.");
+  }
+
+  if (!["images", "videos", "audio"].includes(category)) {
+    return <span className="storage-file-icon"><FileTypeIcon file={file} size={25} /></span>;
+  }
+  if (!url) {
+    return <span className="storage-file-icon" title={previewError || "Preview loading"} aria-label={previewError ? `Preview unavailable: ${previewError}` : "Preview loading"}>
+      {previewError ? <FileTypeIcon file={file} size={25} /> : <LoaderCircle size={21} className="storage-spin" aria-hidden="true" />}
+      <small>{previewError || "Loading preview"}</small>
     </span>;
+  }
+  if (category === "images") return <img src={url} alt="" loading="lazy" onError={showPreviewUnavailable} />;
+  if (category === "videos") return <video src={url} controls preload="metadata" onError={showPreviewUnavailable} aria-label={`Preview of ${file.name}`} />;
+  return <audio src={url} controls preload="metadata" onError={showPreviewUnavailable} aria-label={`Preview of ${file.name}`} />;
 }
 
 function StorageManagerPage() {
@@ -492,13 +541,15 @@ function StorageManagerPage() {
   }, [buckets]);
   const totalBytes = stats.reduce((total, bucket) => total + bucket.totalBytes, 0);
   const unknownSizes = stats.reduce((total, bucket) => total + bucket.unknownSizes, 0);
+  const categoryCounts = useMemo(() => files.reduce<Record<FileCategory, number>>((counts, file) => {
+    counts[getFileCategory(file)] += 1;
+    return counts;
+  }, { images: 0, documents: 0, presentations: 0, videos: 0, audio: 0, archives: 0, other: 0 }), [files]);
   const filteredFiles = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
     const visibleFiles = files.filter((file) => {
       if (bucketFilter !== "all" && file.bucket !== bucketFilter) return false;
-      if (typeFilter === "images" && !isImage(file)) return false;
-      if (typeFilter === "documents" && !isDocument(file)) return false;
-      if (typeFilter === "other" && (isImage(file) || isDocument(file))) return false;
+      if (typeFilter !== "all" && getFileCategory(file) !== typeFilter) return false;
       return !normalizedQuery || file.name.toLocaleLowerCase().includes(normalizedQuery)
         || file.path.toLocaleLowerCase().includes(normalizedQuery)
         || file.bucket.toLocaleLowerCase().includes(normalizedQuery);
@@ -518,8 +569,8 @@ function StorageManagerPage() {
   }, [bucketFilter, files, query, sort, typeFilter]);
   const pageCount = Math.max(1, Math.ceil(filteredFiles.length / FILES_PER_PAGE));
   const pageFiles = filteredFiles.slice(page * FILES_PER_PAGE, (page + 1) * FILES_PER_PAGE);
-  const imageCount = files.filter(isImage).length;
-  const documentCount = files.filter(isDocument).length;
+  const imageCount = categoryCounts.images;
+  const gifCount = files.filter(isGif).length;
   const hasBucketErrors = buckets.some((bucket) => bucket.errors.length > 0);
   const partialInventory = Boolean(inventory?.discoveryError) || hasBucketErrors;
   const knownSizedFiles = files.length - unknownSizes;
@@ -641,14 +692,19 @@ function StorageManagerPage() {
             ? files.length ? `At least ${files.length.toLocaleString()}` : "Incomplete"
             : files.length.toLocaleString()}</strong></article>
           <article><span>Inventory size estimate</span><strong>{partialInventory || unknownSizes
-            ? knownSizedFiles ? `At least ${formatBytes(totalBytes)}` : "Incomplete"
-            : formatBytes(totalBytes)}</strong></article>
+            ? knownSizedFiles ? `At least ${totalBytes.toLocaleString()} bytes (${formatBytes(totalBytes)})` : "Incomplete"
+            : `${totalBytes.toLocaleString()} bytes (${formatBytes(totalBytes)})`}</strong></article>
           <article><span>Images</span><strong>{partialInventory
             ? imageCount ? `At least ${imageCount.toLocaleString()}` : "Incomplete"
             : imageCount.toLocaleString()}</strong></article>
-          <article><span>Documents & presentations</span><strong>{partialInventory
-            ? documentCount ? `At least ${documentCount.toLocaleString()}` : "Incomplete"
-            : documentCount.toLocaleString()}</strong></article>
+          <article><span>GIFs (included in images)</span><strong>{partialInventory
+            ? gifCount ? `At least ${gifCount.toLocaleString()}` : "Incomplete"
+            : gifCount.toLocaleString()}</strong></article>
+          {(["documents", "presentations", "videos", "audio", "archives", "other"] as const).map((category) => (
+            <article key={category}><span>{category[0].toUpperCase() + category.slice(1)}</span><strong>{partialInventory
+              ? categoryCounts[category] ? `At least ${categoryCounts[category].toLocaleString()}` : "Incomplete"
+              : categoryCounts[category].toLocaleString()}</strong></article>
+          ))}
         </div>
         <p className="storage-note">
           Inventory totals are calculated from accessible object metadata{unknownSizes ? `; ${unknownSizes} file${unknownSizes === 1 ? "" : "s"} did not report a size` : ""}.
@@ -678,9 +734,13 @@ function StorageManagerPage() {
         <label><span className="sr-only">Filter by file type</span>
           <select value={typeFilter} onChange={(event) => setTypeFilter(event.currentTarget.value)}>
             <option value="all">All file types</option>
-            <option value="images">Images</option>
-            <option value="documents">Documents & presentations</option>
-            <option value="other">Other files</option>
+          <option value="images">Images (including GIFs)</option>
+          <option value="documents">Documents</option>
+          <option value="presentations">Presentations</option>
+          <option value="videos">Videos</option>
+          <option value="audio">Audio</option>
+          <option value="archives">Archives</option>
+          <option value="other">Other / unknown</option>
           </select>
         </label>
         <label><span className="sr-only">Sort files</span>
@@ -702,13 +762,15 @@ function StorageManagerPage() {
               const fileSize = getFileSize(file).bytes;
               return <article className="storage-file-card" key={`${file.bucket}:${file.path}`}>
                 <div className="storage-file-preview">
-                  {isImage(file) ? <ObjectThumbnail file={file} /> : <span className="storage-file-icon"><FileTypeIcon file={file} /></span>}
+                  <ObjectPreview file={file} />
                 </div>
                 <div className="storage-file-copy">
                   <strong title={file.name}>{file.name}</strong>
                   <code title={file.path}>{file.path}</code>
                   <span>{file.bucket} · {fileSize === null ? "Size unavailable" : formatBytes(fileSize)}</span>
-                  <span>{formatDate(file.updatedAt ?? file.createdAt)}</span>
+                  <span>Type: {getFileTypeLabel(file)}</span>
+                  <span>Created: {formatDate(file.createdAt)}</span>
+                  <span>Updated: {formatDate(file.updatedAt)}</span>
                 </div>
                 <div className="storage-file-actions">
                   <button type="button" onClick={() => void openFile(file)} aria-label={`Open ${file.path}`}>
@@ -749,8 +811,8 @@ function StorageManagerPage() {
             {bucket.errors.length > 0 && <span className="storage-bucket-error">Incomplete listing: {bucket.errors.join("; ")}</span>}
           </div>
           <strong className="storage-bucket-size">{bucket.errors.length
-            ? bucket.count ? `At least ${formatBytes(bucket.totalBytes)}` : "Unavailable"
-            : formatBytes(bucket.totalBytes)}{bucket.unknownSizes ? " + unknown" : ""}</strong>
+            ? bucket.count ? `At least ${bucket.totalBytes.toLocaleString()} bytes (${formatBytes(bucket.totalBytes)})` : "Unavailable"
+            : `${bucket.totalBytes.toLocaleString()} bytes (${formatBytes(bucket.totalBytes)})`}{bucket.unknownSizes ? " + unknown" : ""}</strong>
         </article>)}
       </div> : inventory ? <p className="storage-empty">No buckets were discovered.</p>
         : <p className="storage-muted">Refresh the inventory to view bucket totals.</p>}
