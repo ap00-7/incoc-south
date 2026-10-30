@@ -819,6 +819,7 @@ function AdminSchedulesPage({ schedules }: { schedules: SharedContent["schedules
       <h1>Schedules</h1>
       <div className="admin-title-actions">
         <Link className="button button-secondary" to="/schedule"><CalendarDays size={16} aria-hidden="true" /> View Schedule</Link>
+        <Link className="button button-secondary" to="/slides"><MonitorPlay size={16} aria-hidden="true" /> View Slides</Link>
         <Link className="button button-primary" to="/admin/schedules/new"><Plus size={16} /> Create schedule</Link>
       </div>
     </div>
@@ -871,7 +872,6 @@ function AdminScheduleEditPage({ sharedContent }: { sharedContent: SharedContent
         if (deletedId === schedule.id) navigate("/admin/schedules", { replace: true });
       }}
     />
-    <IntentPrefetchLink href="/schedule" className="back-link"><ArrowLeft size={15} /> Back to Sunday Schedule</IntentPrefetchLink>
     <h1 className="detail-title">{schedule.title}</h1>
     <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
       <InlineScheduleDetails schedule={schedule} />
