@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --layout-max: 1320px;
+  --layout-max: 1680px;
   --page-gutter: clamp(16px, 3vw, 40px);
   --navy: #f4ece2;
   --navy-soft: #30231c;
@@ -619,7 +619,7 @@ html { color-scheme: dark; }
 .schedule-items-editor > .inline-owner-editor { margin-top: 10px; }
 .schedule-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .schedule-editor-actions form { margin: 0; }
-.song-reading.content-wrap { max-width: 1120px; padding-top: 24px; }
+.song-reading.content-wrap { max-width: var(--layout-max); padding-top: 24px; }
 .song-reading .back-link { margin-bottom: 6px; }
 .song-reading .detail-title { font-size: clamp(28px, 4vw, 38px); line-height: 1.2; text-align: center; }
 .song-reading-divider { width: min(100%, 900px); margin: 13px auto 21px; background: #363636; }
@@ -872,7 +872,7 @@ code, kbd, pre { font-family: var(--font-mono); }
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
 
-.songbook-page { max-width: 960px; padding-top: clamp(24px, 5vw, 52px); }
+.songbook-page { max-width: var(--layout-max); padding-top: clamp(24px, 5vw, 52px); }
 .songbook-heading { margin-bottom: 0; }
 .songbook-heading h1 { font-size: clamp(30px, 4vw, 42px); letter-spacing: -.8px; }
 .songbook-search { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(155px, 190px); align-items: start; gap: 12px; margin: 22px 0 18px; }
