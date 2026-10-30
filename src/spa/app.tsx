@@ -343,6 +343,7 @@ function SongDetailPage({ songs, schedules }: {
         if (targetSong) {
           navigate(`/songs/${encodeURIComponent(targetSong.songId)}`, {
             state: { songOrigin: "schedule", scheduleId, scheduleItemId: targetSong.itemId },
+            replace: true,
           });
         }
       },
