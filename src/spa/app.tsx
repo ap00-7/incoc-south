@@ -815,7 +815,13 @@ function AdminSchedulesPage({ schedules }: { schedules: SharedContent["schedules
   const visibleSchedules = schedules.slice(0, 100);
   return <>
     <p className="eyebrow">SERVICE PLANNING</p>
-    <div className="admin-title-row"><h1>Schedules</h1><Link className="button button-primary" to="/admin/schedules/new"><Plus size={16} /> Create schedule</Link></div>
+    <div className="admin-title-row">
+      <h1>Schedules</h1>
+      <div className="admin-title-actions">
+        <Link className="button button-secondary" to="/schedule"><CalendarDays size={16} aria-hidden="true" /> View Schedule</Link>
+        <Link className="button button-primary" to="/admin/schedules/new"><Plus size={16} /> Create schedule</Link>
+      </div>
+    </div>
     <p>Each schedule is a dated gathering.</p>
     {visibleSchedules.length ? <div className="results-list admin-results">{visibleSchedules.map((schedule) => <IntentPrefetchLink className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
       <div><h2>{schedule.title}</h2><p>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div><span className="muted">Edit</span>

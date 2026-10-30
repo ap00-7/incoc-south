@@ -5,8 +5,10 @@ import {
   ArrowRight,
   ArrowUp,
   Bold,
+  FileText,
   Italic,
   ImagePlus,
+  MonitorPlay,
   Pencil,
   Plus,
   Trash2,
@@ -581,6 +583,10 @@ export function AnnouncementManagerPage() {
       <div>
         <p className="eyebrow">ANNOUNCEMENTS</p>
         <h1 className="detail-title">{selectedCollection?.collection_name ?? "Announcement collections"}</h1>
+      </div>
+      <div className="announcement-manager-actions">
+        <Link className="button button-secondary" to="/announcement"><FileText size={16} aria-hidden="true" /> View Announcements</Link>
+        <Link className="button button-secondary" to="/announcement/slides"><MonitorPlay size={16} aria-hidden="true" /> View Announcement Slides</Link>
       </div>
     </header>
     <div className="announcement-collection-toolbar">
