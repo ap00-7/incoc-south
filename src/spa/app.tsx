@@ -1020,15 +1020,12 @@ export function App() {
       const hasCurrentSnapshot = snapshotRef.current?.isOwner === isOwner;
       setSharedLoading(!hasCurrentSnapshot);
       setSharedRefreshing(hasCurrentSnapshot);
-      const syncStartedAt = Date.now();
       refreshInFlight = loadSharedContent(isOwner).then((content) => {
         if (!active) return;
         const nextSnapshot = { isOwner, content };
         snapshotRef.current = nextSnapshot;
         setSnapshot(nextSnapshot);
         setSharedError("");
-        void savePublicSnapshot("shared-content", publicSharedContent(content), syncStartedAt)
-          .catch(reportOfflineCacheError);
       }).catch((loadError: unknown) => {
         if (active) setSharedError(navigator.onLine
           ? loadError instanceof Error ? loadError.message : "Unable to load shared content."
