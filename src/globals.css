@@ -1643,6 +1643,44 @@ body {
   touch-action: pan-y;
 }
 
+.pwa-status {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 9px 13px;
+  color: #f5eee5;
+  background: #171512;
+  border: 1px solid #55432e;
+  border-radius: 999px;
+  box-shadow: 0 5px 18px #0005;
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+
+.pwa-status svg { flex: 0 0 auto; color: var(--gold); }
+.pwa-floating-controls { position: fixed; right: 14px; bottom: max(14px, env(safe-area-inset-bottom)); z-index: 30; display: flex; width: min(360px, calc(100vw - 28px)); flex-direction: column; gap: 9px; align-items: stretch; }
+.pwa-install-card, .pwa-update-card, .pwa-cache-warning { display: flex; align-items: center; gap: 10px; padding: 11px 12px; color: #f5eee5; background: #171512; border: 1px solid #55432e; border-radius: 9px; box-shadow: 0 6px 22px #0006; font-size: 12px; }
+.pwa-install-card, .pwa-update-card { flex-wrap: wrap; }
+.pwa-install-button, .pwa-update-button { min-height: 36px; display: inline-flex; flex: 1 1 auto; align-items: center; justify-content: center; gap: 7px; padding: 7px 10px; color: #111; background: var(--gold); border: 1px solid var(--gold); border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; }
+.pwa-install-button:hover, .pwa-update-button:hover { background: #e0b980; }
+.pwa-update-button:disabled { opacity: .7; cursor: wait; }
+.pwa-dismiss-button { padding: 5px 7px; color: #d6aa70; background: transparent; border: 0; font: inherit; cursor: pointer; }
+.pwa-ios-instructions { flex: 1 0 100%; margin: 0; color: #e7ded2; line-height: 1.5; }
+.pwa-cache-warning { justify-content: space-between; overflow-wrap: anywhere; }
+.pwa-cache-warning button { display: grid; flex: 0 0 auto; place-items: center; padding: 5px; color: #e7ded2; background: transparent; border: 0; cursor: pointer; }
+.announcement-media-unavailable { padding: 14px; color: #d6aa70; font-size: 13px; text-align: center; }
+.announcement-slide-content .announcement-media-unavailable { align-self: center; }
+
+@media (max-width: 520px) {
+  .pwa-floating-controls { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: min(340px, calc(100vw - 20px)); }
+  .pwa-status { top: max(8px, env(safe-area-inset-top)); font-size: 11px; }
+}
+
 .presentation-page {
   position: relative;
   width: 100%;

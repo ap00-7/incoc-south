@@ -17,6 +17,7 @@ import { formatScheduleDuration } from "@/lib/domain/schedule";
 import { notifyDataChanged } from "@/spa/data-events";
 import { useAuth } from "@/spa/auth-provider";
 import { useAsyncResource } from "@/spa/use-async-resource";
+import { readPublicSnapshot, reportOfflineCacheError, savePublicSnapshot } from "@/lib/offline-content";
 
 const PAGE_SIZE = 50;
 const LOAD_PAGE_SIZE = 500;
@@ -204,6 +205,35 @@ async function loadSharedContent(isOwner: boolean) {
 
 type SharedContent = Awaited<ReturnType<typeof loadSharedContent>>;
 
+function hasSignedStorageUrl(value: string | null) {
+  if (!value) return false;
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.pathname.includes("/storage/v1/object/sign/")
+      || url.searchParams.has("token")
+      || url.searchParams.has("signature");
+  } catch {
+    return false;
+  }
+}
+
+function publicSharedContent(content: SharedContent): SharedContent {
+  return {
+    ...content,
+    schedules: content.schedules
+      .filter((schedule) => schedule.status === "published")
+      .map((schedule) => ({
+        ...schedule,
+        schedule_items: schedule.schedule_items.map((item) => ({
+          ...item,
+          media_url: hasSignedStorageUrl(item.media_url) ? null : item.media_url,
+          background_image_url: hasSignedStorageUrl(item.background_image_url) ? null : item.background_image_url,
+          link_url: hasSignedStorageUrl(item.link_url) ? null : item.link_url,
+        })),
+      })),
+  };
+}
+
 function ResourceMessage({ error, retry, children }: { error: string; retry?: () => void; children?: React.ReactNode }) {
   return <div className="content-wrap">
     <div className="notice notice-warning" role="alert">
@@ -361,7 +391,9 @@ function SongDetailPage({ songs, schedules }: {
       ? <Suspense fallback={<div className="content-wrap"><InlineLoading>Loading song…</InlineLoading></div>}>
           <SongPageContent song={song} />
         </Suspense>
-      : <div className="content-wrap"><ResourceMessage error="This song is not available." /></div>}
+    : <div className="content-wrap"><ResourceMessage error={!navigator.onLine
+      ? "This song is not in the songs saved on this device. Reconnect to load it."
+      : "This song is not available."} /></div>}
   </PageShell>;
 }
 
@@ -1012,6 +1044,7 @@ export function App() {
     let refreshQueued = false;
 
     const refreshShared = (): Promise<void> => {
+      if (!navigator.onLine) return Promise.resolve();
       if (refreshInFlight) {
         refreshQueued = true;
         return refreshInFlight;
@@ -1019,14 +1052,19 @@ export function App() {
       const hasCurrentSnapshot = snapshotRef.current?.isOwner === isOwner;
       setSharedLoading(!hasCurrentSnapshot);
       setSharedRefreshing(hasCurrentSnapshot);
+      const syncStartedAt = Date.now();
       refreshInFlight = loadSharedContent(isOwner).then((content) => {
         if (!active) return;
         const nextSnapshot = { isOwner, content };
         snapshotRef.current = nextSnapshot;
         setSnapshot(nextSnapshot);
         setSharedError("");
+        void savePublicSnapshot("shared-content", publicSharedContent(content), syncStartedAt)
+          .catch(reportOfflineCacheError);
       }).catch((loadError: unknown) => {
-        if (active) setSharedError(loadError instanceof Error ? loadError.message : "Unable to load shared content.");
+        if (active) setSharedError(navigator.onLine
+          ? loadError instanceof Error ? loadError.message : "Unable to load shared content."
+          : "");
       }).finally(() => {
         refreshInFlight = null;
         if (!active) return;
@@ -1041,7 +1079,46 @@ export function App() {
     };
 
     const onDataChanged = () => { void refreshShared(); };
+    const onOnline = () => { void refreshShared(); };
+    const onOffline = () => {
+      const current = snapshotRef.current;
+      if (!current) return;
+      const publicSnapshot = { isOwner: current.isOwner, content: publicSharedContent(current.content) };
+      snapshotRef.current = publicSnapshot;
+      setSnapshot(publicSnapshot);
+    };
     window.addEventListener("incoc:data-changed", onDataChanged);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    void (async () => {
+      try {
+        const cached = await readPublicSnapshot<SharedContent>("shared-content");
+        if (active && cached) {
+          const cachedSnapshot = { isOwner, content: cached };
+          snapshotRef.current = cachedSnapshot;
+          setSnapshot(cachedSnapshot);
+          setSharedError("");
+          setSharedLoading(false);
+        }
+      } catch (error) {
+        reportOfflineCacheError(error);
+      }
+      if (!active) return;
+      if (!navigator.onLine) {
+        if (!snapshotRef.current) setSharedError("You are offline and this content has not been saved on this device yet.");
+        setSharedLoading(false);
+        return;
+      }
+      if (!configured) {
+        if (!snapshotRef.current) {
+          setSharedError("Supabase is not configured. Add the required public project settings to load shared content.");
+          setSharedLoading(false);
+        }
+        return;
+      }
+      void refreshShared();
+    })();
+
     if (configured) {
       const supabase = createClient();
       const channel = supabase.channel("incoc-shared-content")
@@ -1054,19 +1131,19 @@ export function App() {
           if (hasConnected) notifyDataChanged();
           hasConnected = true;
         });
-      void refreshShared();
       return () => {
         active = false;
         window.removeEventListener("incoc:data-changed", onDataChanged);
+        window.removeEventListener("online", onOnline);
+        window.removeEventListener("offline", onOffline);
         void supabase.removeChannel(channel);
       };
     }
-
-    setSharedError("Supabase is not configured. Add the required public project settings to load shared content.");
-    setSharedLoading(false);
     return () => {
       active = false;
       window.removeEventListener("incoc:data-changed", onDataChanged);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
     };
   }, [authLoading, configured, isOwner, retryCount]);
 

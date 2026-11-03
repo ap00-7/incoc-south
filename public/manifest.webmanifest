@@ -1,6 +1,7 @@
 {
   "name": "INCOC South",
   "short_name": "INCOC South",
+  "description": "Indian Church of Christ - South Sector",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

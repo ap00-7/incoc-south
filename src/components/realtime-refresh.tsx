@@ -24,6 +24,7 @@ export function RealtimeRefresh({
   showUnavailableMessage?: boolean;
 }) {
   const [unavailable, setUnavailable] = useState(false);
+  const [online, setOnline] = useState(navigator.onLine);
   const onChangeRef = useRef(onChange);
   const onDeleteRef = useRef(onDelete);
   const serialized = useMemo(() => JSON.stringify(subscriptions), [subscriptions]);
@@ -35,6 +36,17 @@ export function RealtimeRefresh({
   useEffect(() => {
     onDeleteRef.current = onDelete;
   }, [onDelete]);
+
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const filters = JSON.parse(serialized) as RealtimeFilter[];
@@ -138,7 +150,7 @@ export function RealtimeRefresh({
     };
   }, [notifyGlobalDataChange, refreshOnSubscribe, serialized]);
 
-  if (!unavailable || !showUnavailableMessage) return null;
+  if (!unavailable || !online || !showUnavailableMessage) return null;
   return <p className="realtime-notice" role="status">
     Live updates are temporarily unavailable. Existing content remains available.{" "}
     <button type="button" className="text-link" onClick={() => {
