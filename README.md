@@ -16,7 +16,7 @@ This is a Vite + React Router single-page application with Supabase Auth, Postgr
 - Public published service details that omit private notes and draft schedules.
 - Deterministic lyric/content slide generation shared by preview and projector mode.
 - Projector keyboard navigation, fullscreen, item navigation, and optional signed-in owner-controlled synchronized sessions.
-- An installable PWA with a versioned service worker and persistent offline copies of public songs, published schedules, and announcements.
+- An installable PWA with a versioned service worker and offline application shell.
 - Scoped Realtime refreshes for song, schedule, membership, and presentation changes, plus a short-lived in-memory route-data cache.
 - A Vercel serverless invitation endpoint that verifies the signed-in owner's membership before using the server-only service-role key.
 - Versioned database migrations and pgTAP tests for tenant isolation, draft visibility, write permissions, private notes, and presentation control.
@@ -73,11 +73,11 @@ The `.env.example` file contains placeholders only. `.env.local` is ignored by G
 
 The production Vite site is also an installable PWA at `https://incoc-south.vercel.app/`. Android and supported desktop browsers show their native install option when available. On iPhone and iPad, open the site in Safari, use **Share**, then **Add to Home Screen**. Installation does not require an app store.
 
-The service worker caches the application shell, built JavaScript and CSS, icons, Google Fonts responses, and a small bounded set of public announcement images. The app stores public content snapshots in IndexedDB: all publicly readable INCOC South songs and their sections, only published schedules, and only announcements in published collections. Owner drafts, private administrative data, auth sessions, API responses, signed storage URLs, and presentation documents are not added to these offline snapshots. Previously fetched public text remains available after the app is closed and reopened; media is available offline only if it was cached while online.
+The service worker caches only the application shell, bounded same-origin static build assets, icons, and Google Fonts responses. It does not cache Supabase/authentication requests, songs, schedules, announcements, private data, or Realtime connections. Previously loaded dynamic pages still need a working network to fetch their latest content; offline mode can show the shell and a clear fetch error, but is not an offline content mode.
 
 When connectivity returns, the app fetches fresh content and its existing Supabase Realtime channels reconnect using the Supabase client. The app also performs an online-transition refresh so changes missed while disconnected are loaded without a manual restart. A waiting service-worker update is offered to the user and only takes over after **Update now** is selected.
 
-PWA deployment requires HTTPS (Vercel's production domain already provides it). Keep `/sw.js` served from the site root with its no-cache response header, and do not rewrite it to the SPA HTML. The Vite build emits `asset-manifest.json`, which the service worker uses to precache hashed JS and CSS. Offline support is browser/device-local; users need to open the relevant public content online at least once on each device. Browser storage may be cleared or evicted by the operating system, and browsers differ in install prompts and offline storage quotas.
+PWA deployment requires HTTPS (Vercel's production domain already provides it). Keep `/sw.js` served from the site root with its no-cache response header, and do not rewrite it to the SPA HTML. The Vite build emits `asset-manifest.json`, which the service worker uses to precache hashed JS and CSS.
 
 ## First owner provisioning
 

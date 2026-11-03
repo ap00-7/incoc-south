@@ -3,20 +3,18 @@ const CACHE_PREFIX = "incoc-south-";
 const SHELL_CACHE = `${CACHE_PREFIX}${BUILD_VERSION}-shell`;
 const ASSET_CACHE = `${CACHE_PREFIX}${BUILD_VERSION}-assets`;
 const FONT_CACHE = `${CACHE_PREFIX}${BUILD_VERSION}-fonts`;
-const MEDIA_CACHE = `${CACHE_PREFIX}${BUILD_VERSION}-announcement-media`;
 const MAX_ASSETS = 100;
 const MAX_PRECACHE_ASSETS = 50;
 const MAX_PRECACHE_BYTES = 25 * 1024 * 1024;
 const MAX_ASSET_BYTES = 3 * 1024 * 1024;
 const MAX_FONT_ASSETS = 30;
-const MAX_MEDIA_ASSETS = 24;
-const MAX_MEDIA_BYTES = 2 * 1024 * 1024;
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
   "/incoc-mark.svg",
   "/incoc-icon-192.png",
   "/incoc-icon-512.png",
+  "/incoc-icon-maskable-192.png",
   "/incoc-icon-maskable-512.png",
 ];
 
@@ -93,7 +91,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    const keep = new Set([SHELL_CACHE, ASSET_CACHE, FONT_CACHE, MEDIA_CACHE]);
+    const keep = new Set([SHELL_CACHE, ASSET_CACHE, FONT_CACHE]);
     const names = await caches.keys();
     await Promise.all(names
       .filter((name) => name.startsWith(CACHE_PREFIX) && !keep.has(name))
@@ -190,31 +188,4 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const isAnnouncementImage = url.pathname.includes("/storage/v1/object/public/announcement-images/");
-  const hasSignedToken = url.pathname.includes("/storage/v1/object/sign/")
-    || url.searchParams.has("token")
-    || url.searchParams.has("signature");
-  if (isAnnouncementImage && !hasSignedToken) {
-    event.respondWith((async () => {
-      const cache = await caches.open(MEDIA_CACHE);
-      try {
-        const response = await fetch(request);
-        const contentType = response.headers.get("content-type") ?? "";
-        const size = Number(response.headers.get("content-length") ?? 0);
-        if (response.ok && contentType.startsWith("image/") && size <= MAX_MEDIA_BYTES) {
-          await cache.put(request, response.clone());
-          await trimCache(cache, MAX_MEDIA_ASSETS);
-        } else if (response.ok && contentType.startsWith("image/") && !size) {
-          const body = await response.clone().blob();
-          if (body.size <= MAX_MEDIA_BYTES) {
-            await cache.put(request, response.clone());
-            await trimCache(cache, MAX_MEDIA_ASSETS);
-          }
-        }
-        return response;
-      } catch {
-        return await cache.match(request) ?? Response.error();
-      }
-    })());
-  }
 });

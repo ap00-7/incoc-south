@@ -33,7 +33,6 @@ import {
 } from "@/lib/domain/announcement-body";
 import { useAuth } from "@/spa/auth-provider";
 import { notifyStorageChanged } from "@/spa/data-events";
-import { readPublicSnapshot, reportOfflineCacheError, savePublicSnapshot } from "@/lib/offline-content";
 
 const announcementBucket = "announcement-images";
 const maxAnnouncementImageSize = 50 * 1024 * 1024;
@@ -47,7 +46,6 @@ type AnnouncementItem = {
   body: string;
   position: number;
   updated_at: string;
-  offline_image_missing?: boolean;
 };
 
 type AnnouncementCollection = {
@@ -171,43 +169,11 @@ async function prepareAnnouncementImage(file: File): Promise<PreparedImage> {
   };
 }
 
-function hasSignedStorageUrl(value: string | null) {
-  if (!value) return false;
-  try {
-    const url = new URL(value, window.location.origin);
-    return url.pathname.includes("/storage/v1/object/sign/")
-      || url.searchParams.has("token")
-      || url.searchParams.has("signature");
-  } catch {
-    return false;
-  }
-}
-
-function publicAnnouncementData(data: AnnouncementData): AnnouncementData {
-  const collections = data.collections.filter((collection) => collection.is_published);
-  const collectionIds = new Set(collections.map((collection) => collection.id));
-  return {
-    ...data,
-    collections,
-    items: data.items
-      .filter((item) => collectionIds.has(item.collection_id))
-      .map((item) => {
-        const signedImage = hasSignedStorageUrl(item.image_url);
-        return {
-          ...item,
-          image_url: signedImage ? null : item.image_url,
-          ...(signedImage ? { offline_image_missing: true } : {}),
-        };
-      }),
-  };
-}
-
-function useAnnouncementData(publicOnly = false) {
+function useAnnouncementData() {
   const [data, setData] = useState<AnnouncementData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
-  const hasDataRef = useRef(Boolean(data));
   const reload = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
@@ -215,28 +181,6 @@ function useAnnouncementData(publicOnly = false) {
     setLoading(true);
     setError("");
     void (async () => {
-      if (publicOnly) {
-        try {
-          const cached = await readPublicSnapshot<AnnouncementData>("public-announcements");
-          if (active && cached) {
-            setData(cached);
-            hasDataRef.current = true;
-            setError("");
-            setLoading(false);
-          }
-        } catch (cacheError) {
-          reportOfflineCacheError(cacheError);
-        }
-      }
-      if (!navigator.onLine) {
-        if (active && !hasDataRef.current) {
-          setError("You are offline and announcements have not been saved on this device yet.");
-        }
-        if (active) setLoading(false);
-        return;
-      }
-
-      const syncStartedAt = Date.now();
       const supabase = createClient();
       const { data: church, error: churchError } = await supabase.from("churches")
         .select("id").eq("slug", "incoc-south").maybeSingle();
@@ -251,35 +195,19 @@ function useAnnouncementData(publicOnly = false) {
       if (collectionResult.error) throw new Error(`Unable to load the announcement collection: ${collectionResult.error.message}`);
       if (itemsResult.error) throw new Error(`Unable to load announcements: ${itemsResult.error.message}`);
       if (active) {
-        const nextData = {
+        setData({
           churchId: church.id,
           collections: collectionResult.data ?? [],
           items: itemsResult.data ?? [],
-        };
-        const visibleData = publicOnly ? publicAnnouncementData(nextData) : nextData;
-        setData(visibleData);
-        hasDataRef.current = true;
-        setError("");
-        if (publicOnly) {
-          void savePublicSnapshot("public-announcements", visibleData, syncStartedAt)
-            .catch(reportOfflineCacheError);
-        }
+        });
       }
     })().catch((loadError: unknown) => {
-      if (active) setError(hasDataRef.current
-        ? navigator.onLine
-          ? "Unable to refresh announcements. Previously loaded announcements remain available."
-          : ""
-        : loadError instanceof Error ? loadError.message : "Unable to load announcements.");
+      if (active) setError(loadError instanceof Error ? loadError.message : "Unable to load announcements.");
     }).finally(() => {
       if (active) setLoading(false);
     });
-    window.addEventListener("online", reload);
-    return () => {
-      active = false;
-      window.removeEventListener("online", reload);
-    };
-  }, [publicOnly, reload, revision]);
+    return () => { active = false; };
+  }, [revision]);
 
   return { data, loading, error, reload };
 }
@@ -463,7 +391,7 @@ function AnnouncementItemEditor({
 }
 
 export function AnnouncementPublicPage() {
-  const { data, loading, error, reload } = useAnnouncementData(true);
+  const { data, loading, error, reload } = useAnnouncementData();
   const availableCollections = data?.collections.filter((collection) => collection.is_published) ?? [];
 
   return <section className="announcement-public content-wrap">
@@ -749,23 +677,13 @@ export function AnnouncementManagerPage() {
   </section>;
 }
 
-function AnnouncementImage({ src }: { src: string }) {
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  if (failed) return <p className="announcement-media-unavailable" role="status">
-    {navigator.onLine ? "This announcement image could not be loaded." : "This image is not available offline."}
-  </p>;
-  return <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />;
-}
-
 function AnnouncementPublicItem({ item }: { item: AnnouncementItem }) {
-  const hasContent = Boolean(item.title.trim() || item.body.trim() || item.image_url || item.offline_image_missing);
+  const hasContent = Boolean(item.title.trim() || item.body.trim() || item.image_url);
   if (!hasContent) return null;
   return <article className="announcement-public-item">
     <div className="announcement-public-item-copy">
       {item.title.trim() && <h2>{item.title}</h2>}
-      {item.image_url && <AnnouncementImage src={item.image_url} />}
-      {item.offline_image_missing && <p className="announcement-media-unavailable">This image is not available offline.</p>}
+      {item.image_url && <img src={item.image_url} alt="" loading="lazy" />}
       {item.body.trim() && <div className="announcement-public-item-body">{announcementBodyNodes(item.body)}</div>}
     </div>
   </article>;
@@ -786,13 +704,12 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
           gridTemplateColumns: split ? "minmax(0, 1fr) minmax(0, 1fr)" : undefined,
         }}
       >
-        {item.image_url && <AnnouncementImage src={item.image_url} />}
-        {item.offline_image_missing && <p className="announcement-media-unavailable">This image is not available offline.</p>}
+        {item.image_url && <img src={item.image_url} alt="" />}
         {hasBody
           ? <div
             className="announcement-slide-body"
           >{announcementBodyNodes(item.body)}</div>
-          : !hasImage && !item.offline_image_missing && <p className="announcement-slide-empty">No announcement content.</p>}
+          : !hasImage && <p className="announcement-slide-empty">No announcement content.</p>}
       </div>
     </div>
   </>;
@@ -800,7 +717,7 @@ function AnnouncementSlide({ item, zoom }: { item: AnnouncementItem; zoom: numbe
 
 export function AnnouncementSlidesPage() {
   const location = useLocation();
-  const { data, loading, error, reload } = useAnnouncementData(true);
+  const { data, loading, error, reload } = useAnnouncementData();
   const [searchParams, setSearchParams] = useSearchParams();
   const [index, setIndex] = useState(0);
   const [zoom, setZoom] = useState(1);

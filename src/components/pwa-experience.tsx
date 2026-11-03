@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { Download, RefreshCw, WifiOff, X } from "lucide-react";
+import { Download, RefreshCw, WifiOff } from "lucide-react";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -36,7 +36,6 @@ export function PwaExperience() {
   const [showIosInstructions, setShowIosInstructions] = useState(false);
   const [updateRegistration, setUpdateRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [updating, setUpdating] = useState(false);
-  const [cacheError, setCacheError] = useState("");
 
   useEffect(() => {
     const onOnline = () => setOnline(true);
@@ -49,22 +48,25 @@ export function PwaExperience() {
       event.preventDefault();
       setInstallPrompt(event as InstallPromptEvent);
     };
-    const onCacheError = (event: Event) => {
-      const message = (event as CustomEvent<unknown>).detail;
-      setCacheError(typeof message === "string" ? message : "Offline content could not be saved.");
-    };
-
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     window.addEventListener("appinstalled", onInstalled);
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-    window.addEventListener("incoc:offline-cache-error", onCacheError);
+    if ("indexedDB" in window) {
+      try {
+        const request = window.indexedDB.deleteDatabase("incoc-south-offline");
+        request.onerror = () => console.error("Unable to remove legacy offline content storage.", request.error);
+        request.onblocked = () => console.error("Legacy offline content storage is still open in another tab.");
+      } catch (error) {
+        console.error("Unable to remove legacy offline content storage.", error);
+      }
+    }
+
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("appinstalled", onInstalled);
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
-      window.removeEventListener("incoc:offline-cache-error", onCacheError);
     };
   }, []);
 
@@ -151,13 +153,9 @@ export function PwaExperience() {
   return <>
     {!online && <div className="pwa-status" role="status">
       <WifiOff size={15} aria-hidden="true" />
-      <span>Offline — showing previously loaded content where available.</span>
+      <span>Offline — live content updates are paused.</span>
     </div>}
-    {(cacheError || showInstall || showUpdate) && <div className="pwa-floating-controls">
-      {cacheError && <div className="pwa-cache-warning" role="status">
-        <span>Offline copy could not be updated: {cacheError}</span>
-        <button type="button" aria-label="Dismiss offline storage warning" onClick={() => setCacheError("")}><X size={15} /></button>
-      </div>}
+    {(showInstall || showUpdate) && <div className="pwa-floating-controls">
       {showInstall && <section className="pwa-install-card" aria-label="Install INCOC South">
         <button type="button" className="pwa-install-button" onClick={() => void installApplication()}>
           <Download size={16} aria-hidden="true" />

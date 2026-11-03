@@ -18,7 +18,7 @@ function pwaServiceWorker(): Plugin {
         hash.update(fileName);
         hash.update(output.type === "chunk" ? output.code : output.source);
       }
-      for (const fileName of ["manifest.webmanifest", "incoc-mark.svg", "incoc-icon-192.png", "incoc-icon-512.png", "incoc-icon-maskable-512.png"]) {
+      for (const fileName of ["manifest.webmanifest", "incoc-mark.svg", "incoc-icon-192.png", "incoc-icon-512.png", "incoc-icon-maskable-192.png", "incoc-icon-maskable-512.png"]) {
         hash.update(readFileSync(new URL(`./public/${fileName}`, import.meta.url)));
       }
       const buildVersion = hash.digest("hex").slice(0, 12);

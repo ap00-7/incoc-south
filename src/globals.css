@@ -1671,11 +1671,6 @@ body {
 .pwa-update-button:disabled { opacity: .7; cursor: wait; }
 .pwa-dismiss-button { padding: 5px 7px; color: #d6aa70; background: transparent; border: 0; font: inherit; cursor: pointer; }
 .pwa-ios-instructions { flex: 1 0 100%; margin: 0; color: #e7ded2; line-height: 1.5; }
-.pwa-cache-warning { justify-content: space-between; overflow-wrap: anywhere; }
-.pwa-cache-warning button { display: grid; flex: 0 0 auto; place-items: center; padding: 5px; color: #e7ded2; background: transparent; border: 0; cursor: pointer; }
-.announcement-media-unavailable { padding: 14px; color: #d6aa70; font-size: 13px; text-align: center; }
-.announcement-slide-content .announcement-media-unavailable { align-self: center; }
-
 @media (max-width: 520px) {
   .pwa-floating-controls { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: min(340px, calc(100vw - 20px)); }
   .pwa-status { top: max(8px, env(safe-area-inset-top)); font-size: 11px; }
