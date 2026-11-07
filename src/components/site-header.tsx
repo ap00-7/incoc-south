@@ -1,18 +1,13 @@
 import { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { BookOpen, CalendarDays, Menu, X } from "lucide-react";
-import { BrandMark } from "@/components/brand-mark";
 
 export function SiteHeader({ showNavigation }: { showNavigation: boolean }) {
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
 
   return (
-    <header className="site-header">
+    <header className="site-header site-header-navigation">
       <div className="header-inner">
-        <Link className="app-brand" to="/" aria-label="INCOC South home">
-          <BrandMark />
-          <span><strong>INCOC South</strong><small>Church in South Sector</small></span>
-        </Link>
         {showNavigation && <>
           <button
             className="mobile-nav-toggle"

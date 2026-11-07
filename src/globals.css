@@ -23,6 +23,11 @@
 }
 
 * { box-sizing: border-box; }
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
 html { min-height: 100%; background: var(--paper); }
 body {
   min-height: 100vh;
@@ -306,18 +311,15 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .programme-song + .programme-metadata { margin-top: 5px; }
 .programme-metadata { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 18px; margin: 9px 0 0; padding: 0; }
 .programme-metadata-1 { grid-template-columns: minmax(0, min(100%, 360px)); }
-.programme-metadata-field { min-width: 0; padding: 0 10px 0 0; }
-.programme-metadata-field dt { margin: 0 0 3px; color: var(--muted); font-size: 13px; font-weight: 650; letter-spacing: .055em; line-height: 1.35; text-transform: uppercase; }
-.programme-metadata-field dd { min-width: 0; margin: 0; color: var(--ink); font-size: 15px; font-weight: 550; line-height: 1.45; overflow-wrap: anywhere; }
+.programme-metadata-field { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; padding: 0 10px 0 0; }
+.programme-metadata-field dt { margin: 0; color: var(--muted); font-size: 13px; font-weight: 650; letter-spacing: .055em; line-height: 1.35; text-transform: uppercase; }
+.programme-metadata-field dd { min-width: 0; flex: 0 1 auto; margin: 0; color: var(--ink); font-size: 15px; font-weight: 550; line-height: 1.45; overflow-wrap: anywhere; }
 .programme-metadata-field dd a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
 .programme-metadata-field dd a:hover { color: var(--gold-bright); }
 .programme-metadata-field dd .programme-duration { color: var(--ink); font-variant-numeric: tabular-nums; }
-.programme-metadata-1 .programme-metadata-field { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
-.programme-metadata-1 .programme-metadata-field dt { margin: 0; }
+.programme-metadata-1 .programme-metadata-field { gap: 4px 12px; }
 .programme-metadata-1 .programme-metadata-field dd { flex: 1 1 auto; }
-.programme-metadata-2 .programme-metadata-field { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 5px; }
-.programme-metadata-2 .programme-metadata-field dt { margin: 0; }
-.programme-metadata-2 .programme-metadata-field dd { flex: 0 1 auto; }
+.programme-metadata-2 .programme-metadata-field { gap: 0 5px; }
 @media (max-width: 600px) {
   .schedule-detail-heading { margin-bottom: 17px; padding: 4px 4px 10px; }
   .schedule-detail-heading .detail-title { font-size: clamp(30px, 8vw, 38px); line-height: 1.16; }
@@ -2763,6 +2765,60 @@ body {
     text-align: center;
   }
   .primary-nav a span { max-width: 100%; overflow-wrap: anywhere; }
+}
+
+.site-header-navigation {
+  position: fixed;
+  z-index: 20;
+  inset: 0 0 auto;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+.site-header-navigation .header-inner {
+  position: relative;
+  display: flex;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  justify-content: flex-end;
+  padding: max(4px, env(safe-area-inset-top)) 8px 0;
+  pointer-events: none;
+}
+.site-header-navigation .mobile-nav-toggle {
+  display: inline-flex;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  pointer-events: auto;
+}
+.site-header-navigation .primary-nav,
+.site-header-navigation .primary-nav[data-open="true"] {
+  position: absolute;
+  top: 48px;
+  right: 8px;
+  display: none;
+  width: min(230px, calc(100vw - 24px));
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 8px;
+  background: #171714;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgb(0 0 0 / 40%);
+  pointer-events: auto;
+}
+.site-header-navigation .primary-nav[data-open="true"] { display: grid; }
+.site-header-navigation .primary-nav a {
+  min-height: 44px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 0 12px;
+  font-size: 13px;
+  text-align: left;
 }
 
 .admin-content .schedule-items-editor > .inline-owner-editor {

@@ -129,8 +129,9 @@ function PageShell({ children, swipeHandlers }: {
 }) {
   const { pathname } = useLocation();
   const isOwnerRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isPresentationRoute = pathname.startsWith("/present/") || pathname === "/announcement/slides";
-  const showHeader = !isOwnerRoute && !isPresentationRoute;
+  const isDetailRoute = /^\/(?:songs|schedule)\/[^/]+$/.test(pathname);
+  const isPresentationRoute = pathname === "/slides" || pathname.startsWith("/present/") || pathname === "/announcement/slides";
+  const showHeader = !isOwnerRoute && !isDetailRoute && !isPresentationRoute;
   return <>
     {showHeader && <SiteHeader showNavigation />}
     <main
