@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { BookOpen, CalendarDays } from "lucide-react";
+import { Link, NavLink } from "react-router-dom";
+import { BookOpen, CalendarDays, Megaphone } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 
 export function SiteHeader({ showNavigation }: { showNavigation: boolean }) {
@@ -11,8 +11,9 @@ export function SiteHeader({ showNavigation }: { showNavigation: boolean }) {
           <span><strong>INCOC South</strong><small>Church in South Sector</small></span>
         </Link>
         {showNavigation && <nav className="primary-nav" aria-label="Main navigation">
-          <Link to="/songs"><BookOpen size={15} aria-hidden="true" /> Songbook</Link>
-          <Link to="/schedule"><CalendarDays size={15} aria-hidden="true" /> Schedule</Link>
+          <NavLink to="/songs"><BookOpen size={16} aria-hidden="true" /><span>Songbook</span></NavLink>
+          <NavLink to="/schedule"><CalendarDays size={16} aria-hidden="true" /><span>Schedule</span></NavLink>
+          <NavLink to="/announcement" aria-label="Announcements"><Megaphone size={16} aria-hidden="true" /><span>Updates</span></NavLink>
         </nav>}
       </div>
     </header>

@@ -168,7 +168,7 @@ function emptyDraft(
     customTitle: false,
     customTitleValue: "",
     item_type: itemType,
-    title: itemType === "scripture_reading" ? "Scripture" : itemType === "presentation" ? "Presentation" : itemType === "song" ? "Communion Song" : "",
+    title: itemType === "scripture_reading" ? "Scripture" : itemType === "presentation" ? "Presentation" : "",
     song_id: "",
     duration_minutes: "",
     leader_name: "",

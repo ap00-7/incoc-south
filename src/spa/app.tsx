@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, HardDrive, LogOut, MapPin, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, FileText, LogOut, MapPin, Megaphone, Menu, MonitorPlay, Plus, Search, Trash2, Users, X } from "lucide-react";
 import { ConfirmButton } from "@/components/confirm-button";
 import { IntentPrefetchLink } from "@/components/intent-prefetch-link";
 import { RealtimeRefresh } from "@/components/realtime-refresh";
@@ -31,7 +31,6 @@ const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-ma
 const AnnouncementManagerPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementManagerPage })));
 const AnnouncementPublicPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementPublicPage })));
 const AnnouncementSlidesPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementSlidesPage })));
-const StorageManagerPage = lazy(() => import("@/components/admin/storage-manager").then((module) => ({ default: module.StorageManagerPage })));
 const InviteMemberForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.InviteMemberForm })));
 const MemberRoleForm = lazy(() => import("@/components/admin/member-action-forms").then((module) => ({ default: module.MemberRoleForm })));
 const LoginForm = lazy(() => import("@/components/auth/login-form").then((module) => ({ default: module.LoginForm })));
@@ -128,7 +127,9 @@ function PageShell({ children, swipeHandlers }: {
   swipeHandlers?: PageSwipeHandlers;
 }) {
   const { pathname } = useLocation();
-  const showHeader = pathname === "/";
+  const isOwnerRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const isPresentationRoute = pathname.startsWith("/present/") || pathname === "/announcement/slides";
+  const showHeader = !isOwnerRoute && !isPresentationRoute;
   return <>
     {showHeader && <SiteHeader showNavigation />}
     <main
@@ -216,32 +217,32 @@ function ResourceMessage({ error, retry, children }: { error: string; retry?: ()
 
 function HomePage() {
   const features = [
-    { icon: BookOpen, title: "Worship Songbook", text: "Browse worship songs, lyrics, and available translations." },
-    { icon: CalendarDays, title: "Sunday Schedule", text: "Organize Sunday service schedules and programme details." },
-    { icon: MonitorPlay, title: "Presentation Slides", text: "Present song lyrics and service content during worship." },
+    { icon: BookOpen, title: "Songbook", text: "Browse worship songs, lyrics, and available translations.", href: "/songs", action: "Browse songs" },
+    { icon: CalendarDays, title: "Sunday schedule", text: "View service dates, programme details, and song links.", href: "/schedule", action: "View schedule" },
+    { icon: MonitorPlay, title: "Presentation slides", text: "Open the slides prepared for each service.", href: "/slides", action: "View slides" },
+    { icon: Megaphone, title: "Announcements", text: "Read the latest updates from the South Sector.", href: "/announcement", action: "Read announcements" },
   ];
   return <PageShell>
     <div className="content-wrap about-page">
       <section className="about-intro" aria-labelledby="about-title">
         <p className="eyebrow">INDIAN CHURCH OF CHRIST · SOUTH SECTOR</p>
-        <h1 className="detail-title" id="about-title">About INCOC South</h1>
+        <h1 className="detail-title" id="about-title">Worship, prepared together.</h1>
         <p className="about-lead">INCOC South is a digital platform for the Indian Church of Christ – South Sector, bringing worship songs and lyrics, Sunday service schedules, and presentation content together to support service preparation.</p>
       </section>
       <section className="about-features" aria-labelledby="about-features-title">
         <div className="section-intro">
-          <p className="eyebrow">CORE FEATURES</p>
-          <h2 id="about-features-title">Resources for Sunday worship</h2>
+          <p className="eyebrow">YOUR WORSHIP RESOURCES</p>
+          <h2 id="about-features-title">Everything for Sunday, in one place.</h2>
         </div>
         <div className="experience-grid">
-          {features.map(({ icon: Icon, title, text }) => <article className="experience-card about-feature-card" key={title}>
+          {features.map(({ icon: Icon, title, text, href, action }) => <Link className="experience-card about-feature-card" to={href} key={title}>
             <span className="experience-icon"><Icon size={19} aria-hidden="true" /></span>
             <h3>{title}</h3>
             <p>{text}</p>
-          </article>)}
+            <span className="about-feature-action">{action}<ArrowRight size={15} aria-hidden="true" /></span>
+          </Link>)}
         </div>
       </section>
-      <p className="about-closing">INCOC South supports organized worship and Sunday service preparation.</p>
-      <p className="about-announcement-link"><Link className="button button-secondary" to="/announcement">Announcements</Link></p>
     </div>
   </PageShell>;
 }
@@ -641,7 +642,6 @@ function AdminLayout() {
     { label: "Songs", href: "/admin/songs" },
     { label: "Sunday Schedule & Slides", href: "/admin/schedules" },
     { label: "Announcements", href: "/admin/announcements" },
-    { label: "Storage Manager", href: "/admin/storage" },
     { label: "Members", href: "/admin/members" },
   ];
 
@@ -730,7 +730,6 @@ function AdminDashboard() {
     { title: "Songbook management", description: "Add, edit, and organize songs, sections, and translations.", href: "/admin/songs", icon: BookOpen },
     { title: "Schedule and slides", description: "Plan services, reorder programme items, and manage slide content and visibility.", href: "/admin/schedules", icon: CalendarDays },
     { title: "Announcement management", description: "Create collections and announcement items, control publishing, and manage images and text.", href: "/admin/announcements", icon: FileText },
-    { title: "Storage Manager", description: "Review storage usage, browse uploaded files, and safely remove unreferenced objects.", href: "/admin/storage", icon: HardDrive },
     { title: "Member access", description: "Invite members and manage their church roles.", href: "/admin/members", icon: Users },
   ];
   return <>
@@ -1125,7 +1124,6 @@ export function App() {
           <Route path="schedules/new" element={<AdminScheduleCreatePage />} />
           <Route path="schedules/:scheduleId" element={<AdminScheduleEditPage sharedContent={sharedContent} />} />
           <Route path="announcements" element={<AnnouncementManagerPage />} />
-          <Route path="storage" element={<StorageManagerPage />} />
           <Route path="members" element={<AdminMembersPage />} />
         </Route>
       </Route>

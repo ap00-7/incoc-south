@@ -264,10 +264,16 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
   const pendingDeleteVerseNumber = pendingDeleteSection?.section_type === "verse"
     ? sections.slice(0, pendingDeleteIndex + 1).filter(({ section_type }) => section_type === "verse").length
     : undefined;
+  const editingSection = sections.find((section) => section.key === editingKey);
+  const editingSectionIndex = editingSection ? sections.findIndex(({ key }) => key === editingSection.key) : -1;
+  const editingSectionLabel = editingSection
+    ? sectionTitle(editingSection, editingSection.section_type === "verse"
+      ? sections.slice(0, editingSectionIndex + 1).filter(({ section_type }) => section_type === "verse").length
+      : undefined)
+    : "lyrics";
   const primarySpecialKeys = new Set((["pre_chorus", "chorus", "bridge"] as const)
     .map((type) => sections.find((section) => section.section_type === type)?.key));
   const additionalSections = sections.filter((section) => section.section_type !== "verse" && !primarySpecialKeys.has(section.key));
-  const editingSection = sections.find((section) => section.key === editingKey);
   const modalDirty = Boolean(workingSection && editingSection && JSON.stringify(workingSection) !== JSON.stringify(editingSection));
 
   function openVerse(section: SectionDraft, trigger: HTMLElement) {
@@ -358,7 +364,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
 
   return (
     <form
-      className="form-stack admin-form song-editor"
+      className={`form-stack admin-form song-editor${song ? " song-editor-existing" : ""}`}
       action={formAction}
       data-dirty-form
       onSubmit={(event) => {
@@ -376,7 +382,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
       <input type="hidden" name="return_to" value={returnTo} />
       <input type="hidden" name="language" value={language} />
       <input type="hidden" name="sections" value={sectionPayload} />
-      <div className="song-editor-fields">
+      {!song && <div className="song-editor-fields">
         <label htmlFor="title">Title</label>
         <div className="song-title-autocomplete" ref={titleFieldRef}>
           <input
@@ -488,15 +494,15 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           required
         />
         {song && !songEditorLanguages.some((option) => option.value === song.language) && <p className="muted legacy-language-note">Existing language “{song.language}” will be retained unless you choose another.</p>}
-      </div>
+      </div>}
 
-      <fieldset className="song-options">
+      {!song && <fieldset className="song-options">
         <legend>Options</legend>
         <label className="check-row"><input type="checkbox" name="has_translation" checked={hasTranslation} onChange={(event) => setHasTranslation(event.target.checked)} /> Has Translation</label>
         <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>
-      </fieldset>
+      </fieldset>}
 
-      <label className="song-ending-control" htmlFor="song-ending">
+      {!song && <label className="song-ending-control" htmlFor="song-ending">
         <span>Ending</span>
         <Dropdown
           id="song-ending"
@@ -510,17 +516,17 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
           ]}
           onValueChange={(value) => setEnding(value as SongEnding)}
         />
-      </label>
+      </label>}
 
-      <section className="song-editor-section" aria-labelledby="verses-heading">
+      {!song && <section className="song-editor-section" aria-labelledby="verses-heading">
         <div className="song-editor-section-heading">
-          <div><p className="eyebrow">LYRICS</p><h2 id="verses-heading">Verses</h2></div>
-          <button className="button button-secondary" type="button" onClick={(event) => {
+          <div><p className="eyebrow">LYRICS</p><h2 id="verses-heading">{song ? "Song lyrics" : "Verses"}</h2></div>
+          {!song && <button className="button button-secondary" type="button" onClick={(event) => {
             const verse = blankSection(`section-${nextKey}`, "verse");
             setNextKey((current) => current + 1);
             setSections((current) => [...current, verse]);
             openVerse(verse, event.currentTarget);
-          }}><Plus size={16} /> Add item</button>
+          }}><Plus size={16} /> Add item</button>}
         </div>
         <ol className="verse-list">
           {numberedVerses.map(({ section, index, number }) => <li className="verse-row" key={section.key}>
@@ -536,9 +542,125 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
             </div>
           </li>)}
         </ol>
-      </section>
+      </section>}
 
-      {(["pre_chorus", "chorus", "bridge"] as const).map((type) => {
+      {song && <section className="songbook-edit-lyrics" aria-label="Song lyrics">
+        {sections.filter(({ section_type }) => section_type !== "pre_chorus" && section_type !== "bridge").map((section) => {
+          const index = sections.findIndex(({ key }) => key === section.key);
+          const label = sectionTitle(section, section.section_type === "verse"
+            ? sections.slice(0, index + 1).filter(({ section_type }) => section_type === "verse").length
+            : undefined);
+          const verseIndex = section.section_type === "verse"
+            ? verses.findIndex(({ key }) => key === section.key)
+            : -1;
+          return <div className="songbook-edit-entry" key={section.key}>
+            <button
+              className="songbook-edit-section"
+              type="button"
+              aria-label={`Edit ${label} lyrics`}
+              onClick={(event) => openVerse(section, event.currentTarget)}
+            >
+              <span className="songbook-edit-section-label">[{label}]</span>
+              {section.lyrics_language && language === "Multilingual" && <span className="translation-language">{section.lyrics_language}</span>}
+              <span className="songbook-edit-section-text">{section.lyrics.trim() || "No lyrics added"}</span>
+            </button>
+            {verseIndex >= 0 && <div className="songbook-edit-section-actions" aria-label={`${label} actions`}>
+              <button type="button" className="icon-button" aria-label="Duplicate verse" title="Duplicate verse" onClick={() => duplicateVerse(section)}><Copy size={15} /></button>
+              <button type="button" className="icon-button" aria-label={`Move verse ${verseIndex + 1} up`} title="Move up" disabled={verseIndex === 0} onClick={() => moveVerse(section.key, -1)}><ArrowUp size={15} /></button>
+              <button type="button" className="icon-button" aria-label={`Move verse ${verseIndex + 1} down`} title="Move down" disabled={verseIndex === verses.length - 1} onClick={() => moveVerse(section.key, 1)}><ArrowDown size={15} /></button>
+              <button type="button" className="icon-button danger" aria-label={`Delete verse ${verseIndex + 1}`} title="Delete verse" onClick={() => setDeleteVerseKey(section.key)}><Trash2 size={15} /></button>
+            </div>}
+          </div>;
+        })}
+        {hasTranslation && sections.some((section) => section.section_type !== "pre_chorus" && section.section_type !== "bridge" && section.translation.trim()) && <>
+          <hr className="songbook-edit-translation-divider" />
+          <div className="songbook-edit-translations" aria-label="Song translation">
+            {sections.filter((section) => section.section_type !== "pre_chorus" && section.section_type !== "bridge" && section.translation.trim()).map((section, index) => {
+              const originalIndex = sections.findIndex(({ key }) => key === section.key);
+              const label = sectionTitle(section, section.section_type === "verse"
+                ? sections.slice(0, originalIndex + 1).filter(({ section_type }) => section_type === "verse").length
+                : undefined);
+              return <button
+                className="songbook-edit-section"
+                type="button"
+                aria-label={`Edit ${label} translation`}
+                key={`${section.key}-translation-${index}`}
+                onClick={(event) => openVerse(section, event.currentTarget)}
+              >
+                <span className="songbook-edit-section-label">[{label}]</span>
+                {section.translation_language && <span className="translation-language">{section.translation_language}</span>}
+                <span className="songbook-edit-section-text">{section.translation}</span>
+              </button>;
+            })}
+          </div>
+        </>}
+      </section>}
+
+      {song && <section className="song-editor-section song-editor-metadata" aria-labelledby="song-details-heading">
+        <div className="song-editor-section-heading">
+          <div><p className="eyebrow">SONG DETAILS</p><h2 id="song-details-heading">Edit song details</h2></div>
+        </div>
+        <div className="song-editor-fields">
+          <label htmlFor="title">Title</label>
+          <input id="title" name="title" value={title} maxLength={200} required onChange={(event) => setTitle(event.currentTarget.value)} />
+          <label htmlFor="author">Author (optional)</label>
+          <input id="author" name="author" defaultValue={song.author ?? ""} maxLength={200} />
+          <label htmlFor="source">Source (optional)</label>
+          <input id="source" name="source" defaultValue={song.source ?? ""} maxLength={300} />
+          <label htmlFor="language">Language</label>
+          <Dropdown
+            id="language"
+            value={language}
+            options={[
+              ...(!songEditorLanguages.some((option) => option.value === song.language)
+                ? [{ label: song.language, value: song.language }]
+                : []),
+              ...songEditorLanguages.map((option) => ({ label: option.label, value: option.value })),
+            ]}
+            onValueChange={setLanguage}
+            required
+          />
+          <fieldset className="song-options">
+            <legend>Options</legend>
+            <label className="check-row"><input type="checkbox" name="has_translation" checked={hasTranslation} onChange={(event) => setHasTranslation(event.target.checked)} /> Has Translation</label>
+            <label className="check-row"><input type="checkbox" name="start_with_chorus" checked={startWithChorus} onChange={(event) => setStartWithChorus(event.target.checked)} /> Start With Chorus</label>
+          </fieldset>
+          <label className="song-ending-control" htmlFor="song-ending">
+            <span>Ending</span>
+            <Dropdown
+              id="song-ending"
+              value={ending}
+              options={[
+                { value: "bridge", label: "End with Bridge" },
+                { value: "chorus", label: "End with Chorus after Bridge" },
+                ...(sections.some(({ section_type }) => section_type === "pre_chorus")
+                  ? [{ value: "pre_chorus_chorus", label: "End with Pre-Chorus and Chorus after Bridge" }]
+                  : []),
+              ]}
+              onValueChange={(value) => setEnding(value as SongEnding)}
+            />
+          </label>
+        </div>
+        <div className="song-editor-special-sections" aria-label="Pre-chorus and bridge lyrics">
+          {(["pre_chorus", "bridge"] as const).map((type) => {
+            const section = sections.find((item) => item.section_type === type);
+            if (!section) return null;
+            const label = sectionTitle(section);
+            return <button
+              className="song-editor-special-section"
+              type="button"
+              key={section.key}
+              aria-label={`Edit ${label} lyrics`}
+              onClick={(event) => openVerse(section, event.currentTarget)}
+            >
+              <span>{label}</span>
+              <span>{section.lyrics.trim() ? "Lyrics added · Edit" : "No lyrics added · Add lyrics"}</span>
+            </button>;
+          })}
+        </div>
+      </section>}
+
+      {!song && (["pre_chorus", "chorus", "bridge"] as const).map((type) => {
         const section = sections.find((item) => item.section_type === type)!;
         const title = type === "pre_chorus" ? "Pre-Chorus" : `${type[0].toUpperCase()}${type.slice(1)}`;
         return <details className="song-part" key={type}>
@@ -565,7 +687,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
         </details>;
       })}
 
-      {additionalSections.length > 0 && <details className="song-part">
+      {!song && additionalSections.length > 0 && <details className="song-part">
         <summary><span>Other saved sections</span><span className="muted">Existing content</span></summary>
         <div className="song-part-fields">
           {additionalSections.map((section) => <div className="form-stack legacy-section" key={section.key}>
@@ -588,7 +710,7 @@ export function SongEditorForm({ song, returnTo = song ? `/admin/songs/${song.id
 
       {workingSection && <div className="verse-dialog-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeVerse(); }}>
         <section className="verse-dialog" role="dialog" aria-modal="true" aria-labelledby="verse-dialog-title" onKeyDown={handleDialogKeyDown}>
-          <header className="verse-dialog-header"><div><p className="eyebrow">VERSE</p><h2 id="verse-dialog-title">Edit Verse</h2></div><button type="button" className="icon-button verse-close" aria-label="Close Edit Verse" onClick={closeVerse}><X size={18} /></button></header>
+          <header className="verse-dialog-header"><div><p className="eyebrow">LYRICS</p><h2 id="verse-dialog-title">Edit {editingSectionLabel}</h2></div><button type="button" className="icon-button verse-close" aria-label={`Close Edit ${editingSectionLabel}`} onClick={closeVerse}><X size={18} /></button></header>
           <div className="form-stack verse-dialog-fields">
             <label htmlFor="verse-hide" className="check-row"><input id="verse-hide" type="checkbox" checked={workingSection.is_hidden} onChange={(event) => setWorkingSection({ ...workingSection, is_hidden: event.target.checked })} /> Hide</label>
             <label htmlFor="verse-lyrics">Lyrics</label>
