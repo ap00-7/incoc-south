@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import {
   FileText,
   FileUp,
@@ -23,6 +23,7 @@ import {
   moveScheduleItem,
   reorderScheduleItems,
   saveScheduleItem,
+  setScheduleVisibility,
   updateSchedule,
   type ScheduleItemInput,
 } from "@/lib/actions/content";
@@ -32,6 +33,7 @@ import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { useFormAction } from "@/components/use-form-action";
 import { createClient } from "@/lib/supabase/browser";
 import { getAnnouncementScheduleDestination } from "@/lib/domain/slides";
+import { formatScheduleDuration } from "@/lib/domain/schedule";
 import { notifyDataChanged, notifyStorageChanged } from "@/spa/data-events";
 
 type SongOption = { id: string; title: string; language: string };
@@ -256,6 +258,7 @@ export function InlineScheduleManager({
   const [mediaValidation, setMediaValidation] = useState("");
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [contextMenuItemId, setContextMenuItemId] = useState<string | null>(null);
+  const [menuOpensUp, setMenuOpensUp] = useState(false);
   const [activeSubmenu, setActiveSubmenu] = useState<{ itemId: string; itemType: ScheduleItemInput["item_type"]; opensLeft: boolean } | null>(null);
   const [dragState, setDragState] = useState<{ itemId: string; targetIndex: number } | null>(null);
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
@@ -504,6 +507,28 @@ export function InlineScheduleManager({
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeSubmenu, contextMenuItemId]);
+
+  useLayoutEffect(() => {
+    if (!contextMenuItemId) {
+      setMenuOpensUp(false);
+      return;
+    }
+    const updateMenuPlacement = () => {
+      const menu = activeMenuRef.current?.querySelector<HTMLElement>(".schedule-item-context-menu");
+      const controls = activeMenuRef.current?.closest<HTMLElement>(".admin-programme-item-controls");
+      if (!menu || !controls) return;
+      const menuHeight = menu.getBoundingClientRect().height;
+      const downwardBottom = controls.getBoundingClientRect().bottom + 5 + menuHeight;
+      setMenuOpensUp(downwardBottom > window.innerHeight - 12);
+    };
+    updateMenuPlacement();
+    window.addEventListener("resize", updateMenuPlacement);
+    window.addEventListener("scroll", updateMenuPlacement, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuPlacement);
+      window.removeEventListener("scroll", updateMenuPlacement, true);
     };
   }, [activeSubmenu, contextMenuItemId]);
 
@@ -775,20 +800,6 @@ export function InlineScheduleManager({
 
   return (
     <section className="inline-owner-editor">
-      <div className="inline-item-toolbar">
-        <button className="button button-primary" type="button" onClick={() => openAdd()}>
-          <Plus size={15} /> Add Item
-        </button>
-        <button className="button button-secondary" type="button" onClick={() => openAdd("song")} disabled={!songsReady}>
-          <Plus size={15} /> Add Song
-        </button>
-        <button className="button button-secondary" type="button" onClick={() => openAdd("scripture_reading")}>
-          <Plus size={15} /> Add Scripture
-        </button>
-        <button className="button button-secondary" type="button" onClick={() => openAdd("presentation")}>
-          <FileUp size={15} /> Add PPT
-        </button>
-      </div>
       {!privateNotesReady && <p className="muted" role="status">Loading private schedule notes; existing items cannot be edited until they are ready.</p>}
       {privateNotesReady && !songsReady && <p className="muted" role="status">Loading Songbook options…</p>}
       {feedback && <p className="inline-item-feedback" role="status">{feedback}</p>}
@@ -798,18 +809,64 @@ export function InlineScheduleManager({
           const displayTitle = item.item_type === "scripture_reading"
             ? "Scripture"
             : item.item_type === "presentation" ? "Presentation" : item.title;
+          const announcementDestination = getAnnouncementScheduleDestination(item.title);
+          const primary = !relatedSong && item.public_content
+            ? item.public_content
+            : !relatedSong && item.item_type === "scripture_reading" ? "Scripture reading" : null;
+          const duration = formatScheduleDuration(item.duration_minutes);
+          const metadata = [
+            ...(item.leader_name ? [{ label: item.item_type === "song" ? "Song leader" : "Responsible", value: item.leader_name }] : []),
+            ...(duration ? [{ label: "Duration", value: duration }] : []),
+            ...(item.translator_name ? [{ label: "Translator", value: item.translator_name }] : []),
+            ...(item.translation_language ? [{ label: "Translation language", value: item.translation_language }] : []),
+          ];
+          const hasReference = Boolean(item.link_url && !announcementDestination);
           const itemIsDragging = dragState?.itemId === item.id;
           const isDropTarget = dragState !== null && dragState.targetIndex === index && !itemIsDragging;
           return <li
-            className={`inline-programme-item${itemIsDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
+            className={`inline-programme-item admin-programme-item${contextMenuItemId === item.id ? ` has-open-actions${menuOpensUp ? " actions-open-up" : ""}` : ""}${itemIsDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
             data-schedule-item-id={item.id}
             key={item.id}
           >
-            <div className="inline-programme-actions">
-              <div>
-                <strong>{displayTitle}</strong>
-                {relatedSong && <p className="muted">{relatedSong.title}</p>}
-              </div>
+            <div className="admin-programme-item-content">
+              <button
+                className="admin-programme-item-trigger"
+                type="button"
+                aria-label={`Edit ${displayTitle} schedule item`}
+                onClick={() => openEdit(item)}
+                disabled={!privateNotesReady}
+              >
+                <span className="admin-programme-item-title">{announcementDestination ? item.title : displayTitle}</span>
+                {primary && <span className="admin-programme-item-primary">{primary}</span>}
+                {metadata.length > 0 && <span className="admin-programme-item-metadata">
+                  {metadata.map(({ label, value }) => <span className="admin-programme-item-metadata-field" key={label}>
+                    <span>{label}</span>
+                    <span>{value}</span>
+                  </span>)}
+                </span>}
+              </button>
+              {relatedSong && <div className="programme-song">
+                <Link
+                  className="song-title-link"
+                  to={`/songs/${item.song_id}`}
+                  state={{ songOrigin: "schedule", scheduleId: schedule.id, scheduleItemId: item.id }}
+                >{relatedSong.title}</Link>
+              </div>}
+              {hasReference && <dl className="programme-metadata admin-programme-reference">
+                <div className="programme-metadata-field">
+                  <dt>Reference</dt>
+                  <dd><a href={item.link_url!} target="_blank" rel="noreferrer">{item.link_title || item.link_url}</a></dd>
+                </div>
+              </dl>}
+              {item.media_url && /\.(mp4|webm)(?:$|\?)/i.test(item.media_url) && <video
+                className="schedule-item-media"
+                src={item.media_url}
+                controls
+                preload="metadata"
+              />}
+            </div>
+            <div className="admin-programme-item-controls">
+              {!item.show_in_schedule && <span className="admin-programme-hidden">Hidden from schedule</span>}
               <div className="mini-actions">
                 <button
                   className="schedule-item-drag-handle icon-button"
@@ -835,6 +892,7 @@ export function InlineScheduleManager({
                   {contextMenuItemId === item.id && <div className="schedule-item-context-menu" id={`schedule-item-menu-${item.id}`} role="menu" aria-label={`${displayTitle} actions`} onKeyDown={onMainMenuKeyDown}>
                     <button type="button" role="menuitem" disabled={index === 0 || reordering} onPointerEnter={() => setActiveSubmenu(null)} onClick={() => void moveItem(item.id, -1)}>Move item up</button>
                     <button type="button" role="menuitem" disabled={index === displayItems.length - 1 || reordering} onPointerEnter={() => setActiveSubmenu(null)} onClick={() => void moveItem(item.id, 1)}>Move item down</button>
+                    <button type="button" role="menuitem" disabled={duplicatingId !== null || reordering} onPointerEnter={() => setActiveSubmenu(null)} onClick={() => void duplicateItem(item)}>Duplicate item</button>
                     {insertionOptions.map(({ label, itemType }) => {
                       const submenuIsOpen = activeSubmenu?.itemId === item.id && activeSubmenu.itemType === itemType;
                       return <div
@@ -891,15 +949,30 @@ export function InlineScheduleManager({
                     </form>
                   </div>}
                 </div>
-                <button className="icon-button" type="button" aria-label="Edit item" onClick={() => openEdit(item)} disabled={!privateNotesReady}>Edit</button>
-                <button className="icon-button" type="button" aria-label={`Duplicate ${displayTitle}`} onClick={() => void duplicateItem(item)} disabled={duplicatingId !== null || reordering}>{duplicatingId === item.id ? "Duplicating…" : "Duplicate"}</button>
               </div>
             </div>
           </li>;
         })}
       </ol> : <p className="muted">No schedule items yet.</p>}
+        <details className="schedule-add-disclosure">
+          <summary>Manage schedule items</summary>
+          <div className="inline-item-toolbar">
+            <button className="button button-primary" type="button" onClick={() => openAdd()}>
+              <Plus size={15} /> Add Item
+            </button>
+            <button className="button button-secondary" type="button" onClick={() => openAdd("song")} disabled={!songsReady}>
+              <Plus size={15} /> Add Song
+            </button>
+            <button className="button button-secondary" type="button" onClick={() => openAdd("scripture_reading")}>
+              <Plus size={15} /> Add Scripture
+            </button>
+            <button className="button button-secondary" type="button" onClick={() => openAdd("presentation")}>
+              <FileUp size={15} /> Add PPT
+            </button>
+          </div>
+        </details>
 
-      {draft && <div className="item-modal-backdrop" onMouseDown={(event) => {
+        {draft && <div className="item-modal-backdrop" onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeModal();
       }}>
         <section className="item-modal" role="dialog" aria-modal="true" aria-labelledby="item-modal-title">
@@ -1355,29 +1428,81 @@ function MediaPicker({
 
 export function InlineScheduleDetails({
   schedule,
+  open,
+  onOpenChange,
 }: {
   schedule: { id: string; title: string; service_date: string; venue: string | null; description: string | null; updated_at: string };
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const { error, formAction } = useFormAction(updateSchedule);
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onOpenChange(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onOpenChange, open]);
   return (
-    <section className="schedule-editor-details">
-      <form className="form-stack schedule-edit-form" action={formAction} data-dirty-form>
-        <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
-        <input type="hidden" name="schedule_id" value={schedule.id} />
-        <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
-        <label htmlFor={`title-${schedule.id}`}>Title</label>
-        <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
-        <label htmlFor={`venue-${schedule.id}`}>Venue</label>
-        <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
-        <label htmlFor={`date-${schedule.id}`}>Date</label>
-        <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
-        <label htmlFor={`description-${schedule.id}`}>Description <span className="muted">(optional)</span></label>
-        <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={2} maxLength={2000} />
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <PendingSubmitButton pendingLabel="Saving…">Save schedule</PendingSubmitButton>
-      </form>
-    </section>
+    <>
+      <button className="button button-secondary schedule-details-open" type="button" onClick={() => onOpenChange(true)}>
+        Edit schedule details
+      </button>
+      {open && <div className="item-modal-backdrop" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onOpenChange(false);
+      }}>
+        <section className="item-modal schedule-details-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-details-modal-title">
+          <header className="item-modal-header">
+            <div><p className="eyebrow">SCHEDULE</p><h2 id="schedule-details-modal-title">Edit schedule details</h2></div>
+            <button type="button" className="icon-button" aria-label="Close" onClick={() => onOpenChange(false)}><X size={19} /></button>
+          </header>
+          <form className="item-modal-form schedule-edit-form" action={formAction} data-dirty-form>
+          <input type="hidden" name="return_to" value={`/admin/schedules/${schedule.id}`} />
+          <input type="hidden" name="schedule_id" value={schedule.id} />
+          <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
+          <label htmlFor={`title-${schedule.id}`}>Title</label>
+          <input id={`title-${schedule.id}`} name="title" defaultValue={schedule.title} required maxLength={200} />
+          <label htmlFor={`venue-${schedule.id}`}>Venue</label>
+          <input id={`venue-${schedule.id}`} name="venue" defaultValue={schedule.venue ?? ""} maxLength={200} />
+          <label htmlFor={`date-${schedule.id}`}>Date</label>
+          <input id={`date-${schedule.id}`} type="date" name="service_date" defaultValue={schedule.service_date} required />
+          <label htmlFor={`description-${schedule.id}`}>Description <span className="muted">(optional)</span></label>
+          <textarea id={`description-${schedule.id}`} name="description" defaultValue={schedule.description ?? ""} rows={2} maxLength={2000} />
+          {error && <p className="form-error" role="alert">{error}</p>}
+            <footer className="item-modal-footer">
+              <button type="button" className="button button-secondary" onClick={() => onOpenChange(false)}>Cancel</button>
+              <PendingSubmitButton pendingLabel="Saving…">Save schedule</PendingSubmitButton>
+            </footer>
+          </form>
+        </section>
+      </div>}
+    </>
   );
+}
+
+export function ScheduleVisibilityControl({
+  schedule,
+}: {
+  schedule: { id: string; title: string; status: "draft" | "published"; updated_at: string };
+}) {
+  const { error, formAction } = useFormAction(setScheduleVisibility);
+  return <form className="schedule-card-visibility" action={formAction} key={`${schedule.id}-${schedule.status}`}>
+      <input type="hidden" name="schedule_id" value={schedule.id} />
+      <input type="hidden" name="expected_updated_at" value={schedule.updated_at} />
+      <label>
+        <input
+          type="checkbox"
+          name="hide_schedule"
+          value="true"
+          defaultChecked={schedule.status !== "published"}
+          aria-label={`Hide ${schedule.title} from public Schedule and Slides`}
+          onChange={(event) => event.currentTarget.form?.requestSubmit()}
+        />
+        <span>Hide</span>
+      </label>
+      {error && <span className="schedule-visibility-error" role="alert">{error}</span>}
+    </form>;
 }
 
 export function ScheduleActions({

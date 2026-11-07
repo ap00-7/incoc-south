@@ -28,6 +28,7 @@ const InlineScheduleDetails = lazy(() => import("@/components/admin/inline-sched
 const InlineScheduleManager = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.InlineScheduleManager })));
 const NewScheduleForm = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.NewScheduleForm })));
 const ScheduleActions = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.ScheduleActions })));
+const ScheduleVisibilityControl = lazy(() => import("@/components/admin/inline-schedule-manager").then((module) => ({ default: module.ScheduleVisibilityControl })));
 const AnnouncementManagerPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementManagerPage })));
 const AnnouncementPublicPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementPublicPage })));
 const AnnouncementSlidesPage = lazy(() => import("@/components/announcements").then((module) => ({ default: module.AnnouncementSlidesPage })));
@@ -219,7 +220,6 @@ function HomePage() {
   const features = [
     { icon: BookOpen, title: "Songbook", text: "Browse worship songs, lyrics, and available translations.", href: "/songs", action: "Browse songs" },
     { icon: CalendarDays, title: "Sunday schedule", text: "View service dates, programme details, and song links.", href: "/schedule", action: "View schedule" },
-    { icon: MonitorPlay, title: "Presentation slides", text: "Open the slides prepared for each service.", href: "/slides", action: "View slides" },
     { icon: Megaphone, title: "Announcements", text: "Read the latest updates from the South Sector.", href: "/announcement", action: "Read announcements" },
   ];
   return <PageShell>
@@ -824,9 +824,15 @@ function AdminSchedulesPage({ schedules }: { schedules: SharedContent["schedules
       </div>
     </div>
     <p>Each schedule is a dated gathering.</p>
-    {visibleSchedules.length ? <div className="results-list admin-results">{visibleSchedules.map((schedule) => <IntentPrefetchLink className="result-card" href={`/admin/schedules/${schedule.id}`} key={schedule.id}>
-      <div><h2>{schedule.title}</h2><p>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div><span className="muted">Edit</span>
-    </IntentPrefetchLink>)}</div> : <div className="empty-state">No service schedules yet. Create one to start planning.</div>}
+    {visibleSchedules.length ? <div className="results-list admin-results">{visibleSchedules.map((schedule) => <article className="result-card schedule-admin-card" key={schedule.id}>
+      <IntentPrefetchLink className="admin-schedule-card-link" href={`/admin/schedules/${schedule.id}`}>
+        <div><h2>{schedule.title}</h2><p>{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}{schedule.venue ? ` · ${schedule.venue}` : ""}</p></div>
+        <span className="muted">Edit</span>
+      </IntentPrefetchLink>
+      <Suspense fallback={<span className="schedule-card-visibility-placeholder">Hide</span>}>
+        <ScheduleVisibilityControl schedule={schedule} />
+      </Suspense>
+    </article>)}</div> : <div className="empty-state">No service schedules yet. Create one to start planning.</div>}
   </>;
 }
 
@@ -842,6 +848,7 @@ function AdminScheduleEditPage({ sharedContent }: { sharedContent: SharedContent
   const { scheduleId = "" } = useParams();
   const { membership } = useAuth();
   const navigate = useNavigate();
+  const [scheduleDetailsOpen, setScheduleDetailsOpen] = useState(false);
   const schedule = sharedContent?.schedules.find((item) => item.id === scheduleId);
   const songs = sharedContent?.songs ?? [];
   const itemIds = schedule?.schedule_items.map(({ id }) => id).join(",") ?? "";
@@ -872,13 +879,21 @@ function AdminScheduleEditPage({ sharedContent }: { sharedContent: SharedContent
         if (deletedId === schedule.id) navigate("/admin/schedules", { replace: true });
       }}
     />
-    <h1 className="detail-title">{schedule.title}</h1>
+    <header className="schedule-detail-heading admin-schedule-detail-heading">
+      <button className="admin-schedule-title-trigger" type="button" onClick={() => setScheduleDetailsOpen(true)}>
+        <h1 className="detail-title">{schedule.title}</h1>
+      </button>
+      {schedule.status !== "published" && <span className="schedule-draft-badge">Hidden from public</span>}
+      <div className="detail-meta schedule-detail-meta">
+        <span className="schedule-detail-meta-item"><CalendarDays size={16} aria-hidden="true" />{dateFormatter.format(new Date(`${schedule.service_date}T12:00:00+05:30`))}</span>
+        {schedule.venue && <span className="schedule-detail-meta-item schedule-detail-venue"><MapPin size={16} aria-hidden="true" />{schedule.venue}</span>}
+      </div>
+    </header>
+    {schedule.description && <p className="section-description admin-schedule-description">{schedule.description}</p>}
     <Suspense fallback={<InlineLoading>Loading schedule editor…</InlineLoading>}>
-      <InlineScheduleDetails schedule={schedule} />
       {notesResource.error && <ResourceMessage error={notesResource.error} retry={notesResource.refresh} />}
       {notesResource.loading && <InlineLoading>Loading schedule options…</InlineLoading>}
       <section className="schedule-items-editor" aria-label="Schedule Items">
-        <h2>Schedule Items</h2>
         <InlineScheduleManager
           schedule={schedule}
           items={scheduleItems}
@@ -889,6 +904,9 @@ function AdminScheduleEditPage({ sharedContent }: { sharedContent: SharedContent
           churchId={membership?.churchId ?? ""}
         />
       </section>
+      <div className="schedule-edit-footer">
+        <InlineScheduleDetails schedule={schedule} open={scheduleDetailsOpen} onOpenChange={setScheduleDetailsOpen} />
+      </div>
       <ScheduleActions schedule={schedule} />
     </Suspense>
   </>;

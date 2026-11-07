@@ -801,8 +801,6 @@ export async function updateSchedule(formData: FormData) {
     service_date: parsed.data.service_date,
     venue: parsed.data.venue || null,
     description: parsed.data.description || null,
-    status: "published",
-    published_at: new Date().toISOString(),
   }).eq("id", scheduleId).eq("church_id", member.churchId)
     .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
   if (error) throw new Error(`Unable to update service: ${error.message}`);
@@ -812,6 +810,25 @@ export async function updateSchedule(formData: FormData) {
   invalidateRouteData(`/admin/schedules/${scheduleId}`);
   invalidateRouteData("/slides");
   return { redirectTo: getReturnPath(formData, `/admin/schedules/${scheduleId}`) };
+}
+
+export async function setScheduleVisibility(formData: FormData) {
+  const member = await requireOwner();
+  const scheduleId = z.string().uuid().parse(formData.get("schedule_id"));
+  const expectedUpdatedAt = z.string().datetime({ offset: true }).parse(formData.get("expected_updated_at"));
+  const status = formData.get("hide_schedule") === "true" ? "draft" : "published";
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("schedules").update({
+    status,
+    published_at: status === "published" ? new Date().toISOString() : null,
+  }).eq("id", scheduleId).eq("church_id", member.churchId)
+    .eq("updated_at", expectedUpdatedAt).select("id").maybeSingle();
+  if (error) throw new Error(`Unable to update schedule visibility: ${error.message}`);
+  if (!data) throw new Error("This schedule was changed by another owner. Reload and try again.");
+  invalidateRouteData("/admin/schedules");
+  invalidateRouteData("/schedule");
+  invalidateRouteData(`/schedule/${scheduleId}`);
+  invalidateRouteData("/slides");
 }
 
 export async function addScheduleItem(formData: FormData) {
